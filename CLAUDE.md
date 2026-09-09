@@ -459,8 +459,16 @@ row is the honest state, not an omission to paper over.
 | Judge | _TBD_ | — | — | see the self-preference note below |
 | Reranker | _TBD_ | — | — | Phase 1 at the earliest; interface only in Phase 0 |
 
+Access is via **OpenRouter**; the API key is already in `.env` at the repo root
+(gitignored). Read it from the environment — never print, commit, or echo it.
+
 Rules for this table:
 
+- **Krutik chooses every model. Ask him.** When a model decision comes up, stop and
+  put the choice to him with the cost, latency, and bias tradeoffs laid out. Do not
+  pick a reasonable default and carry on, and do not log the choice as `Joint` or
+  `Krutik` in `docs/DECISIONS.md` if you made it. Do everything that does not depend
+  on the answer first, then ask.
 - Every entry needs a `DEC-NNN` in `docs/DECISIONS.md` before it is used in a run.
   Model choice is exactly the kind of decision that is expensive to reverse: it
   starts a new comparison family.
