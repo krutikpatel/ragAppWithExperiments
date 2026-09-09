@@ -69,6 +69,17 @@ at k=1 (DEC-010).
 failure rather than as a ceiling, drop it or report it over the single-gold subset.
 **Status:** open.
 
+## OQ-010 — Can answer correctness be scored without a judge?
+The gold answer exists, so lexical (ROUGE) or embedding similarity against it is
+possible and would be free, reproducible, and immune to a judge model changing
+underneath us. The usual objection is that both are weak on long procedural text: a
+correct paraphrase scores low, and a wrong-setting answer that shares vocabulary
+scores high. Untested here.
+**Decided by:** hand-label 40 generated answers as correct/incorrect against the
+reference; report the agreement of (a) ROUGE-L, (b) embedding cosine, (c) an LLM
+judge with the same labels. If a free method reaches judge-level agreement, it
+replaces the judge for correctness. **Status:** open. Raised by Krutik, 2026-09-09.
+
 ---
 
 ## External claims to test, not to cite

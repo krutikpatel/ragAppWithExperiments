@@ -301,3 +301,70 @@ SHA, and reason.
 - **Consequences:** Two smoke runs exist in the local results store. They are not
   experiments and must never appear in `docs/EXPERIMENTS.md`.
 - **Revisit if:** a real retriever makes the toy redundant for testing.
+
+## DEC-017 — Generator: `openai/gpt-5-nano`
+- **Date:** 2026-09-09
+- **Decided by:** Krutik (options and recommendation from Claude)
+- **Status:** Active
+- **Context:** Tier 2 needs a model to write answers from retrieved chunks. Phases
+  1-3 vary *retrieval*, so the generator is held constant across every config.
+- **Options considered:**
+  1. `openai/gpt-5-nano` ($0.05/$0.40 per Mtok, ~$0.06 per Tier 2 dev run) — chosen.
+  2. `google/gemini-2.5-flash-lite` ($0.10/$0.40) — rejected, no advantage once the
+     judge is not an OpenAI model being graded by its own family.
+  3. `meta-llama/llama-3.3-70b-instruct` ($0.10/$0.32) — rejected for now; open
+     weights are attractive for reproducibility and this stays the fallback.
+  4. `anthropic/claude-sonnet-5` ($2/$10, ~$2.20 per run) — rejected. ~35x the cost
+     to raise the floor on every config equally, and a strong generator can paper
+     over bad retrieval by writing a plausible answer from thin context, which makes
+     retrieval failures *harder* to see.
+- **Decision:** `openai/gpt-5-nano`, temperature 0, via OpenRouter.
+- **Evidence:** No measured data on this corpus; cost figures are OpenRouter list
+  prices read on 2026-09-09, and the per-run estimate is an engineering estimate
+  (~4k tokens in, ~300 out per question, 200 questions), not a measurement.
+- **Consequences:** Absolute generation numbers will be modest and are not the point;
+  they are a constant backdrop for retrieval comparisons. Known risk: the cheapest
+  models may ignore the `[doc:<id>]` citation format or the refusal instruction,
+  which would tank citation and refusal metrics for reasons unrelated to retrieval.
+  The P0-13 Tier 2 smoke run is where that gets checked, before any real Tier 2 work.
+- **Revisit if:** the smoke run shows it does not follow the citation or refusal
+  instructions, or generation quality becomes the object of study rather than the
+  backdrop.
+
+## DEC-018 — The real judge is deferred; `gpt-5-nano` is a smoke-test placeholder
+- **Date:** 2026-09-09
+- **Decided by:** Krutik (raised the question; options from Claude)
+- **Status:** Active
+- **Context:** Krutik asked why a judge is needed when WixQA ships gold answers.
+  Working through it: the benchmark fully answers "did we retrieve the right
+  documents" (gold `article_ids`) and pays for citation precision/recall and step
+  coverage for free. It cannot answer **faithfulness** — whether each claim is
+  supported by the chunks *this run* retrieved — because that depends on the
+  retriever's output and no static benchmark can label it. Answer correctness is the
+  contestable one: the gold answer exists, but lexical and embedding similarity are
+  weak on long procedural text.
+- **Options considered:**
+  1. Cheap placeholder now, real judge chosen when answer-quality claims are actually
+     being made — chosen.
+  2. `anthropic/claude-sonnet-5` now (~$3.30 per Tier 2 dev run) — rejected as
+     premature: the judge would be paid for before any claim depends on it.
+  3. Drop judge metrics from Phase 0 entirely — rejected; it would leave P0-13's
+     "Tier 2 exercised end to end" criterion unmet and the plumbing unproven.
+  4. Non-LLM answer correctness (embedding/lexical similarity) — not rejected,
+     recorded as OQ-010. It would need an embedding model choice and its agreement
+     with human judgment would itself need measuring.
+- **Decision:** `judge_model: openai/gpt-5-nano` **solely to prove the Tier 2
+  plumbing** — that prompts render, responses parse, and scores land in the store.
+  **Its scores are not measurements and must never be written into
+  `docs/EXPERIMENTS.md` or quoted in `NARRATIVE.md`.** The real judge is chosen
+  before the first Tier 2 run whose generation numbers are meant to be believed.
+- **Evidence:** No measured data; judgment call on sequencing. Retrieval is what the
+  next phases vary, and every retrieval metric is already free.
+- **Consequences:** Faithfulness, answer relevance and answer correctness have no
+  trustworthy values until the real judge is chosen. Citation precision stands in as
+  the cheap grounding signal in the meantime — an answer citing documents that are
+  not gold is a strong hallucination signal, and it costs nothing.
+- **Revisit if:** a Tier 2 run's generation numbers are about to enter the narrative,
+  or before any experiment whose decision rule names a judge metric. At that point
+  the judge choice needs its own DEC entry, and it should be cross-family from
+  `gpt-5-nano` to avoid self-preference bias.

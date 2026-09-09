@@ -23,6 +23,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
    scores.** Then assert the library agrees with the ranking recorded in the
    artifacts, on real data. (MIS-003)
 8. Never report a `toy_overlap` number as a result. It is a harness smoke test.
+9. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+   relevance and answer correctness have no trustworthy values until a real judge is
+   chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
 ---
 

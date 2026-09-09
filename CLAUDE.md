@@ -465,16 +465,18 @@ Rules that outlive any particular library:
 
 ### Models
 
-**Not yet chosen. Fill this in before the first Tier 2 run.** Until a row here is
-filled, no generation, judge, or embedding number can be produced — and an empty
-row is the honest state, not an omission to paper over.
+| Role | Model | Chosen in | Notes |
+|---|---|---|---|
+| Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
+| Judge | `openai/gpt-5-nano` — **PLACEHOLDER** | DEC-018 | Proves the Tier 2 plumbing only. **Its faithfulness / relevance / correctness scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md.** Real judge to be chosen, cross-family, before any believed Tier 2 run. |
+| Embedding | _not chosen_ | — | Not needed until Phase 1. P0-13's baseline is BM25. |
+| Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
-| Role | Model | Version / id | Chosen in | Notes |
-|---|---|---|---|---|
-| Embedding | _TBD_ | — | — | cost and latency per 6,221-doc index build matter |
-| Generator | _TBD_ | — | — | |
-| Judge | _TBD_ | — | — | see the self-preference note below |
-| Reranker | _TBD_ | — | — | Phase 1 at the earliest; interface only in Phase 0 |
+An empty row is the honest state, not an omission to paper over. So is a row marked
+PLACEHOLDER: the benchmark's gold `article_ids` pay for every retrieval metric plus
+citation precision/recall and step coverage for free, so a judge is only needed for
+faithfulness (which no static benchmark can label, since it depends on what *this
+run* retrieved) and for answer correctness (contestable — see OQ-010).
 
 Access is via **OpenRouter**; the API key is already in `.env` at the repo root
 (gitignored). Read it from the environment — never print, commit, or echo it.
