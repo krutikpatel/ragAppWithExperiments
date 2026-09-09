@@ -220,3 +220,28 @@ def test_dev_split_needs_no_flag(store):
     from rag.runner.run import check_test_split_guard
 
     check_test_split_guard(RunConfig(name="x", split="dev"), open_test=False, store=store)
+
+
+def test_judge_must_not_share_the_generators_family():
+    """P0-07: same-family judging carries unmeasured self-preference bias."""
+    with pytest.raises(ValueError, match="self-preference"):
+        RunConfig(
+            name="x",
+            eval_tier=EvalTier.TIER_2,
+            generator_model="openai/gpt-5-nano",
+            judge_model="openai/gpt-5.1",
+        )
+
+    ok = RunConfig(
+        name="x",
+        eval_tier=EvalTier.TIER_2,
+        generator_model="openai/gpt-5-nano",
+        judge_model="anthropic/claude-sonnet-5",
+    )
+    assert ok.generator_family == "openai" and ok.judge_family == "anthropic"
+
+
+def test_subsample_settings_are_part_of_run_identity():
+    base = RunConfig(name="x")
+    assert base.with_(eval_subsample_size=50).config_hash != base.config_hash
+    assert base.with_(full_eval=True).config_hash != base.config_hash

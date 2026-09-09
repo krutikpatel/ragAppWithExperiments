@@ -84,8 +84,14 @@ COMPARABILITY_KEYS = (
     "normalization_version",
     "split",
     "split_hash",
+    "eval_subsample_id",
     "doc_pooling",
     "judge_model",
+    "judge_temperature",
+    # A Ragas upgrade can change a metric's internal prompts, which moves every
+    # judged score without anything else in the config changing. MIS-004.
+    "ragas_version",
+    "metric_prompt_versions",
 )
 
 

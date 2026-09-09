@@ -394,16 +394,17 @@ rag/
                     retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
                     generation_metrics.py (citations, refusal — no LLM calls),
                     steps.py (procedural step coverage), slices.py (P0-08),
-                    judge.py (Judge interface + OpenRouter judge)
+                    judge.py — the ONLY module that may import Ragas
   generation/       base.py — Generator interface + OpenRouter generator
   runner/           config.py (RunConfig, EvalTier, config_hash), run.py
                     (run(config) -> row), store.py (SQLite runs + run_questions),
-                    diff.py (rag diff), registry.py (retrievers by name)
+                    diff.py (rag diff), registry.py (retrievers by name),
+                    subsample.py (fixed Tier 2 subsample), cost.py (pre-run estimate)
   embedding/        (planned, P0-11)   Embedder
   reranking/        (planned, P0-11)   Reranker — interface only in Phase 0
 
-prompts/            versioned YAML, addressed by (id, version): answer.yaml and
-                    the three judge_*.yaml. Never inline a prompt in Python.
+prompts/            versioned YAML, addressed by (id, version). answer.yaml only —
+                    Ragas owns the judge prompts. Never inline a prompt in Python.
                     Content hashes are pinned in tests/test_prompts.py, so an edit
                     without a version bump fails the suite.
 configs/            experiment configs. smoke_toy*.yaml are harness smoke tests,
@@ -446,7 +447,8 @@ Two notes on where things live:
 | Tests | `pytest` | |
 | IR metrics | `ranx` | never hand-roll recall/nDCG/MRR |
 | Results store | SQLite | `runs` and `run_questions` tables |
-| LLM access | `httpx` -> OpenRouter | key in `.env`; models still unchosen |
+| LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. **No embedding models** — see DEC-022 |
+| Judged metrics | `ragas==0.4.3` (exact pin) | metric library ONLY. Not its dataset or experiment layer |
 | Config objects | frozen dataclasses today; `pydantic` declared for P0-10 | must hash to a stable `config_hash` |
 
 Rules that outlive any particular library:
@@ -462,21 +464,36 @@ Rules that outlive any particular library:
 - Design a metric's not-applicable case before its happy path. `None` is not zero,
   and averaging zeros over questions a metric cannot score reads as a system
   failure. (MIS-002)
+- Pin judged-metric dependencies **exactly** and record the version on every run.
+  Ragas revises metric prompts between releases; an upgrade can move every historical
+  score with no config change. `ragas_version` and `metric_prompt_versions` are
+  recorded and checked by `rag diff`. (MIS-004, DEC-021)
+- Third-party eval libraries are metric providers, never the experiment or dataset
+  layer. Ragas lives behind the `Judge` interface and a test enforces the boundary,
+  so swapping it is a one-file change. (DEC-019)
 
 ### Models
 
 | Role | Model | Chosen in | Notes |
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
-| Judge | `openai/gpt-5-nano` — **PLACEHOLDER** | DEC-018 | Proves the Tier 2 plumbing only. **Its faithfulness / relevance / correctness scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md.** Real judge to be chosen, cross-family, before any believed Tier 2 run. |
-| Embedding | _not chosen_ | — | Not needed until Phase 1. P0-13's baseline is BM25. |
+| Judge | **NOT CHOSEN — blocks Tier 2** | DEC-025 | Must be a **non-OpenAI family** (the generator is OpenAI) and an **exact pinned id**, never an alias. Still a plumbing placeholder per DEC-018: its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md. |
+| Embedding | _not chosen_ | DEC-022, OQ-011 | OpenRouter serves none. Blocks Ragas `answer_relevance`, one of P0-07's three judged metrics. Phase 1 needs one for dense retrieval anyway. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
-An empty row is the honest state, not an omission to paper over. So is a row marked
-PLACEHOLDER: the benchmark's gold `article_ids` pay for every retrieval metric plus
-citation precision/recall and step coverage for free, so a judge is only needed for
-faithfulness (which no static benchmark can label, since it depends on what *this
-run* retrieved) and for answer correctness (contestable — see OQ-010).
+An empty row is the honest state, not an omission to paper over. The benchmark's gold
+`article_ids` pay for every retrieval metric plus citation precision/recall and step
+coverage for free, so a judge is only needed for faithfulness (which no static
+benchmark can label, since it depends on what *this run* retrieved) and for answer
+correctness.
+
+Two constraints now bind this table, both enforced in code rather than by intent:
+
+- **Judge family must differ from generator family.** `RunConfig` refuses the pairing
+  outright — same-family judging carries unmeasured self-preference bias (P0-07).
+- **Ragas `answer_relevance` needs embeddings and OpenRouter has none.** Two of three
+  judged metrics ship; the third is recorded as skipped on every run rather than
+  quietly absent (DEC-022).
 
 Access is via **OpenRouter**; the API key is already in `.env` at the repo root
 (gitignored). Read it from the environment — never print, commit, or echo it.

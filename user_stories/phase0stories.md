@@ -59,6 +59,8 @@ If a story seems to need one of these to pass, stop and flag it rather than buil
 - HuggingFace `datasets` for ingest; local **Parquet** for the frozen corpus and splits.
 - **SQLite** for the results store (single file, committed-adjacent but gitignored).
 - IR metrics via **`ranx`** or **`pytrec_eval`** — do not hand-roll recall/nDCG/MRR.
+- Judged generation metrics via **Ragas**, pinned to an exact version. Used as a *metric library
+  only*, never as the experiment or dataset layer — see P0-07.
 - Prompts in versioned YAML under `prompts/`, loaded by id + version. Never inline in Python.
 - Config objects are frozen dataclasses or Pydantic models, hashable to a stable `config_hash`.
 - Everything reproducible from a config file: `run(config) → row in results store`.
@@ -201,6 +203,11 @@ Acceptance criteria, all computed at document level via `ranx`/`pytrec_eval`:
   docs; the harness must refuse to report it over the full set.
 - k values reported: 1, 3, 5, 10, 20.
 - Every metric is also emitted per slice (see P0-08).
+- **Ragas `context_precision` and `context_recall` are explicitly NOT used.** They are LLM-judged
+  approximations of retrieval quality, built for projects with no retrieval ground truth. WixQA
+  ships `article_ids`, so we have real qrels; estimating labelled recall with a judge would be
+  slower, costlier, non-deterministic and less defensible. Record this as a decision in
+  `docs/DECISIONS.md`. Retrieval evaluation belongs to `ranx`/`pytrec_eval`; Ragas owns P0-07 only.
 
 ---
 
@@ -209,21 +216,44 @@ Acceptance criteria, all computed at document level via `ranx`/`pytrec_eval`:
 **As an experimenter, I need answer-quality metrics that exploit the gold answers and gold
 article ids we now have.**
 
-Acceptance criteria:
-- **Faithfulness** — are generated claims supported by the retrieved context. LLM judge.
-- **Answer relevance** — does the answer address the question. LLM judge.
-- **Answer correctness** — generated answer vs. the WixQA reference answer. LLM judge, with the
-  reference answer supplied.
-- **Citation precision / recall** — computed *automatically* by comparing cited `doc_id`s against
-  `gold_doc_ids`. No LLM call, no manual judgment. This is free because of `article_ids`.
+**Judged metrics come from Ragas. Label-based and rule-based metrics do not.**
+
+Acceptance criteria — via Ragas:
+- **Faithfulness** — are generated claims supported by the retrieved context.
+- **Answer relevance** — does the answer address the question.
+- **Answer correctness** — generated answer vs. the WixQA reference answer, with the reference
+  supplied. Note it blends factual and semantic-similarity components and is noisy on long
+  procedural answers; record the weighting used.
+
+Acceptance criteria — NOT via Ragas:
+- **Citation precision / recall** — computed by comparing cited `doc_id`s against `gold_doc_ids`.
+  No LLM call, no manual judgment. Free because of `article_ids`.
 - **Step coverage** — WixQA answers are procedural markdown. Extract the ordered step list from
   the reference answer and from the generated answer, and report (a) fraction of gold steps
-  present and (b) whether order is preserved. Rationale: procedural QA fails by retrieving the
-  right article and then dropping or reordering steps; faithfulness will not catch that.
+  present and (b) whether order is preserved. **Rule-based, not LLM-judged** — this is exactly
+  computable, and a judge would only add variance to a deterministic quantity. Rationale:
+  procedural QA fails by retrieving the right article and then dropping or reordering steps;
+  faithfulness will not catch that.
 - **Refusal metrics** on the unanswerable set: refusal rate (should approach 1.0) and, on the
   answerable dev set, false-refusal rate (should approach 0.0).
-- The judge model id and prompt version are recorded on every score. Swapping judges must be
-  visible in the results store.
+
+Acceptance criteria — Ragas integration boundary:
+- Ragas is called **behind the `Judge` interface** (P0-11). Nothing outside `rag/eval/` imports it.
+- **Do not adopt Ragas's `Dataset`, `experiment`, or result-logging abstractions.** Ragas has moved
+  from a RAG-eval library toward a general LLM-app eval product with its own dataset management
+  and experiment tracking; using those would duplicate and fork the Phase 0 results store, and
+  `rag diff` would stop working. Call metrics, take scores, write them to our own SQLite rows.
+- **Pin Ragas to an exact version** and record `ragas_version` on every run row. The v0.1→v0.2
+  migration was breaking (`EvaluationDataset`/`SingleTurnSample` replacing HF datasets; metrics
+  initialized with an explicit evaluator LLM rather than passed to `evaluate()`; `ascore`
+  deprecated for `single_score`), and it has kept moving. A silent prompt change inside a Ragas
+  metric on upgrade would invalidate every historical comparison in `docs/EXPERIMENTS.md`.
+  Seed this into `docs/MISTAKES.md`.
+- **Judge temperature is 0** and is recorded.
+- **The judge must be a different model family from the generator**, to avoid same-family
+  self-preference bias. Record the pairing in `docs/DECISIONS.md`.
+- The judge model id, judge family, temperature, Ragas version, and metric prompt versions are
+  recorded on every score. Swapping any of them must be visible in the results store.
 
 ---
 
@@ -249,6 +279,13 @@ Acceptance criteria:
 - **Tier 1** — retrieval metrics only. Zero LLM calls. Must complete a full `dev` run in seconds
   and a full `dev_large` run in minutes. This is the default tier.
 - **Tier 2** — Tier 1 plus generation and judge metrics. Run only on promoted configs.
+  - Ragas is expensive per sample: faithfulness decomposes an answer into claims and verifies each
+    one, so a single question costs several LLM calls per metric. At 400 dev questions across
+    dozens of experiments this compounds fast.
+  - Tier 2 therefore **defaults to a fixed dev subsample** (recommend 100, seed recorded, same
+    subsample every run so results stay comparable). Full-dev Tier 2 requires an explicit
+    `--full-dev` flag.
+  - Estimated judge cost is printed before a Tier 2 run starts.
 - The tier is a first-class config field and is recorded on every run row.
 - The runner refuses to run Tier 2 against `test` unless an explicit `--open-test` flag is
   passed, and logs the event (see P0-12).
@@ -265,7 +302,9 @@ Acceptance criteria — SQLite with two tables:
 **`runs`** (one row per experiment):
 `run_id`, `timestamp`, `config_hash`, `config_json`, `corpus_hash`, `normalization_version`,
 `hf_revision`, `dataset_config`, `split`, `split_hash`, `git_sha`, `git_dirty` (bool),
-`eval_tier`, `doc_pooling`, `judge_model`, `prompt_versions`, plus all aggregate metrics.
+`eval_tier`, `eval_subsample_id`, `doc_pooling`, `judge_model`, `judge_family`,
+`judge_temperature`, `ragas_version`, `prompt_versions`, `metric_prompt_versions`,
+plus all aggregate metrics.
 
 **`run_questions`** (one row per question per run):
 `run_id`, `question_id`, `retrieved_doc_ids` (ranked), `retrieved_chunk_ids` (ranked), `scores`,
@@ -292,7 +331,11 @@ Acceptance criteria — these interfaces exist with at least one concrete implem
   runner must not import anything WixQA-specific. Dropping in a second benchmark later should
   require only a new adapter.
 - `Chunker`, `Embedder`, `Retriever`, `Reranker` (interface only — no implementation in Phase 0),
-  `ContextAssembler`, `Generator`, `Judge`.
+  `ContextAssembler`, `Generator`.
+- `Judge` — wraps Ragas. Takes `(question, answer, contexts, reference)` and returns named scores
+  plus the provenance fields in P0-10. This interface is the *only* place Ragas is imported, so a
+  Ragas major-version change or a swap to another judge library is a one-file change. A test
+  asserts no Ragas import exists outside `rag/eval/`.
 - Prompts live in `prompts/*.yaml`, addressed by `(id, version)`. The runner records the exact
   versions used. A prompt edit without a version bump should fail a test.
 
@@ -370,5 +413,6 @@ Claude Code should append to these as part of the work, not as an afterthought.
 
 Flag rather than guess:
 - Embedding model and generator model choices for the Tier 2 smoke run (cost/latency implications).
-- Judge model — same family as the generator risks self-preference bias; worth a decision entry.
+- Judge model — **resolved**: must be a different family from the generator (P0-07). Still open is
+  *which* family, given the generator choice above.
 - Whether `dev_large` sweeps should run on a subsample (e.g. 1,000) by default to keep the loop fast.

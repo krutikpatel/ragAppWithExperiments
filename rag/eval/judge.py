@@ -1,58 +1,126 @@
-"""LLM judge — the scored half of P0-07.
+"""Judged generation metrics, via Ragas — P0-07.
 
-Three criteria, one prompt each, versioned. Every score carries the judge model id
-and the prompt ref that produced it, because swapping either changes the numbers
-and must be visible in the results store rather than inferred from a commit date.
+Ragas is used as a **metric library only**. Its `Dataset`, `experiment` and
+result-logging abstractions are deliberately not adopted: Ragas has drifted from a
+RAG-eval library toward a general LLM-app eval product with its own dataset
+management and experiment tracking, and adopting those would fork the Phase 0
+results store and break `rag diff`. We call metrics, take scores, and write them to
+our own SQLite rows.
 
-No model is chosen here. `JudgeConfig.model` is supplied by the run config, and
-choosing it is Krutik's decision (CLAUDE.md section 10) — running with the same
-family as the generator risks self-preference bias, which needs a decision entry
-rather than a default.
+**This module is the only place Ragas may be imported.** `tests/test_eval_boundary.py`
+asserts that. A Ragas major-version change or a swap to another judge library is then
+a one-file change.
+
+Provenance recorded on every score: judge model, judge family, temperature, the
+pinned Ragas version, and a fingerprint of each metric's implementation package.
+Ragas does not expose prompt objects on the collections API, so the fingerprint
+hashes the metric package source — it changes when Ragas changes the metric, which
+is the thing that would silently move scores across an upgrade.
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
+import hashlib
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
-from rag.prompts import load_prompt
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-CRITERIA = ("faithfulness", "answer_relevance", "answer_correctness")
+CRITERIA = ("faithfulness", "answer_correctness", "answer_relevance")
 
-PROMPT_FOR_CRITERION = {
-    "faithfulness": ("judge_faithfulness", "v1"),
-    "answer_relevance": ("judge_answer_relevance", "v1"),
-    "answer_correctness": ("judge_answer_correctness", "v1"),
-}
+# Metrics that need no embedding model. `answer_relevance` is absent on purpose —
+# see EMBEDDING_REQUIRED below.
+CRITERIA_WITHOUT_EMBEDDINGS = ("faithfulness", "answer_correctness")
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# Ragas's AnswerRelevancy requires an embeddings model, and OpenRouter serves none
+# (checked 2026-09-09: no model on OpenRouter exposes an embeddings endpoint). So
+# this criterion cannot run through our only configured access path until an
+# embedding model is chosen. See DEC-022 and OQ-011.
+EMBEDDING_REQUIRED = ("answer_relevance",)
+
+# [factuality, semantic similarity]. Similarity is weighted to zero: it is the
+# component P0-07 warns is noisy on long procedural answers, and zeroing it also
+# removes the embeddings dependency from this metric. Recorded on every run.
+ANSWER_CORRECTNESS_WEIGHTS = (1.0, 0.0)
+
+
+def model_family(model_id: str) -> str:
+    """The provider family of an OpenRouter model id: `openai/gpt-5-nano` -> `openai`.
+
+    Used to enforce that the judge is not from the generator's family, which would
+    make every judged score carry an unmeasured self-preference bias.
+    """
+    return model_id.split("/", 1)[0] if "/" in model_id else model_id
 
 
 @dataclass(frozen=True)
 class JudgeScore:
     criterion: str
     score: float
-    reasoning: str
     judge_model: str
-    prompt_ref: str
+    judge_family: str
+    judge_temperature: float
+    ragas_version: str
+    metric_fingerprint: str
     detail: dict[str, Any] = field(default_factory=dict)
-    tokens_in: int = 0
-    tokens_out: int = 0
 
 
 @dataclass(frozen=True)
 class JudgeConfig:
     model: str
     temperature: float = 0.0
-    max_tokens: int = 600
-    timeout_s: float = 60.0
+    embedding_model: str = ""
+    answer_correctness_weights: tuple[float, float] = ANSWER_CORRECTNESS_WEIGHTS
+    timeout_s: float = 120.0
+
+    @property
+    def family(self) -> str:
+        return model_family(self.model)
+
+    @property
+    def criteria(self) -> tuple[str, ...]:
+        """Which criteria this configuration can actually score."""
+        if self.embedding_model:
+            return CRITERIA
+        return CRITERIA_WITHOUT_EMBEDDINGS
+
+    @property
+    def skipped_criteria(self) -> tuple[str, ...]:
+        return tuple(c for c in CRITERIA if c not in self.criteria)
+
+
+def ragas_version() -> str:
+    import ragas
+
+    return ragas.__version__
+
+
+@lru_cache(maxsize=None)
+def metric_fingerprint(package: str) -> str:
+    """Hash of a Ragas metric package's source.
+
+    Ragas manages metric prompts internally and revises them between releases. A
+    prompt change on upgrade would silently move every historical score while
+    `ragas_version` alone might still look "close enough" to a reader. Hashing the
+    implementation package makes the change visible in the results store.
+    """
+    import importlib
+
+    module = importlib.import_module(package)
+    directory = Path(module.__file__).parent
+    digest = hashlib.sha256()
+    for path in sorted(directory.rglob("*.py")):
+        digest.update(path.read_bytes())
+    return "sha256:" + digest.hexdigest()[:16]
 
 
 class Judge(ABC):
-    """Scores one answer on one criterion."""
+    """Scores one (question, answer, contexts, reference) tuple."""
 
     name: str
 
@@ -65,56 +133,31 @@ class Judge(ABC):
         self.config = config
 
     @abstractmethod
-    def _complete(self, prompt: str) -> tuple[str, int, int]:
-        """Return (text, tokens_in, tokens_out)."""
-
-    def score(self, criterion: str, **fields: Any) -> JudgeScore:
-        if criterion not in PROMPT_FOR_CRITERION:
-            raise ValueError(f"unknown criterion {criterion!r}; known: {CRITERIA}")
-        prompt_id, version = PROMPT_FOR_CRITERION[criterion]
-        prompt = load_prompt(prompt_id, version)
-        text, tokens_in, tokens_out = self._complete(prompt.render(**fields))
-        parsed = _parse_json_object(text)
-
-        score = float(parsed.get("score", 0.0))
-        if not 0.0 <= score <= 1.0:
-            raise ValueError(f"judge returned out-of-range score {score} for {criterion}")
-
-        return JudgeScore(
-            criterion=criterion,
-            score=score,
-            reasoning=str(parsed.get("reasoning", ""))[:500],
-            judge_model=self.config.model,
-            prompt_ref=prompt.ref,
-            detail={k: v for k, v in parsed.items() if k not in {"score", "reasoning"}},
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
-        )
+    def score(
+        self, *, question: str, answer: str, contexts: list[str], reference: str
+    ) -> dict[str, JudgeScore]:
+        """Return one JudgeScore per criterion this judge can compute."""
 
 
-def _parse_json_object(text: str) -> dict[str, Any]:
-    """Pull the JSON object out of a completion, tolerating code fences.
+class RagasJudge(Judge):
+    """Ragas metrics driven through an OpenRouter-backed instructor LLM."""
 
-    A judge that returns unparseable output raises. Defaulting a failed parse to
-    0.0 would quietly turn an infrastructure failure into a quality finding.
-    """
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.split("```")[1]
-        stripped = stripped[4:] if stripped.startswith("json") else stripped
-    start, end = stripped.find("{"), stripped.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError(f"judge response contained no JSON object: {text[:200]!r}")
-    return json.loads(stripped[start : end + 1])
+    name = "ragas"
 
+    METRIC_PACKAGES = {
+        "faithfulness": "ragas.metrics.collections.faithfulness",
+        "answer_correctness": "ragas.metrics.collections.answer_correctness",
+        "answer_relevance": "ragas.metrics.collections.answer_relevancy",
+    }
 
-class OpenRouterJudge(Judge):
-    """Judge backed by OpenRouter. The key comes from `.env`; the model from config."""
+    def __init__(self, config: JudgeConfig) -> None:
+        super().__init__(config)
+        self._metrics: dict[str, Any] | None = None
 
-    name = "openrouter"
-
-    def _complete(self, prompt: str) -> tuple[str, int, int]:
-        import httpx
+    def _build_metrics(self) -> dict[str, Any]:
+        from openai import OpenAI
+        from ragas.llms import llm_factory
+        from ragas.metrics.collections import AnswerCorrectness, Faithfulness
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -122,43 +165,80 @@ class OpenRouterJudge(Judge):
                 "OPENROUTER_API_KEY is not set. It lives in .env at the repo root; "
                 "load it into the environment before a Tier 2 run."
             )
-        response = httpx.post(
-            OPENROUTER_URL,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": self.config.model,
-                "temperature": self.config.temperature,
-                "max_tokens": self.config.max_tokens,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=self.config.timeout_s,
+        client = OpenAI(
+            api_key=api_key, base_url=OPENROUTER_BASE_URL, timeout=self.config.timeout_s
         )
-        response.raise_for_status()
-        payload = response.json()
-        usage = payload.get("usage", {})
-        return (
-            payload["choices"][0]["message"]["content"],
-            int(usage.get("prompt_tokens", 0)),
-            int(usage.get("completion_tokens", 0)),
+        llm = llm_factory(
+            model=self.config.model,
+            provider="openai",
+            client=client,
+            temperature=self.config.temperature,
         )
 
+        metrics: dict[str, Any] = {
+            "faithfulness": Faithfulness(llm=llm),
+            "answer_correctness": AnswerCorrectness(
+                llm=llm, weights=list(self.config.answer_correctness_weights)
+            ),
+        }
+        if self.config.embedding_model:
+            from ragas.metrics.collections import AnswerRelevancy
 
-def judge_all_criteria(
-    judge: Judge,
-    *,
-    question: str,
-    answer: str,
-    context: str,
-    reference_answer: str,
-) -> dict[str, JudgeScore]:
-    """Score one question on all three criteria."""
-    fields = {
-        "faithfulness": {"context": context, "answer": answer},
-        "answer_relevance": {"question": question, "answer": answer},
-        "answer_correctness": {
-            "question": question,
-            "reference_answer": reference_answer,
-            "answer": answer,
+            metrics["answer_relevance"] = AnswerRelevancy(
+                llm=llm, embeddings=self._embeddings()
+            )
+        return metrics
+
+    def _embeddings(self) -> Any:
+        raise NotImplementedError(
+            "no embeddings backend is wired. OpenRouter serves no embedding models, "
+            "so answer_relevance needs a second provider or a local model. See "
+            "DEC-022 and OQ-011."
+        )
+
+    def score(
+        self, *, question: str, answer: str, contexts: list[str], reference: str
+    ) -> dict[str, JudgeScore]:
+        if self._metrics is None:
+            self._metrics = self._build_metrics()
+
+        calls = {
+            "faithfulness": lambda m: m.ascore(
+                user_input=question, response=answer, retrieved_contexts=contexts
+            ),
+            "answer_correctness": lambda m: m.ascore(
+                user_input=question, response=answer, reference=reference
+            ),
+            "answer_relevance": lambda m: m.ascore(user_input=question, response=answer),
+        }
+
+        scores: dict[str, JudgeScore] = {}
+        for criterion, metric in self._metrics.items():
+            result = asyncio.run(calls[criterion](metric))
+            scores[criterion] = JudgeScore(
+                criterion=criterion,
+                score=float(result.value),
+                judge_model=self.config.model,
+                judge_family=self.config.family,
+                judge_temperature=self.config.temperature,
+                ragas_version=ragas_version(),
+                metric_fingerprint=metric_fingerprint(self.METRIC_PACKAGES[criterion]),
+                detail={"reason": getattr(result, "reason", None)},
+            )
+        return scores
+
+
+def judge_provenance(config: JudgeConfig) -> dict[str, Any]:
+    """The provenance a run row records for its judge, computed without calling one."""
+    return {
+        "judge_model": config.model,
+        "judge_family": config.family,
+        "judge_temperature": config.temperature,
+        "ragas_version": ragas_version(),
+        "answer_correctness_weights": list(config.answer_correctness_weights),
+        "metric_prompt_versions": {
+            criterion: metric_fingerprint(RagasJudge.METRIC_PACKAGES[criterion])
+            for criterion in config.criteria
         },
+        "skipped_criteria": list(config.skipped_criteria),
     }
-    return {criterion: judge.score(criterion, **fields[criterion]) for criterion in CRITERIA}

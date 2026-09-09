@@ -56,7 +56,19 @@ class RunConfig:
     generator_model: str = ""
     generator_prompt: str = "answer@v1"
     judge_model: str = ""
+    judge_temperature: float = 0.0
+    # Ragas AnswerRelevancy needs embeddings and OpenRouter serves none, so this is
+    # empty until a second provider or a local model is chosen (DEC-022).
+    judge_embedding_model: str = ""
     context_max_tokens: int = 6000
+
+    # Tier 2 is expensive per question — Ragas faithfulness decomposes an answer into
+    # claims and verifies each one, several LLM calls per metric. So Tier 2 scores a
+    # fixed subsample by default; the same questions every run, so results stay
+    # comparable. Tier 1 is free and always runs the whole split.
+    eval_subsample_size: int = 100
+    eval_subsample_seed: int = 7
+    full_eval: bool = False
 
     seed: int = 1
     # Set only by a harness smoke test. Runs carrying it are marked in the store and
@@ -88,6 +100,28 @@ class RunConfig:
                     "for Krutik with a DEC entry, not a default — see CLAUDE.md "
                     "section 10."
                 )
+            # P0-07: a judge from the generator's own family grades its own lineage.
+            # The bias is real and unmeasured, so it is refused rather than noted.
+            if self.generator_family == self.judge_family:
+                raise ValueError(
+                    f"judge and generator are both from the {self.judge_family!r} "
+                    "family. Same-family judging carries self-preference bias; P0-07 "
+                    "requires different families. Pick a judge from another provider."
+                )
+        if self.eval_subsample_size < 1:
+            raise ValueError("eval_subsample_size must be at least 1")
+
+    @property
+    def generator_family(self) -> str:
+        from rag.eval.judge import model_family
+
+        return model_family(self.generator_model)
+
+    @property
+    def judge_family(self) -> str:
+        from rag.eval.judge import model_family
+
+        return model_family(self.judge_model)
 
     def as_dict(self) -> dict[str, Any]:
         data = asdict(self)

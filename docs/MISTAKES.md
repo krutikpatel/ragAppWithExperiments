@@ -23,7 +23,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
    scores.** Then assert the library agrees with the ranking recorded in the
    artifacts, on real data. (MIS-003)
 8. Never report a `toy_overlap` number as a result. It is a harness smoke test.
-9. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+9. **Never upgrade Ragas without starting a new comparison family.** It revises
+   metric prompts between releases; `ragas_version` and `metric_prompt_versions` are
+   recorded and checked by `rag diff` for exactly this reason. (MIS-004)
+10. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -99,3 +102,30 @@ Derived from the prevention rules below. Run through it and say in chat that you
   order, not the scores that produced the order. Then assert the library's result
   agrees with the ranking recorded in the artifacts, on real data, not just a fixture.
 - **Added to preflight:** yes
+
+## MIS-004 — Ragas's dependency spec resolves to a version its own code cannot import
+- **Date:** 2026-09-09
+- **Severity:** Medium — blocked P0-07 until pinned; no results affected.
+- **What happened:** Installing `ragas` (tried 0.2.15, then 0.4.3, the newest) gave a
+  hard `ModuleNotFoundError: No module named 'langchain_community.chat_models.vertexai'`
+  on `import ragas`. Ragas imports that module; `langchain-community` 0.4.x removed
+  it; Ragas's dependency spec does not exclude 0.4.x, so the resolver installed a
+  combination that cannot import.
+- **How it was caught:** The first `import ragas` failed, before any code was written
+  against it.
+- **Root cause:** A dependency's own version constraints were trusted to produce a
+  working install.
+- **Impact:** None to results. Roughly half an hour of version bisection.
+- **Fix applied:** Pinned `ragas==0.4.3` exactly and added the ceiling Ragas should
+  have had: `langchain-community<0.4`. Both are in `pyproject.toml` with the reason
+  written next to them.
+- **Prevention rule:** Pin judged-metric dependencies exactly and record the version
+  on every run. Ragas revises metric prompts between releases, so an upgrade can move
+  every historical judged score with no config change — record
+  `metric_prompt_versions` fingerprints too, and let `rag diff` refuse the comparison.
+  Do not trust a library's dependency spec to yield a working install; assert the
+  import.
+- **Added to preflight:** yes
+- **Note:** `ragas.metrics` is already deprecated for `ragas.metrics.collections`
+  "removed in v1.0". This API is moving, and the pin is what stands between that and
+  the results ledger.

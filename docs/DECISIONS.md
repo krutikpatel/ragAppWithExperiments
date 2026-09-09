@@ -334,7 +334,8 @@ SHA, and reason.
 ## DEC-018 — The real judge is deferred; `gpt-5-nano` is a smoke-test placeholder
 - **Date:** 2026-09-09
 - **Decided by:** Krutik (raised the question; options from Claude)
-- **Status:** Active
+- **Status:** **Superseded by DEC-025** — the placeholder model is invalid under
+  P0-07's different-family rule. The *deferral* still stands; only the model changes.
 - **Context:** Krutik asked why a judge is needed when WixQA ships gold answers.
   Working through it: the benchmark fully answers "did we retrieve the right
   documents" (gold `article_ids`) and pays for citation precision/recall and step
@@ -368,3 +369,149 @@ SHA, and reason.
   or before any experiment whose decision rule names a judge metric. At that point
   the judge choice needs its own DEC entry, and it should be cross-family from
   `gpt-5-nano` to avoid self-preference bias.
+
+## DEC-019 — Ragas is the judged-metric library, and nothing more
+- **Date:** 2026-09-09
+- **Decided by:** Krutik (P0-07 updated to specify it)
+- **Status:** Active
+- **Context:** Phase 0's handover originally named only `ranx`/`pytrec_eval` while
+  describing P0-07's three criteria in Ragas's vocabulary. The eval layer was
+  written custom by default rather than by decision — the gap this file exists to
+  prevent. P0-07 was then updated to specify Ragas explicitly.
+- **Decision:** Faithfulness, answer relevance and answer correctness come from
+  Ragas. Everything else does not: retrieval metrics stay with `ranx`, and citation
+  precision/recall, step coverage and refusal detection stay rule-based and free.
+  Ragas is called **behind the `Judge` interface** in `rag/eval/judge.py`, which is
+  the only module permitted to import it — `tests/test_eval_boundary.py` enforces
+  that by scanning for import statements.
+- **Ragas's dataset and experiment abstractions are explicitly not adopted.** It has
+  drifted from a RAG-eval library toward a general LLM-app eval product with its own
+  dataset management and experiment tracking. Adopting those would fork the Phase 0
+  results store and break `rag diff`. We call metrics, take scores, write our own rows.
+- **Evidence:** No measured data; framework selection. The boundary is enforced by a
+  test rather than by intent.
+- **Consequences:** A Ragas major-version change, or a swap to another judge library,
+  is a one-file change. Judge prompts are no longer ours: `prompts/judge_*.yaml` were
+  deleted, and only the generator prompt remains under our version control.
+- **Revisit if:** Ragas's metric definitions drift from what we need, or its release
+  cadence makes pinning impractical.
+
+## DEC-020 — Ragas `context_precision` / `context_recall` are not used
+- **Date:** 2026-09-09
+- **Decided by:** Krutik (P0-07/P0-06 updated to specify it)
+- **Status:** Active
+- **Context:** Ragas ships LLM-judged retrieval metrics built for projects with no
+  retrieval ground truth.
+- **Decision:** Not used. WixQA ships `article_ids`, so we have real document-level
+  qrels; estimating labelled recall with a judge would be slower, costlier,
+  non-deterministic and less defensible. Retrieval evaluation belongs to `ranx`;
+  Ragas owns P0-07 only.
+- **Evidence:** Measured — all 400 gold document ids in `dev` and `test` resolve
+  against the frozen corpus, so ground truth is complete and needs no estimation.
+- **Consequences:** Retrieval metrics stay free and deterministic. Tier 1 remains
+  zero-LLM-call, which is what makes parameter sweeps affordable.
+- **Revisit if:** a benchmark without document-level ground truth is added, where
+  judged context metrics would be the only option.
+
+## DEC-021 — Ragas is pinned exactly, and its metric code is fingerprinted
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-07)
+- **Status:** Active
+- **Context:** P0-07 requires an exact pin and `ragas_version` on every run row.
+  Ragas manages metric prompts internally and revises them between releases.
+- **Decision:** `ragas==0.4.3`, exact. Every run records `ragas_version` and
+  `metric_prompt_versions`. Ragas's collections API exposes no prompt objects, so
+  the fingerprint is a SHA-256 over each metric package's source — it changes when
+  Ragas changes the metric, which is the thing that would silently move scores.
+  Both fields are part of `rag diff`'s comparability check.
+- **Evidence:** Measured during implementation — see MIS-004. `ragas.metrics` is
+  already deprecated in favour of `ragas.metrics.collections` "removed in v1.0", so
+  the API is actively moving.
+- **Consequences:** A Ragas upgrade is a deliberate act that starts a new comparison
+  family for judged metrics, and `rag diff` will say so.
+- **Revisit if:** Ragas stabilises and publishes prompt versions we can record directly.
+
+## DEC-022 — `answer_relevance` is unavailable until an embedding model is chosen
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-07); the model choice itself is Krutik's
+- **Status:** Active — **blocking one of P0-07's three judged metrics**
+- **Context:** Ragas's `AnswerRelevancy` requires an embeddings model (it embeds
+  generated questions to compare against the original). Our only configured LLM
+  access path is OpenRouter, which **serves no embedding models** — checked against
+  its `/models` endpoint on 2026-09-09: zero models expose an embeddings endpoint.
+- **Options considered:**
+  1. Ship faithfulness and answer correctness now, skip relevance and record it —
+     chosen.
+  2. Add a second provider for embeddings — deferred; needs another key and a model
+     decision that is Krutik's.
+  3. Local embeddings via `sentence-transformers` — deferred; free and deterministic,
+     but a heavy dependency and still a model choice.
+- **Decision:** `JudgeConfig.criteria` omits `answer_relevance` when no embedding
+  model is configured, and `skipped_criteria` is recorded on the run so its absence
+  is visible rather than assumed.
+- **Evidence:** Measured — `AnswerRelevancy.__init__` requires `embeddings`;
+  OpenRouter's model list contains no embedding models.
+- **Consequences:** P0-07 ships two of three judged metrics. Answer relevance is the
+  weakest of the three and largely overlaps answer correctness, so the loss is small,
+  but it is a gap and is recorded as one. Tracked as OQ-011.
+- **Revisit if:** an embedding model is chosen — which Phase 1 needs anyway for dense
+  retrieval, so this likely resolves itself there.
+
+## DEC-023 — Answer correctness is scored on factuality alone
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-07)
+- **Status:** Active
+- **Context:** P0-07 notes Ragas's `AnswerCorrectness` "blends factual and
+  semantic-similarity components and is noisy on long procedural answers; record the
+  weighting used." Its default is `[0.75 factual, 0.25 similarity]`.
+- **Decision:** `weights = [1.0, 0.0]` — factuality only. This removes the component
+  the story flags as noisy on exactly the answer shape this corpus has, and it also
+  removes the embeddings dependency from this metric (Ragas requires embeddings only
+  when the similarity weight is above zero). Recorded on every run as
+  `answer_correctness_weights`.
+- **Evidence:** No measured data on this corpus; follows P0-07's own warning.
+- **Consequences:** Our answer-correctness numbers are not comparable to any
+  published Ragas number using default weights. Anyone quoting one against ours must
+  say so.
+- **Revisit if:** an embedding model arrives and a weighting sweep shows the
+  similarity component adds signal rather than variance.
+
+## DEC-024 — Tier 2 scores a fixed 100-question subsample by default
+- **Date:** 2026-09-09
+- **Decided by:** Krutik (P0-09 updated to specify it)
+- **Status:** Active
+- **Context:** Ragas faithfulness decomposes an answer into claims and verifies each,
+  so one question is several LLM calls per metric. Across dozens of experiments on
+  200 dev questions that compounds.
+- **Decision:** Tier 2 defaults to a fixed subsample of 100, seed 7, recorded as
+  `eval_subsample_id` on every run and included in `rag diff`'s comparability check.
+  *Fixed* is the point: the same questions every run, so two Tier 2 runs differ by
+  configuration and not by which questions they happened to score. `full_eval: true`
+  takes the whole split. Tier 1 is free and always scores everything.
+- **Evidence:** Cost is an engineering estimate, printed before every Tier 2 run —
+  roughly $3 per 100-question run with a mid-tier judge, dominated by the judge.
+- **Consequences:** Tier 2 metrics carry the error bars of 100 questions, not 200.
+  Sliced further — step coverage applies to about 27% of answers — some Tier 2 slices
+  will be too small to separate configurations, and must be reported with their `n`.
+- **Revisit if:** a Tier 2 slice is consistently too small to support a finding.
+
+## DEC-025 — The placeholder judge must leave the generator's family
+- **Date:** 2026-09-09
+- **Decided by:** Claude (raising the conflict); **model choice pending from Krutik**
+- **Status:** **OPEN — blocks any Tier 2 run**
+- **Context:** DEC-018 chose `openai/gpt-5-nano` as a plumbing placeholder judge while
+  DEC-017 chose the same model as the generator. P0-07 was then updated to require
+  that the judge be from a different model family than the generator, to avoid
+  same-family self-preference bias. `RunConfig` now refuses that pairing outright
+  rather than warning, so the placeholder as recorded cannot run.
+- **Decision:** DEC-018's *deferral* stands — the judge is still a plumbing
+  placeholder and its scores are still not measurements. What must change is the
+  model: it has to come from a non-OpenAI family, and it must be an **exact pinned
+  id**, not a floating alias like `anthropic/claude-haiku-latest` (CLAUDE.md section
+  10 forbids aliases; a provider updating the model behind one invalidates every
+  comparison across that boundary with nothing in the artifacts showing it).
+- **Evidence:** Measured — `RunConfig.__post_init__` raises on same-family pairings;
+  `tests/test_runner.py::test_judge_must_not_share_the_generators_family` covers it.
+- **Consequences:** Until a judge model is chosen, `eval_tier: tier2` cannot be
+  constructed and P0-13's "Tier 2 exercised end to end" criterion cannot be met.
+- **Revisit if:** n/a — this needs a decision, not a trigger.

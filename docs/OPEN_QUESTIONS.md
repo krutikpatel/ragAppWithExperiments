@@ -80,6 +80,22 @@ reference; report the agreement of (a) ROUGE-L, (b) embedding cosine, (c) an LLM
 judge with the same labels. If a free method reaches judge-level agreement, it
 replaces the judge for correctness. **Status:** open. Raised by Krutik, 2026-09-09.
 
+## OQ-011 — Which embedding model unlocks `answer_relevance`?
+Ragas's `AnswerRelevancy` needs embeddings and OpenRouter serves none (DEC-022), so
+one of P0-07's three judged metrics cannot run. Phase 1 needs an embedding model for
+dense retrieval anyway, so the two decisions may as well be one.
+**Decided by:** Krutik chooses an embedding model (a second provider, or local
+`sentence-transformers`); relevance is then scored on the Tier 2 subsample and checked
+for whether it adds signal beyond answer correctness, which it largely overlaps.
+**Status:** open, blocking one P0-07 metric.
+
+## OQ-012 — Does the Ragas call multiplier match reality?
+The Tier 2 cost estimate assumes roughly 3x the single-call token volume for the
+judge, because faithfulness decomposes claims and verifies each one. That number is an
+allowance, not a measurement.
+**Decided by:** the first real Tier 2 run — compare estimated judge tokens against
+OpenRouter's reported usage and correct `RAGAS_CALL_MULTIPLIER`. **Status:** open.
+
 ---
 
 ## External claims to test, not to cite

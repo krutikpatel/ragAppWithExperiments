@@ -208,6 +208,8 @@ one that matters most — report it first.
 
 - A short dense-vs-sparse comparison section: where each wins, by slice. No conclusions beyond
   what the numbers show.
+- Every judged metric in the scorecard is reported **with its minimum detectable difference from
+  P1-11**, e.g. `faithfulness 0.71 (MDD ±0.04)`. A scorecard entry without an MDD is incomplete.
 
 ---
 
@@ -245,6 +247,36 @@ Acceptance criteria:
 
 ---
 
+### P1-11 — Judge variance and minimum detectable difference
+
+**As the project, I need to know how noisy my evaluator is, before I trust any improvement it
+reports.**
+
+Context: Ragas metrics are LLM-judged and therefore stochastic. If a Phase 2 reranker improves
+faithfulness by 3 points and the judge's own run-to-run spread is 4 points, nothing has been
+learned — and that will not be visible unless it is measured. This is the difference between a
+portfolio project that reports gains confidently and one that reports them correctly.
+
+Acceptance criteria:
+- The Phase 1 dense baseline Tier 2 config is run **three times, entirely unchanged**, on the same
+  fixed dev subsample, at judge temperature 0.
+- For each judged metric (faithfulness, answer relevance, answer correctness), compute mean and
+  standard deviation across the three runs, at both corpus level and per slice.
+- Derive and record a **minimum detectable difference (MDD)** per metric — the threshold below
+  which a change is indistinguishable from judge noise. State the rule used to derive it
+  (e.g. 2× the observed standard deviation) in `docs/DECISIONS.md`.
+- MDD values are written into `docs/EXPERIMENTS.md` as a standing reference table, and referenced
+  by the Phase 1 scorecard (P1-08).
+- Sanity check: the rule-based and label-based metrics — citation precision/recall, step coverage,
+  and all retrieval metrics — must be **identical** across all three runs. Any variance there is a
+  bug (non-determinism leaking into retrieval or parsing), not judge noise. Fail the story if they
+  differ.
+- Seed `docs/MISTAKES.md`: *"Never report a judged-metric improvement smaller than its MDD as a
+  win. Report it as 'within judge noise'."*
+- Cost of the three runs is recorded, since this repeats at any judge or Ragas version change.
+
+---
+
 ## 4. Phase 1 definition of done
 
 1. Chunk config reconciled; sparse baseline re-run under it.
@@ -257,6 +289,8 @@ Acceptance criteria:
 8. Baseline scorecard in `docs/EXPERIMENTS.md`, sliced.
 9. `rag diff` smoke test passes against `configs/baseline_dense.yaml`.
 10. `docs/HYPOTHESES.md` exists with Phase 1 entries resolved.
+11. Judge variance measured over three identical runs; MDD table recorded; non-judged metrics
+    verified identical across all three.
 
 ---
 
@@ -264,8 +298,8 @@ Acceptance criteria:
 
 Flag rather than guess:
 - Which embedding model specifically, and confirmation of its prefix convention.
-- Generator model for Tier 2, and whether the judge should be a different family to avoid
-  self-preference bias (carried over from Phase 0 open questions).
+- Generator model for Tier 2. The judge-family question is **resolved** — it must differ from the
+  generator's family (P0-07) — but the specific pairing still needs choosing.
 - Whether the candidate-pool cap of 50 chunks is right, given the collapse ratio observed in P1-02.
 - Whether the prompt should branch on procedural vs non-procedural questions, or use one
   step-list instruction throughout. One prompt is simpler and is the recommended default.

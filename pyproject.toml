@@ -12,6 +12,14 @@ dependencies = [
     "pyyaml>=6.0",
     "ranx>=0.3.20",
     "httpx>=0.27",
+    # Judged generation metrics. PINNED EXACTLY, not floored: Ragas revises metric
+    # prompts between releases, and a silent prompt change would move every
+    # historical judged score without any config changing. See MIS-004 / DEC-021.
+    "ragas==0.4.3",
+    # ragas 0.4.3 imports langchain_community.chat_models.vertexai, which
+    # langchain-community 0.4.x removed. Its own dependency spec does not exclude
+    # 0.4.x, so this ceiling is ours to hold. See MIS-004.
+    "langchain-community<0.4",
 ]
 
 [project.optional-dependencies]

@@ -19,15 +19,17 @@ from rag.chunking.index_map import ChunkIndex
 from rag.corpus.loader import load_corpus
 from rag.dataset.splits import load_split
 from rag.eval.generation_metrics import deterministic_metrics, refusal_summary
-from rag.eval.judge import CRITERIA, JudgeConfig, OpenRouterJudge, judge_all_criteria
+from rag.eval.judge import CRITERIA, JudgeConfig, RagasJudge, judge_provenance
 from rag.eval.qrels import qrels_from_split, run_from_results
 from rag.eval.retrieval_metrics import evaluate_retrieval
 from rag.eval.slices import aggregate_by_slice, build_slices
 from rag.generation.base import GeneratorConfig, OpenRouterGenerator
 from rag.hashing import short_id
 from rag.runner.config import EvalTier, RunConfig
+from rag.runner.cost import estimate_tier2_cost, format_estimate
 from rag.runner.registry import build_retriever
 from rag.runner.store import ResultsStore
+from rag.runner.subsample import build_subsample
 
 HELD_OUT_SPLIT = "test"
 
@@ -122,8 +124,31 @@ def _run(
 
     corpus = load_corpus()
     frame = load_split(config.split)
+    split_hash = _split_hash(config.split)
+
+    # Tier 1 is free and always scores the whole split. Tier 2 scores a fixed
+    # subsample unless full_eval is set (P0-09).
+    if config.eval_tier is EvalTier.TIER_2:
+        subsample = build_subsample(
+            frame,
+            size=config.eval_subsample_size,
+            seed=config.eval_subsample_seed,
+            split_hash=split_hash,
+            full=config.full_eval,
+        )
+        frame = frame[frame["question_id"].isin(subsample.question_ids)].reset_index(drop=True)
+        print(format_estimate(_cost_estimate(config, frame)))
+    else:
+        subsample = build_subsample(
+            frame, size=len(frame), seed=config.eval_subsample_seed,
+            split_hash=split_hash, full=True,
+        )
+
     slices = build_slices(frame)
     index, chunk_text = build_index(config)
+    judge_meta = (
+        judge_provenance(_judge_config(config)) if config.eval_tier is EvalTier.TIER_2 else {}
+    )
 
     run_id = make_run_id(config)
     store.start_run(
@@ -138,10 +163,11 @@ def _run(
             "hf_revision": corpus.hf_revision,
             "dataset_config": config.split,
             "split": config.split,
-            "split_hash": _split_hash(config.split),
+            "split_hash": split_hash,
             "git_sha": git.sha,
             "git_dirty": int(git.dirty),
             "eval_tier": config.eval_tier.value,
+            "eval_subsample_id": subsample.subsample_id,
             "doc_pooling": config.doc_pooling,
             "chunker_id": index.chunker_id,
             "retriever": config.retriever,
@@ -149,7 +175,11 @@ def _run(
             "seed": config.seed,
             "generator_model": config.generator_model,
             "judge_model": config.judge_model,
+            "judge_family": judge_meta.get("judge_family"),
+            "judge_temperature": judge_meta.get("judge_temperature"),
+            "ragas_version": judge_meta.get("ragas_version"),
             "prompt_versions": json.dumps(_prompt_versions(config)),
+            "metric_prompt_versions": json.dumps(judge_meta.get("metric_prompt_versions", {})),
             "harness_smoke_test": int(config.harness_smoke_test),
             "status": "RUNNING",
         }
@@ -172,14 +202,29 @@ def _split_hash(split: str) -> str:
 
 
 def _prompt_versions(config: RunConfig) -> dict[str, str]:
+    """Our own prompts only. Ragas manages the judge prompts internally, so those are
+    fingerprinted as `metric_prompt_versions` instead."""
     if config.eval_tier is not EvalTier.TIER_2:
         return {}
-    from rag.eval.judge import PROMPT_FOR_CRITERION
+    return {"answer": config.generator_prompt}
 
-    versions = {"answer": config.generator_prompt}
-    for criterion, (prompt_id, version) in PROMPT_FOR_CRITERION.items():
-        versions[criterion] = f"{prompt_id}@{version}"
-    return versions
+
+def _judge_config(config: RunConfig) -> JudgeConfig:
+    return JudgeConfig(
+        model=config.judge_model,
+        temperature=config.judge_temperature,
+        embedding_model=config.judge_embedding_model,
+    )
+
+
+def _cost_estimate(config: RunConfig, frame) -> dict:
+    context_words = config.top_k * int(config.chunker_params.get("chunk_size", 512))
+    return estimate_tier2_cost(
+        n_questions=len(frame),
+        context_words=context_words,
+        generator_model=config.generator_model,
+        judge_model=config.judge_model,
+    )
 
 
 def _execute(
@@ -285,7 +330,7 @@ def _tier2(
     """Generate answers and judge them. The only part of a run that costs money."""
     assembler = ConcatAssembler(max_tokens=config.context_max_tokens)
     generator = OpenRouterGenerator(GeneratorConfig(model=config.generator_model))
-    judge = OpenRouterJudge(JudgeConfig(model=config.judge_model))
+    judge = RagasJudge(_judge_config(config))
 
     generated: dict[str, Any] = {}
     for row in rows:
@@ -304,12 +349,14 @@ def _tier2(
                 gold_doc_ids=list(row["gold_doc_ids"]),
             )
         )
-        scores = judge_all_criteria(
-            judge,
+        # Ragas scores against the retrieved contexts as a list, not one blob:
+        # faithfulness decomposes claims and attributes them to individual contexts.
+        contexts = [chunk_text[c.chunk_id] for c in results_by_question[question_id].chunks[: config.top_k]]
+        scores = judge.score(
             question=row["question"],
             answer=answer.text,
-            context=context.text,
-            reference_answer=row["answer"],
+            contexts=contexts,
+            reference=row["answer"],
         )
         for criterion, score in scores.items():
             per_question[question_id][criterion] = score.score
@@ -318,7 +365,9 @@ def _tier2(
             "text": answer.text,
             "cited": answer.cited_doc_ids,
             "latency_ms": answer.latency_ms,
-            "tokens_in": answer.tokens_in + sum(s.tokens_in for s in scores.values()),
-            "tokens_out": answer.tokens_out + sum(s.tokens_out for s in scores.values()),
+            # Ragas does not surface per-call token usage, so only the generator's
+            # tokens are counted here. Judge cost is the pre-run estimate.
+            "tokens_in": answer.tokens_in,
+            "tokens_out": answer.tokens_out,
         }
     return generated

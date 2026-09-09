@@ -79,13 +79,18 @@ Done:
   rule recorded on every run, strict and loose recall@{1,3,5,10,20}, nDCG@10, and MRR
   restricted to the single-gold subset with its size attached.
 - **Generation metrics.** Citation precision/recall and step coverage computed from
-  artifacts with no LLM call; refusal and false-refusal tracked separately; three
-  judge criteria behind versioned prompts whose content hashes are pinned in tests.
+  artifacts with no LLM call; refusal and false-refusal tracked separately. Judged
+  metrics come from **Ragas**, pinned exactly and confined behind the `Judge`
+  interface — a test asserts nothing else imports it, so swapping judge libraries is
+  a one-file change. Its dataset and experiment abstractions are deliberately not
+  adopted; they would fork the results store.
 - **Slice reporting** on every axis P0-08 requires, with `n` carried alongside each
   number and empty slices omitted.
 - **Two-tier loop.** Tier 1 (retrieval only, zero LLM calls) runs `dev` end to end in
-  about 12 seconds. Tier 2 adds generation and judging. The held-out `test` split
-  refuses to open without an explicit flag and prints its opening history.
+  about 12 seconds. Tier 2 adds generation and judging, scores a fixed 100-question
+  subsample so runs stay comparable and affordable, and prints a cost estimate before
+  it starts. The held-out `test` split refuses to open without an explicit flag and
+  prints its opening history.
 - **Runner and results store.** `run(config) -> row`, SQLite with `runs` and
   `run_questions`, full provenance including git dirty state, crashed runs recorded
   as `VOID`, and `rag diff` listing the questions that flipped in either direction
@@ -97,9 +102,12 @@ and the P0-13 baseline run. **No experiments have been run, so there are no resu
 to report.** The only runs in the store are harness smoke tests using a deliberately
 bad retriever; they are marked as such and are not experiments.
 
-**Models are not chosen.** Tier 2 refuses to run until a generator and judge are
-configured — that decision is Krutik's, needs a `DEC-NNN` entry, and access is via
-OpenRouter (`.env`).
+**Models are partly chosen.** The generator is `openai/gpt-5-nano` (DEC-017). The
+judge is not chosen and Tier 2 cannot run without it: it must come from a non-OpenAI
+family, since `RunConfig` refuses same-family judging as self-preference bias
+(DEC-025). Ragas's `answer_relevance` additionally needs an embedding model, and
+OpenRouter serves none — so two of three judged metrics are available today, with the
+third recorded as skipped rather than quietly missing (DEC-022).
 
 ## Quickstart
 
