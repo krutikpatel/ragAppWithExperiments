@@ -1,0 +1,26 @@
+# Tier 2 plumbing smoke test — NOT an experiment.
+#
+# Proves the Tier 2 path end to end: generator answers, Ragas scores, provenance and
+# per-question rows land in the store. The judge is a placeholder (DEC-025), so its
+# faithfulness and answer-correctness numbers are NOT measurements and must never be
+# written into docs/EXPERIMENTS.md or quoted in NARRATIVE.md.
+#
+# Uses toy_overlap retrieval, so the retrieval numbers are meaningless too. The real
+# Tier 2 run belongs to P0-13, on BM25.
+name: tier 2 plumbing smoke test
+split: dev
+eval_tier: tier2
+retriever: toy_overlap
+chunker: fixed_token
+chunker_params:
+  chunk_size: 512
+  overlap: 0
+retrieval_depth: 100
+top_k: 5
+doc_pooling: max
+generator_model: openai/gpt-5-nano
+judge_model: deepseek/deepseek-v3.2
+judge_temperature: 0.0
+# Small on purpose: this checks the plumbing, not the corpus.
+eval_subsample_size: 5
+harness_smoke_test: true

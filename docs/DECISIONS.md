@@ -497,8 +497,8 @@ SHA, and reason.
 
 ## DEC-025 — The placeholder judge must leave the generator's family
 - **Date:** 2026-09-09
-- **Decided by:** Claude (raising the conflict); **model choice pending from Krutik**
-- **Status:** **OPEN — blocks any Tier 2 run**
+- **Decided by:** Krutik (options and recommendation from Claude)
+- **Status:** Active — **resolved: `deepseek/deepseek-v3.2`**
 - **Context:** DEC-018 chose `openai/gpt-5-nano` as a plumbing placeholder judge while
   DEC-017 chose the same model as the generator. P0-07 was then updated to require
   that the judge be from a different model family than the generator, to avoid
@@ -512,6 +512,25 @@ SHA, and reason.
   comparison across that boundary with nothing in the artifacts showing it).
 - **Evidence:** Measured — `RunConfig.__post_init__` raises on same-family pairings;
   `tests/test_runner.py::test_judge_must_not_share_the_generators_family` covers it.
-- **Consequences:** Until a judge model is chosen, `eval_tier: tier2` cannot be
-  constructed and P0-13's "Tier 2 exercised end to end" criterion cannot be met.
-- **Revisit if:** n/a — this needs a decision, not a trigger.
+- **Chosen:** `deepseek/deepseek-v3.2` ($0.27/$0.40 per Mtok, roughly $0.36 per
+  100-question Tier 2 run). Non-OpenAI family, exact pinned id, and stronger at
+  reasoning than the flash tier — Ragas drives its metrics through `instructor`, so
+  the judge has to return parseable structured output reliably, and the cheapest
+  small models are the ones that fail at that.
+- **Options considered:**
+  1. `deepseek/deepseek-v3.2` (~$0.36/run) — chosen. Middle ground: cheap enough to
+     stay a placeholder, capable enough that its scores are roughly indicative.
+  2. `google/gemini-2.5-flash-lite` (~$0.15/run) — rejected; marginally cheaper, less
+     reasoning headroom.
+  3. `qwen/qwen3.5-flash-02-23` (~$0.10/run) — rejected; highest structured-output risk.
+  4. `anthropic/claude-sonnet-5` (~$3.12/run) — rejected for now; ending the deferral
+     costs ~9x per run before we know which judged metrics we actually rely on.
+- **Status of its scores:** DEC-018's deferral **still stands**. This is a plumbing
+  judge. Faithfulness and answer correctness from it are not measurements and must not
+  enter `docs/EXPERIMENTS.md` or `NARRATIVE.md`. The real judge decision comes before
+  the first Tier 2 run whose generation numbers are meant to be believed.
+- **Consequences:** Tier 2 can now be constructed and P0-13's end-to-end criterion is
+  unblocked. Judge cost is roughly $0.36 per 100-question run — the estimate is
+  printed before every Tier 2 run and OQ-012 will replace it with observed usage.
+- **Revisit if:** DeepSeek fails Ragas's structured-output requirement (surfaces as
+  parse errors, not wrong scores), or judged numbers are about to enter the narrative.

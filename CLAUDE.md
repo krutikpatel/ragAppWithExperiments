@@ -477,7 +477,7 @@ Rules that outlive any particular library:
 | Role | Model | Chosen in | Notes |
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
-| Judge | **NOT CHOSEN — blocks Tier 2** | DEC-025 | Must be a **non-OpenAI family** (the generator is OpenAI) and an **exact pinned id**, never an alias. Still a plumbing placeholder per DEC-018: its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md. |
+| Judge | `deepseek/deepseek-v3.2` — **PLACEHOLDER** | DEC-025 | Non-OpenAI family, as required. ~$0.36 per 100-question Tier 2 run. **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** — the real judge decision is still pending (DEC-018). |
 | Embedding | _not chosen_ | DEC-022, OQ-011 | OpenRouter serves none. Blocks Ragas `answer_relevance`, one of P0-07's three judged metrics. Phase 1 needs one for dense retrieval anyway. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 

@@ -102,12 +102,13 @@ and the P0-13 baseline run. **No experiments have been run, so there are no resu
 to report.** The only runs in the store are harness smoke tests using a deliberately
 bad retriever; they are marked as such and are not experiments.
 
-**Models are partly chosen.** The generator is `openai/gpt-5-nano` (DEC-017). The
-judge is not chosen and Tier 2 cannot run without it: it must come from a non-OpenAI
-family, since `RunConfig` refuses same-family judging as self-preference bias
-(DEC-025). Ragas's `answer_relevance` additionally needs an embedding model, and
-OpenRouter serves none — so two of three judged metrics are available today, with the
-third recorded as skipped rather than quietly missing (DEC-022).
+**Models.** Generator `openai/gpt-5-nano` (DEC-017); judge `deepseek/deepseek-v3.2`
+(DEC-025), from a different family because `RunConfig` refuses same-family judging as
+self-preference bias. The judge is still a **plumbing placeholder** — its scores prove
+Tier 2 works and are not measurements. Ragas's `answer_relevance` additionally needs
+an embedding model and OpenRouter serves none, so two of three judged metrics are
+available today, with the third recorded as skipped rather than quietly missing
+(DEC-022).
 
 ## Quickstart
 
