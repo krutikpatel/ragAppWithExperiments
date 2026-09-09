@@ -47,7 +47,7 @@ indexes/
 
 # NOTE: results/runs/ is deliberately NOT ignored.
 # Run artifacts (config.yaml, metrics.json, predictions.jsonl, env.json,
-# stdout.log) are the source of truth for every number in docs/. See CLAUDE.md §2.
+# stdout.log) are the source of truth for every number in docs/. See CLAUDE.md section 2.
 
 # Editors / OS
 .DS_Store

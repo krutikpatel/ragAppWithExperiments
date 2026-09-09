@@ -362,3 +362,115 @@ until we have resolved it.
 **Ask before:** changing metric definitions, regenerating the eval set, switching
 embedding or judge models, deleting run artifacts, or changing anything that
 breaks comparability with prior runs.
+
+---
+
+## 10. Repository structure, tech stack, and models
+
+Reference material. Keep it accurate: when you add a directory, a dependency, or a
+model, update this section in the same commit. A stale map here is worse than none,
+because it gets trusted.
+
+**Directories marked _(planned)_ do not exist yet.** Do not describe them as if they
+do, and do not create one until the story that owns it is in scope.
+
+### Directory structure
+
+```
+rag/
+  cli.py            `rag` entry point (typer). CLI only — no UI in Phase 0.
+  paths.py          every filesystem location, in one place
+  hashing.py        canonical-JSON hashing for corpora, splits, configs
+  corpus/           freeze.py (pinned HF revision -> parquet), normalize.py
+                    (norm-vN), loader.py (the ONLY runtime read path)
+  dataset/          wixqa.py (QA configs), splits.py (test/dev/dev_large),
+                    unanswerable.py (the authored refusal set)
+  chunking/         base.py (Chunker, Chunk, FixedTokenChunker),
+                    index_map.py (ChunkIndex — persists chunk_id -> doc_id)
+  retrieval/        base.py (Retriever, RetrievalResult), pooling.py (doc_pooling)
+  eval/             qrels.py (binary document-level qrels + run alignment check)
+  embedding/        (planned, P0-11)   Embedder
+  reranking/        (planned, P0-11)   Reranker — interface only in Phase 0
+  assembly/         (planned, P0-11)   ContextAssembler
+  generation/       (planned, P0-11)   Generator
+  runner/           (planned, P0-10)   run(config) -> row in the results store
+
+prompts/            versioned YAML, addressed by (id, version). Exists, empty
+                    until P0-11. Never inline a prompt in Python.
+configs/            experiment configs. Exists, empty until P0-10.
+
+data/
+  authored/         hand-written inputs, VERSION CONTROLLED.
+                    unanswerable_seed.yaml lives here.
+  frozen/           materialized corpus and splits + *.meta.json. GITIGNORED,
+                    rebuilt by `rag corpus freeze` and `rag data splits`,
+                    tracked by hash rather than by content.
+
+docs/               the documentation contract (section 2). Deliverables.
+  experiments/      (planned) per-experiment EXP-NNNN.md files
+tests/              pytest. A story is not done until its criteria are a test
+                    or a runnable command.
+user_stories/       phase handover documents. Input, not deliverable.
+```
+
+Two notes on where things live:
+
+- The handover for Phase 0 suggested `rag/adapters/`. It is `rag/dataset/` here,
+  which holds both the WixQA loading and the split curation that consumes it. The
+  `DatasetAdapter` interface required by P0-11 belongs in that package.
+- `data/authored/` versus `data/frozen/` is the load-bearing distinction. Anything a
+  human wrote is version controlled and reviewable in a diff. Anything a command
+  can regenerate from a pinned revision is gitignored and identified by hash.
+
+### Tech stack
+
+| Layer | Choice | Notes |
+|---|---|---|
+| Language | Python 3.11+ | `.python-version` pins 3.11 locally |
+| Dependencies | `uv` | `uv pip install -e ".[dev]"` |
+| Ingest | HuggingFace `datasets` | split building only; never at runtime |
+| Storage | Parquet via `pandas` + `pyarrow` | frozen corpus and splits |
+| CLI | `typer` | one `rag` entry point |
+| Authored data | `pyyaml` | seed files under `data/authored/` |
+| Tests | `pytest` | |
+| IR metrics | `ranx` or `pytrec_eval` _(planned, P0-06)_ | never hand-roll recall/nDCG/MRR |
+| Results store | SQLite _(planned, P0-10)_ | `runs` and `run_questions` tables |
+| Config objects | frozen dataclasses today; `pydantic` declared for P0-10 | must hash to a stable `config_hash` |
+
+Rules that outlive any particular library:
+
+- Hash *records*, never file bytes. Parquet output is not byte-reproducible across
+  writer versions, so every hash is computed over a canonical serialization of the
+  rows. See `rag/hashing.py`.
+- One read path per artifact. If a second code path can reach HuggingFace or read a
+  parquet file directly, provenance stops being enforceable.
+- Everything reproducible from a config file: `run(config) -> row in results store`.
+
+### Models
+
+**Not yet chosen. Fill this in before the first Tier 2 run.** Until a row here is
+filled, no generation, judge, or embedding number can be produced — and an empty
+row is the honest state, not an omission to paper over.
+
+| Role | Model | Version / id | Chosen in | Notes |
+|---|---|---|---|---|
+| Embedding | _TBD_ | — | — | cost and latency per 6,221-doc index build matter |
+| Generator | _TBD_ | — | — | |
+| Judge | _TBD_ | — | — | see the self-preference note below |
+| Reranker | _TBD_ | — | — | Phase 1 at the earliest; interface only in Phase 0 |
+
+Rules for this table:
+
+- Every entry needs a `DEC-NNN` in `docs/DECISIONS.md` before it is used in a run.
+  Model choice is exactly the kind of decision that is expensive to reverse: it
+  starts a new comparison family.
+- **Pin an exact model id**, never a floating alias. A provider silently updating
+  the model behind an alias invalidates every comparison across that boundary, and
+  nothing in the artifacts would show it.
+- The judge model id and the judge prompt version are recorded on every score
+  (P0-07). Swapping either must be visible in the results store.
+- **Open question, flag rather than guess:** using the same model family for judge
+  and generator risks self-preference bias. That needs a decision entry with its
+  reasoning, not a default.
+- Runs that used different judge models are not comparable. Say so rather than
+  quietly presenting the delta.
