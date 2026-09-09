@@ -1,0 +1,173 @@
+# Unanswerable evaluation set — P0-04.
+#
+# WixQA ships no questions the system should refuse, so this set is authored.
+#
+# HARD CONSTRAINT: this set is NOT built by removing articles from the index.
+# Deleting articles would change corpus_hash and break comparability with every
+# other run. Every question here is unanswerable from the *complete*, frozen
+# 2024-12-02 corpus.
+#
+# Provenance
+#   drafted_by:   claude-opus-5 (Claude Code session, 2026-09-09)
+#   verified_by:  PENDING — no human has reviewed these yet
+#   verification: each question must be confirmed to have no grounded answer in
+#                 the frozen corpus before any refusal number is quoted as a
+#                 result. Set `verified_by` and `verified_on` once done.
+#
+# Buckets
+#   out-of-scope-platform  same task, a competing platform. The corpus is Wix-only.
+#   post-snapshot          explicitly asks about a period after 2024-12-02, so no
+#                          snapshot of the KB could contain the answer. Phrased by
+#                          date rather than by naming a specific later feature, so
+#                          that the question stays unanswerable without asserting
+#                          anything about what Wix actually shipped.
+#   underspecified         no referent. Cannot be grounded in any single article.
+
+meta:
+  drafted_by: claude-opus-5
+  drafted_on: "2026-09-09"
+  verified_by: null
+  verified_on: null
+  corpus_snapshot_date: "2024-12-02"
+
+questions:
+  # --- out-of-scope-platform ---------------------------------------------
+  - id: UNA-001
+    reason: out-of-scope-platform
+    question: How do I connect a custom domain to my Shopify store?
+  - id: UNA-002
+    reason: out-of-scope-platform
+    question: Where do I change the checkout currency in Squarespace?
+  - id: UNA-003
+    reason: out-of-scope-platform
+    question: How do I add a members-only area to a Webflow site?
+  - id: UNA-004
+    reason: out-of-scope-platform
+    question: How do I set up abandoned cart emails in Shopify?
+  - id: UNA-005
+    reason: out-of-scope-platform
+    question: How do I enable the blog on a Squarespace site?
+  - id: UNA-006
+    reason: out-of-scope-platform
+    question: Where are the SEO settings in Webflow?
+  - id: UNA-007
+    reason: out-of-scope-platform
+    question: How do I install an app from the Shopify App Store?
+  - id: UNA-008
+    reason: out-of-scope-platform
+    question: How do I transfer my Squarespace subscription to another account?
+  - id: UNA-009
+    reason: out-of-scope-platform
+    question: How do I add a booking calendar to a Webflow page?
+  - id: UNA-010
+    reason: out-of-scope-platform
+    question: How do I set up local pickup for orders in Shopify?
+  - id: UNA-011
+    reason: out-of-scope-platform
+    question: How do I change the site favicon in Squarespace?
+  - id: UNA-012
+    reason: out-of-scope-platform
+    question: How do I create a CMS collection in Webflow?
+  - id: UNA-013
+    reason: out-of-scope-platform
+    question: How do I connect Google Analytics to my Shopify store?
+  - id: UNA-014
+    reason: out-of-scope-platform
+    question: How do I restore a deleted page in Squarespace?
+  - id: UNA-015
+    reason: out-of-scope-platform
+    question: How do I export the HTML and CSS of my Webflow site?
+
+  # --- post-snapshot -----------------------------------------------------
+  - id: UNA-016
+    reason: post-snapshot
+    question: Which Wix Studio features were released in 2025?
+  - id: UNA-017
+    reason: post-snapshot
+    question: What changed in Wix Payments pricing during 2026?
+  - id: UNA-018
+    reason: post-snapshot
+    question: What is in the Wix Editor release notes for March 2025?
+  - id: UNA-019
+    reason: post-snapshot
+    question: Which Wix Bookings features shipped after December 2024?
+  - id: UNA-020
+    reason: post-snapshot
+    question: Which AI tools were added to the Wix dashboard in 2025?
+  - id: UNA-021
+    reason: post-snapshot
+    question: Which Wix apps were deprecated during 2025?
+  - id: UNA-022
+    reason: post-snapshot
+    question: What is the Wix Premium plan lineup as of January 2026?
+  - id: UNA-023
+    reason: post-snapshot
+    question: Which countries did Wix Payments expand to in 2025?
+  - id: UNA-024
+    reason: post-snapshot
+    question: What changed in the Wix Owner mobile app in its 2025 releases?
+  - id: UNA-025
+    reason: post-snapshot
+    question: What shipping-rule changes did Wix Stores announce in 2025?
+  - id: UNA-026
+    reason: post-snapshot
+    question: Which Velo APIs were introduced after December 2024?
+  - id: UNA-027
+    reason: post-snapshot
+    question: What is the Wix Partner Program tier structure in 2026?
+  - id: UNA-028
+    reason: post-snapshot
+    question: Which website templates did Wix add in 2025?
+  - id: UNA-029
+    reason: post-snapshot
+    question: How did the Wix SEO tools change in the 2025 updates?
+  - id: UNA-030
+    reason: post-snapshot
+    question: What were the Wix service outages reported in 2025?
+
+  # --- underspecified ----------------------------------------------------
+  - id: UNA-031
+    reason: underspecified
+    question: How do I fix it?
+  - id: UNA-032
+    reason: underspecified
+    question: Why isn't my site working?
+  - id: UNA-033
+    reason: underspecified
+    question: How much does it cost?
+  - id: UNA-034
+    reason: underspecified
+    question: Can I change the settings?
+  - id: UNA-035
+    reason: underspecified
+    question: Which plan is best for me?
+  - id: UNA-036
+    reason: underspecified
+    question: Is that included?
+  - id: UNA-037
+    reason: underspecified
+    question: How long does it take?
+  - id: UNA-038
+    reason: underspecified
+    question: Where do I click?
+  - id: UNA-039
+    reason: underspecified
+    question: Why was my account charged?
+  - id: UNA-040
+    reason: underspecified
+    question: How do I make it look better?
+  - id: UNA-041
+    reason: underspecified
+    question: Can I undo it?
+  - id: UNA-042
+    reason: underspecified
+    question: What happened to my page?
+  - id: UNA-043
+    reason: underspecified
+    question: Is there a limit?
+  - id: UNA-044
+    reason: underspecified
+    question: How do I get it approved?
+  - id: UNA-045
+    reason: underspecified
+    question: Why is it not showing up?

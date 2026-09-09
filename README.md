@@ -67,9 +67,44 @@ row and the detail file are written.
 
 ## Status
 
-Early. The operating contract is written; the pipeline, corpus, and evaluation set
-are not yet in the repository. No experiments have been run, so there are no results
-to report here yet.
+**Phase 0 — evaluation harness. Stories P0-01 through P0-05 are complete.** The
+harness builds and scores inputs; it does not retrieve yet.
+
+Done:
+
+- The corpus is pinned to one HuggingFace commit and materialized locally with a
+  reproducible `corpus_hash` (6,221 articles, snapshot 2024-12-02).
+- One versioned text-normalization rule, `norm-v1`, with the stored article kept
+  verbatim for citation display.
+- Four hashed splits — `test` (held out), `dev`, `dev_large`, `unanswerable` — built
+  by a seeded, stratified deal.
+- 45 authored unanswerable questions in three buckets, added as questions rather
+  than by deleting articles from the index. **LLM-drafted; human verification
+  pending.**
+- Document-level qrels and an explicit chunk-to-document pooling rule, recorded on
+  every run because it changes the document ranking by itself.
+
+Not yet built: retrieval metrics (P0-06), generation metrics (P0-07), slice
+reporting (P0-08), the two-tier loop (P0-09), the runner and results store (P0-10),
+the remaining interfaces (P0-11), test-split discipline (P0-12), and the baseline
+run (P0-13). **No experiments have been run, so there are no results to report.**
+
+## Quickstart
+
+```bash
+uv venv --python 3.11 && uv pip install -e ".[dev]"
+
+rag corpus freeze          # materialize the pinned corpus, print corpus_hash
+rag corpus verify          # recompute the hash from the artifact
+rag data splits            # build test / dev / dev_large / unanswerable
+rag data describe dev      # shape and slice counts
+
+pytest
+```
+
+`data/frozen/` is gitignored. It is reproduced from the pinned revision by the two
+commands above, and its provenance travels in `corpus.meta.json` and
+`splits.meta.json`.
 
 ## Working in this repo
 

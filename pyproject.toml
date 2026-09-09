@@ -1,0 +1,31 @@
+[project]
+name = "rag"
+version = "0.0.1"
+description = "RAG experiment platform over the WixQA benchmark"
+requires-python = ">=3.11"
+dependencies = [
+    "datasets>=3.0",
+    "pyarrow>=17.0",
+    "pandas>=2.2",
+    "pydantic>=2.8",
+    "typer>=0.12",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+rag = "rag.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rag"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

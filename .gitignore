@@ -20,6 +20,9 @@ env/
 *.key
 credentials.json
 
+# uv
+uv.lock
+
 # Tooling caches
 .pytest_cache/
 .mypy_cache/
@@ -29,9 +32,14 @@ credentials.json
 htmlcov/
 coverage.xml
 
+# Materialized artifacts — rebuildable from a pinned revision, tracked by hash
+# in data/frozen/*.meta.json rather than by content in git.
+data/frozen/
+
 # Local model / retrieval caches — rebuildable, not evidence
 .cache/
 data/cache/
+indexes/
 indexes/
 *.faiss
 *.duckdb
