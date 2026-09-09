@@ -27,12 +27,18 @@ def test_questions_without_gold_docs_are_excluded():
 
 
 def test_run_is_built_from_pooled_documents():
+    """Scores are rank-derived, so the metric scores the ranking we actually return.
+
+    The raw pooled scores are available with `rank_scores=False`. See MIS-003 for
+    why they are not what gets scored.
+    """
     result = RetrievalResult(
         question_id="q1",
         chunks=[ScoredChunk("c1", "doc_A", 0.9)],
         docs=[("doc_A", 0.9), ("doc_B", 0.4)],
     )
-    assert run_from_results([result]) == {"q1": {"doc_A": 0.9, "doc_B": 0.4}}
+    assert list(run_from_results([result])["q1"]) == ["doc_A", "doc_B"]
+    assert run_from_results([result], rank_scores=False) == {"q1": {"doc_A": 0.9, "doc_B": 0.4}}
 
 
 def test_alignment_check_reports_both_directions():

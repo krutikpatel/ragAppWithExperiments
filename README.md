@@ -67,27 +67,39 @@ row and the detail file are written.
 
 ## Status
 
-**Phase 0 — evaluation harness. Stories P0-01 through P0-05 are complete.** The
-harness builds and scores inputs; it does not retrieve yet.
+**Phase 0 — evaluation harness. Stories P0-01 through P0-10 are complete.**
 
 Done:
 
-- The corpus is pinned to one HuggingFace commit and materialized locally with a
-  reproducible `corpus_hash` (6,221 articles, snapshot 2024-12-02).
-- One versioned text-normalization rule, `norm-v1`, with the stored article kept
-  verbatim for citation display.
-- Four hashed splits — `test` (held out), `dev`, `dev_large`, `unanswerable` — built
-  by a seeded, stratified deal.
-- 45 authored unanswerable questions in three buckets, added as questions rather
-  than by deleting articles from the index. **LLM-drafted; human verification
-  pending.**
-- Document-level qrels and an explicit chunk-to-document pooling rule, recorded on
-  every run because it changes the document ranking by itself.
+- **Inputs are pinned and hashed.** Corpus frozen to one HuggingFace commit (6,221
+  articles, snapshot 2024-12-02) with a reproducible `corpus_hash`; one versioned
+  normalization rule; four hashed splits built by a seeded stratified deal; 45
+  authored unanswerable questions (**LLM-drafted, human verification pending**).
+- **Document-level scoring.** Binary qrels, an explicit chunk-to-document pooling
+  rule recorded on every run, strict and loose recall@{1,3,5,10,20}, nDCG@10, and MRR
+  restricted to the single-gold subset with its size attached.
+- **Generation metrics.** Citation precision/recall and step coverage computed from
+  artifacts with no LLM call; refusal and false-refusal tracked separately; three
+  judge criteria behind versioned prompts whose content hashes are pinned in tests.
+- **Slice reporting** on every axis P0-08 requires, with `n` carried alongside each
+  number and empty slices omitted.
+- **Two-tier loop.** Tier 1 (retrieval only, zero LLM calls) runs `dev` end to end in
+  about 12 seconds. Tier 2 adds generation and judging. The held-out `test` split
+  refuses to open without an explicit flag and prints its opening history.
+- **Runner and results store.** `run(config) -> row`, SQLite with `runs` and
+  `run_questions`, full provenance including git dirty state, crashed runs recorded
+  as `VOID`, and `rag diff` listing the questions that flipped in either direction
+  with their gold ranks — refusing to call two runs comparable when their inputs
+  differ.
 
-Not yet built: retrieval metrics (P0-06), generation metrics (P0-07), slice
-reporting (P0-08), the two-tier loop (P0-09), the runner and results store (P0-10),
-the remaining interfaces (P0-11), test-split discipline (P0-12), and the baseline
-run (P0-13). **No experiments have been run, so there are no results to report.**
+Not yet built: the remaining P0-11 interfaces, the P0-12 test-openings log wiring,
+and the P0-13 baseline run. **No experiments have been run, so there are no results
+to report.** The only runs in the store are harness smoke tests using a deliberately
+bad retriever; they are marked as such and are not experiments.
+
+**Models are not chosen.** Tier 2 refuses to run until a generator and judge are
+configured — that decision is Krutik's, needs a `DEC-NNN` entry, and access is via
+OpenRouter (`.env`).
 
 ## Quickstart
 
@@ -98,6 +110,10 @@ rag corpus freeze          # materialize the pinned corpus, print corpus_hash
 rag corpus verify          # recompute the hash from the artifact
 rag data splits            # build test / dev / dev_large / unanswerable
 rag data describe dev      # shape and slice counts
+
+rag run configs/smoke_toy.yaml   # harness smoke test — NOT an experiment
+rag runs list
+rag diff <run_a> <run_b> --metric strict_recall@5
 
 pytest
 ```

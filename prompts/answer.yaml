@@ -1,0 +1,25 @@
+id: answer
+description: Answer a Wix support question from retrieved help-center articles.
+versions:
+  v1:
+    description: Grounded answer with inline [doc:<id>] citations and explicit refusal.
+    template: |
+      Answer the user's question using ONLY the Wix Help Center articles below.
+
+      Rules:
+      - Use only what the articles say. Do not add knowledge from anywhere else.
+      - Cite the article you used inline as [doc:<id>], using the id shown in the
+        article header. Cite every article you actually used, and no others.
+      - If the answer is a procedure, give it as a numbered list, in order, with no
+        steps omitted.
+      - If the articles do not contain the answer, say so plainly and do not guess.
+        Say what is missing. Do not cite an article that does not answer it.
+      - If the question is too vague to answer, say what you would need to know.
+
+      ARTICLES:
+      {context}
+
+      QUESTION:
+      {question}
+
+      ANSWER:

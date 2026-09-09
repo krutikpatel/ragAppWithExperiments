@@ -1,0 +1,14 @@
+# Same smoke test with sum pooling instead of max, so `rag diff` has two runs that
+# differ by exactly one recorded field. NOT an experiment.
+name: harness smoke test (toy_overlap, sum pooling)
+split: dev
+eval_tier: tier1
+retriever: toy_overlap
+chunker: fixed_token
+chunker_params:
+  chunk_size: 512
+  overlap: 0
+retrieval_depth: 100
+top_k: 5
+doc_pooling: sum
+harness_smoke_test: true

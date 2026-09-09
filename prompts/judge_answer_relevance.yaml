@@ -1,0 +1,21 @@
+id: judge_answer_relevance
+description: Does the answer address the question that was asked?
+versions:
+  v1:
+    description: Relevance only, explicitly independent of correctness and grounding.
+    template: |
+      You are grading whether an answer addresses the question asked.
+
+      Judge ONLY relevance. An answer may be wrong, ungrounded, or incomplete and
+      still be relevant. An answer that is true but answers a different question is
+      NOT relevant. A refusal is not relevant unless the question is unanswerable.
+
+      QUESTION:
+      {question}
+
+      ANSWER:
+      {answer}
+
+      Reply with JSON only:
+      {{"score": <0.0-1.0>,
+        "reasoning": "<two sentences at most>"}}

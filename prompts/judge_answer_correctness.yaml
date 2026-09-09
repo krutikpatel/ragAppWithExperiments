@@ -1,0 +1,30 @@
+id: judge_answer_correctness
+description: >
+  Does the generated answer match the WixQA reference answer? The reference is
+  supplied, so this is comparison, not open-ended fact-checking.
+versions:
+  v1:
+    description: Compared against the gold answer, scoring substance over wording.
+    template: |
+      You are comparing a generated answer against a reference answer written by a
+      support expert.
+
+      The reference is correct by definition. Judge whether the generated answer
+      conveys the same substance. Differences in wording, ordering of prose, length
+      or formatting do not matter. Missing a required step, naming the wrong
+      setting, or adding a claim the reference contradicts do matter.
+
+      QUESTION:
+      {question}
+
+      REFERENCE ANSWER:
+      {reference_answer}
+
+      GENERATED ANSWER:
+      {answer}
+
+      Reply with JSON only:
+      {{"score": <0.0-1.0, where 1.0 is substantively equivalent>,
+        "missing": ["<substantive thing the reference has and the answer lacks>", ...],
+        "contradicted": ["<claim that conflicts with the reference>", ...],
+        "reasoning": "<two sentences at most>"}}

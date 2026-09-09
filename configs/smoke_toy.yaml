@@ -1,0 +1,17 @@
+# Harness smoke test — NOT an experiment.
+#
+# `toy_overlap` ranks chunks by raw word overlap. It exists to exercise the runner,
+# the results store and `rag diff` end to end. Its numbers are meaningless and must
+# never be written into docs/EXPERIMENTS.md. The real baseline is P0-13's BM25 run.
+name: harness smoke test (toy_overlap)
+split: dev
+eval_tier: tier1
+retriever: toy_overlap
+chunker: fixed_token
+chunker_params:
+  chunk_size: 512
+  overlap: 0
+retrieval_depth: 100
+top_k: 5
+doc_pooling: max
+harness_smoke_test: true

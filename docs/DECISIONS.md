@@ -185,3 +185,119 @@ SHA, and reason.
 | # | Date | Config hash | Git SHA | Reason |
 |---|---|---|---|---|
 | _(none)_ | — | — | — | The test split has never been opened. |
+
+## DEC-010 — Strict recall@k is the headline retrieval metric
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-06)
+- **Status:** Active
+- **Context:** `ranx`'s `recall@k` is the mean per-question *fraction* of gold
+  documents found. P0-06 asks for "all gold docs in top-k" (strict) and "any gold
+  doc in top-k" (loose), neither of which is that.
+- **Decision:** `strict_recall@k` = fraction of questions whose per-question recall
+  reached 1.0, computed from `ranx`'s per-query output. `loose_recall@k` =
+  `ranx`'s `hit_rate@k`. `ranx`'s own `recall@k` is used only as the input to
+  strict recall and is never reported under the name "recall".
+- **Evidence:** Measured — 79 of the 400 human-grounded questions need 2-3 gold
+  documents, so the definitions separate on a fifth of the set.
+- **Consequences:** `strict_recall@1` is structurally capped: two gold documents
+  cannot both sit in a top-1 list, so ~20% of questions can never score there.
+  Read `strict_recall@1` against that ceiling, not against 1.0.
+- **Revisit if:** we adopt graded relevance, which would make the binary threshold
+  meaningless.
+
+## DEC-011 — MRR is reported only over the single-gold-document subset
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-06)
+- **Status:** Active
+- **Decision:** `mrr_single_gold` plus `mrr_single_gold_n`. `refuse_full_set_mrr`
+  raises if asked for MRR over a set containing multi-gold questions.
+- **Evidence:** No measured data; definitional. Reciprocal rank asks where *the*
+  answer is; averaged over a mixed population the value tracks the multi-doc
+  proportion of the split rather than the retriever.
+- **Consequences:** MRR is computed over 160 of 200 `dev` questions. The subset size
+  travels with the number so it cannot be quoted as if it covered the split.
+- **Revisit if:** a multi-document rank-aware metric is needed; that is a new metric,
+  not a redefinition of this one.
+
+## DEC-012 — Retrieval depth is separate from context size
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-09/P0-10)
+- **Status:** Active
+- **Context:** P0-06 reports k up to 20; P0-13's baseline retrieves top-5. A first
+  implementation used `top_k` for both, and `strict_recall@20` came back exactly
+  equal to `strict_recall@5` — recall@5 wearing a different label.
+- **Decision:** `retrieval_depth` (default 100) is how many chunks are ranked for
+  scoring; `top_k` is how many chunks reach the generator's context. The config
+  refuses `retrieval_depth < top_k`. Each run records `max_docs_returned` and any
+  `k_values_capped_by_depth`.
+- **Evidence:** Measured on a harness smoke run — with depth tied to `top_k=5`,
+  strict recall was flat at 0.165 for k=5, 10 and 20; with depth 100 it rose
+  0.16 -> 0.225 -> 0.335.
+- **Consequences:** Every run ranks 100 documents deep even when only 5 are shown,
+  which costs retrieval time but no LLM budget.
+- **Revisit if:** deep ranking becomes a measurable share of Tier 1 runtime.
+
+## DEC-013 — Metrics score the ranking we return, not raw pooled scores
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-06/P0-10)
+- **Status:** Active
+- **Context:** See MIS-003. Pooled document scores tie constantly; our pooling rule
+  breaks ties on the best chunk's rank, and an IR library re-breaks them its own way.
+- **Decision:** `run_from_results` emits strictly decreasing rank-derived scores
+  (`1/(rank+1)`) by default, so the library scores exactly the ordering the system
+  returns and the ordering recorded in `run_questions`. Raw scores remain available
+  via `rank_scores=False` for inspection.
+- **Evidence:** Measured — before the fix, a `dev` smoke run had questions whose gold
+  document sat at stored rank 4 while scoring 0 on `strict_recall@5`; after, 0 of 200
+  questions disagree, and the aggregate moved (0.160 -> 0.165).
+- **Consequences:** The `scores` column in `run_questions` (raw chunk scores) is
+  diagnostic only; it is not what produced the metrics.
+- **Revisit if:** we adopt a metric that is sensitive to score magnitude rather than
+  to rank alone.
+
+## DEC-014 — Refusal detection is lexical in Phase 0
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-07)
+- **Status:** Active
+- **Options considered:**
+  1. Ask the judge whether the answer is a refusal — rejected for now: it adds an
+     LLM call per question to a metric that should be free and auditable.
+  2. A versioned pattern list (`refusal-lexical-v1`) — chosen.
+- **Decision:** Lexical detection, version recorded on every run alongside the rates.
+  Refusal on an unanswerable question and refusal on an answerable one are reported
+  as two separate metrics, never one "refusal rate".
+- **Evidence:** No measured data; the detector's agreement with human judgment is
+  untested. Tracked as OQ-008.
+- **Revisit if:** OQ-008 shows the detector disagrees with human reading, or a model
+  refuses in phrasings the patterns miss.
+
+## DEC-015 — Step coverage is reported over the procedural subset only
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-07)
+- **Status:** Active
+- **Context:** P0-07 frames WixQA answers as procedural markdown.
+- **Decision:** Steps are numbered-list items only. Coverage is `None` when the
+  reference has fewer than 2 steps, and the slice report carries
+  `step_coverage__n` so every reported value shows what it was computed over.
+  Matching is Jaccard overlap of content words at threshold 0.5.
+- **Evidence:** Measured — 54 of 200 `dev` reference answers contain a numbered
+  list; 146 are prose. See MIS-002.
+- **Consequences:** Step coverage on `dev` is a ~27% subset metric, roughly 54
+  questions, which is small enough that a few questions move it visibly.
+- **Revisit if:** the subset proves too small to separate configurations, or OQ-007
+  shows lexical matching disagrees with human reading of "same step".
+
+## DEC-016 — Harness smoke-test runs are marked and never comparable
+- **Date:** 2026-09-09
+- **Decided by:** Claude (implementing P0-10)
+- **Status:** Active
+- **Context:** Demonstrating `run(config) -> row` and `rag diff` needs runs, but
+  P0-13's BM25 baseline must be the first recorded experiment.
+- **Decision:** A `toy_overlap` retriever ranks by raw word overlap and exists only
+  to exercise the harness. Configs using it must set `harness_smoke_test: true`,
+  which marks the run row, shows as `[SMOKE TEST]` in `rag runs list`, and makes
+  `rag diff` report any comparison involving it as NOT COMPARABLE.
+- **Evidence:** No measured data; judgment call to keep the ledger clean.
+- **Consequences:** Two smoke runs exist in the local results store. They are not
+  experiments and must never appear in `docs/EXPERIMENTS.md`.
+- **Revisit if:** a real retriever makes the toy redundant for testing.

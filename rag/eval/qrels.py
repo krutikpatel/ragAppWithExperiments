@@ -39,11 +39,36 @@ def qrels_from_split(frame: pd.DataFrame) -> dict[str, dict[str, int]]:
     return qrels
 
 
-def run_from_results(results: Iterable[RetrievalResult]) -> dict[str, dict[str, float]]:
-    """Build a run dict from pooled document rankings."""
+def run_from_results(
+    results: Iterable[RetrievalResult], *, rank_scores: bool = True
+) -> dict[str, dict[str, float]]:
+    """Build a run dict from pooled document rankings.
+
+    By default the raw pooled scores are replaced with strictly decreasing
+    rank-derived scores, `1 / (rank + 1)`.
+
+    This is not cosmetic. Pooled scores tie often — with `max` pooling every
+    document whose best chunk scored the same value ties exactly — and our pooling
+    rule breaks those ties on the rank of the document's best chunk (see
+    `rag/retrieval/pooling.py`). An IR library re-sorts by score and breaks ties by
+    its own undocumented rule, so it would score a *different* ordering than the one
+    the system actually returns and the one recorded in `run_questions`. A question
+    could then show its gold document at rank 4 in the stored ranking and score zero
+    recall@5. That is not a metric measuring the system; it is two orderings
+    disagreeing. See MIS-003.
+
+    Pass `rank_scores=False` only to inspect the raw pooled scores. Every
+    rank-based metric here — recall, nDCG, reciprocal rank — depends on order
+    alone, so the substitution cannot change a correctly-ordered result.
+    """
     run: dict[str, dict[str, float]] = {}
     for result in results:
-        run[result.question_id] = {doc_id: float(score) for doc_id, score in result.docs}
+        if rank_scores:
+            run[result.question_id] = {
+                doc_id: 1.0 / (rank + 1) for rank, (doc_id, _) in enumerate(result.docs)
+            }
+        else:
+            run[result.question_id] = {doc_id: float(score) for doc_id, score in result.docs}
     return run
 
 

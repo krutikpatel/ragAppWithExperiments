@@ -381,6 +381,8 @@ rag/
   cli.py            `rag` entry point (typer). CLI only — no UI in Phase 0.
   paths.py          every filesystem location, in one place
   hashing.py        canonical-JSON hashing for corpora, splits, configs
+  prompts.py        versioned prompt loading by (id, version), content-hashed
+  assembly.py       ContextAssembler — retrieved chunks into the generator prompt
   corpus/           freeze.py (pinned HF revision -> parquet), normalize.py
                     (norm-vN), loader.py (the ONLY runtime read path)
   dataset/          wixqa.py (QA configs), splits.py (test/dev/dev_large),
@@ -388,16 +390,25 @@ rag/
   chunking/         base.py (Chunker, Chunk, FixedTokenChunker),
                     index_map.py (ChunkIndex — persists chunk_id -> doc_id)
   retrieval/        base.py (Retriever, RetrievalResult), pooling.py (doc_pooling)
-  eval/             qrels.py (binary document-level qrels + run alignment check)
+  eval/             qrels.py (binary document-level qrels + alignment check),
+                    retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
+                    generation_metrics.py (citations, refusal — no LLM calls),
+                    steps.py (procedural step coverage), slices.py (P0-08),
+                    judge.py (Judge interface + OpenRouter judge)
+  generation/       base.py — Generator interface + OpenRouter generator
+  runner/           config.py (RunConfig, EvalTier, config_hash), run.py
+                    (run(config) -> row), store.py (SQLite runs + run_questions),
+                    diff.py (rag diff), registry.py (retrievers by name)
   embedding/        (planned, P0-11)   Embedder
   reranking/        (planned, P0-11)   Reranker — interface only in Phase 0
-  assembly/         (planned, P0-11)   ContextAssembler
-  generation/       (planned, P0-11)   Generator
-  runner/           (planned, P0-10)   run(config) -> row in the results store
 
-prompts/            versioned YAML, addressed by (id, version). Exists, empty
-                    until P0-11. Never inline a prompt in Python.
-configs/            experiment configs. Exists, empty until P0-10.
+prompts/            versioned YAML, addressed by (id, version): answer.yaml and
+                    the three judge_*.yaml. Never inline a prompt in Python.
+                    Content hashes are pinned in tests/test_prompts.py, so an edit
+                    without a version bump fails the suite.
+configs/            experiment configs. smoke_toy*.yaml are harness smoke tests,
+                    not experiments.
+results/            runs.sqlite — the results store. GITIGNORED.
 
 data/
   authored/         hand-written inputs, VERSION CONTROLLED.
@@ -433,8 +444,9 @@ Two notes on where things live:
 | CLI | `typer` | one `rag` entry point |
 | Authored data | `pyyaml` | seed files under `data/authored/` |
 | Tests | `pytest` | |
-| IR metrics | `ranx` or `pytrec_eval` _(planned, P0-06)_ | never hand-roll recall/nDCG/MRR |
-| Results store | SQLite _(planned, P0-10)_ | `runs` and `run_questions` tables |
+| IR metrics | `ranx` | never hand-roll recall/nDCG/MRR |
+| Results store | SQLite | `runs` and `run_questions` tables |
+| LLM access | `httpx` -> OpenRouter | key in `.env`; models still unchosen |
 | Config objects | frozen dataclasses today; `pydantic` declared for P0-10 | must hash to a stable `config_hash` |
 
 Rules that outlive any particular library:
@@ -445,6 +457,11 @@ Rules that outlive any particular library:
 - One read path per artifact. If a second code path can reach HuggingFace or read a
   parquet file directly, provenance stops being enforceable.
 - Everything reproducible from a config file: `run(config) -> row in results store`.
+- Hand a metrics library the *ordering* you return, not the scores that produced it.
+  Tied scores get re-broken by a rule you did not choose. (MIS-003)
+- Design a metric's not-applicable case before its happy path. `None` is not zero,
+  and averaging zeros over questions a metric cannot score reads as a system
+  failure. (MIS-002)
 
 ### Models
 

@@ -33,24 +33,54 @@ was faithful. That is why step coverage is on the metric list.
 
 ## 2. How this was measured
 
-_Pending P0-06 through P0-09. The splits and ground-truth format exist; the metrics
-that consume them do not yet._
+_The harness is built; no experiment has run through it yet._
 
-What exists so far: the corpus is pinned to one HuggingFace commit and hashed
-(`sha256:74694ad4…`), so any two runs can be checked for input equality. Four splits
-are frozen and hashed: `test` (100 expert-written + 100 simulated, held out), `dev`
-(the other 200), `dev_large` (all 6,221 synthetic questions), and `unanswerable` (45
-authored questions with no answer in the corpus). Split assignment is a seeded,
-stratified deal, so the choice of which questions are held out does not track
-anything in the data.
+**Inputs are pinned.** The corpus is one HuggingFace commit, materialized locally and
+hashed (`sha256:74694ad4…`, 6,221 articles). Four splits are frozen and hashed: `test`
+(100 expert-written + 100 simulated, held out), `dev` (the other 200), `dev_large`
+(all 6,221 synthetic questions), and `unanswerable` (45 authored questions with no
+answer in the corpus). Split assignment is a seeded stratified deal, so which
+questions are held out does not track anything in the data.
 
-Two things are deliberately fenced off. `dev_large` carries a leakage warning in
-code and in metadata: its questions were generated *from* the articles they are
-grounded in, so lexical overlap is inflated and any lexical retriever scores
-optimistically on it. And `test` is held out behind an explicit flag with a logged
-opening — 400 gold questions across dozens of experiments is few enough that
-iterating on them would produce a system tuned to the test set and disappointing
-everywhere else.
+**Retrieval metrics.** Strict recall@k — *all* gold documents in the top k — is the
+headline, because 79 of the 400 human-grounded questions need two or three documents
+and a system that finds one of two looks healthy under any looser definition. Loose
+recall@k and nDCG@10 accompany it. MRR is reported only over the single-gold subset,
+with the subset size attached: reciprocal rank asks where *the* answer is, and
+averaged over a mixed population it tracks the split's multi-doc proportion rather
+than the retriever. Everything goes through `ranx`; nothing is hand-rolled.
+
+Two things about the metrics are worth knowing before reading any number they
+produce. `strict_recall@1` is structurally capped — two documents cannot both be in a
+top-1 list — so a fifth of the questions can never score there. And retrieval depth is
+deliberately separate from context size: an early version ranked only `top_k=5`
+documents and reported `strict_recall@20`, which was recall@5 wearing a different
+label.
+
+**Generation metrics.** The cheap ones do the most work. Citation precision and recall
+are computed by comparing the document ids the answer cited against the gold ids — no
+LLM call, free, and immune to a judge model changing underneath us. Step coverage
+catches the failure mode a faithfulness judge structurally cannot: retrieving the
+right article and then dropping or reordering a step, where every step that *was*
+emitted is perfectly faithful. Three judge-scored criteria — faithfulness, answer
+relevance, answer correctness against the gold answer — sit on top, each with a
+versioned prompt whose content hash is pinned in a test, so a prompt edited without a
+version bump fails the suite instead of quietly changing every future score.
+
+**What the numbers are guarded against.** Runs record corpus hash, normalization
+version, split hash, pooling rule, git SHA and dirty flag, model ids and prompt
+versions; `rag diff` refuses to call two runs comparable when any of those differ.
+`dev_large` carries a leakage warning in code and metadata — its questions were
+generated *from* the articles they are grounded in, so lexical overlap is inflated.
+`test` is held behind an explicit flag that prints how many times it has been opened
+before. And a run that crashes is recorded as `VOID` rather than dropped, because
+silent gaps in the ledger are what make a results document untrustworthy.
+
+The most useful thing built here is not a metric. It is `run_questions`: one row per
+question per run, with the ranked documents, the gold ranks, and the per-question
+metric values. Aggregates say a technique gained four points; those rows say which
+questions flipped and what came back instead, and that is what a findings document is
+actually made of.
 
 ## 3. The baseline
 
@@ -78,14 +108,27 @@ _Pending Phase 3._
 
 ## 9. Lessons that transfer
 
-One so far, from building the harness rather than from a result: the handover
-document for this phase described the article text as dense with markdown links, and
-P0-02 exists to decide how to handle them. Counting first showed that 2 of 6,221
-articles contain any markdown link — the links live in a field we do not index and
-in the answers. The normalization rule was implemented as specified, but it is
-recorded as what it measurably is: close to a no-op on this corpus. Writing it up as
-a meaningful preprocessing decision would have been a small, quiet fiction of
-exactly the kind that makes the rest of a results document untrustworthy. (MIS-001)
+Three so far, all from building the harness rather than from a result.
+
+**Count before you build.**  The handover for this phase made three claims about the
+data, and counting contradicted all three. Article text is "dense with markdown
+links": 2 of 6,221 articles contain one. Answers are "procedural markdown": 54 of 200
+are; the rest are prose. The article-type slice would separate `article`,
+`feature_request` and `known_issue`: every gold document in `dev` is an `article`, so
+two thirds of that slice are empty on the split we iterate on. Each was implemented as
+specified and recorded as what it measurably is. (MIS-001, MIS-002)
+
+**Hand a library the order, not the scores.** Pooled document scores tie constantly.
+Passing the raw ties to the metrics library let it re-break them by a rule we had not
+chosen, so the metrics scored a different ranking than the one the system returns and
+records. It surfaced as a nonsense line in a diff — a gold document at rank 4 scoring
+zero recall@5 — and would otherwise have quietly shifted every retrieval number in
+the project. (MIS-003)
+
+**The empty case is the design.** Step coverage over prose answers, MRR over
+multi-document questions, precision when nothing was cited: each has a "not
+applicable" that is not zero. Averaging zeros there produces numbers that look like
+system failures and are actually category errors.
 
 ## 10. What remains untested
 

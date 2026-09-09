@@ -38,6 +38,37 @@ documents contain one. Untested.
 **Decided by:** `norm-v2` stripping bare URLs, strict recall@5 on `dev`.
 **Status:** open.
 
+## OQ-006 — Do `feature_request` articles act as retrieval distractors?
+2,049 of 6,221 corpus documents are `feature_request` and 63 are `known_issue`, but
+no `dev` question has one as a gold document (`test` has 10). A third of the index is
+therefore never a right answer for the questions we iterate on, while still competing
+for rank.
+**Decided by:** strict recall@5 on `dev` with the full index vs. an index restricted
+to `article_type == article`, same retriever and seeds. A large gap means a cheap
+filter is available and the P0-08 article-type slice is measuring index composition
+rather than question difficulty. **Status:** open.
+
+## OQ-007 — Does lexical step matching agree with human reading?
+Step coverage matches a reference step to a generated one by Jaccard overlap of
+content words at 0.5 (DEC-015). A reworded but correct step may score as missing.
+**Decided by:** hand-label 30 reference/generated step pairs; report agreement with
+the lexical matcher. Under 0.8 agreement, the threshold or the method needs to change.
+**Status:** open.
+
+## OQ-008 — Does the lexical refusal detector agree with human judgment?
+`refusal-lexical-v1` is a pattern list (DEC-014). It will miss refusals phrased
+creatively and may fire on hedged but genuine answers.
+**Decided by:** hand-label 50 generated answers spanning answerable and unanswerable
+questions; report precision and recall of the detector. **Status:** open (needs a
+Tier 2 run).
+
+## OQ-009 — Is `strict_recall@1` worth reporting at all?
+It is structurally capped: ~20% of questions need 2-3 documents and can never score
+at k=1 (DEC-010).
+**Decided by:** judgment after the first baseline — if the number is read as a
+failure rather than as a ceiling, drop it or report it over the single-gold subset.
+**Status:** open.
+
 ---
 
 ## External claims to test, not to cite
