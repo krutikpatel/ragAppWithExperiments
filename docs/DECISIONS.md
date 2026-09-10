@@ -86,6 +86,8 @@ would make us revisit it. A superseded decision keeps its entry and gains a
 - **Revisit if:** it proves error-prone to check two keys instead of one.
 
 ## DEC-005 — Chunk width is measured in whitespace tokens
+> **CORRECTED by DEC-029 on 2026-09-10** — the decision stands; its token estimate
+> was wrong. 512 whitespace words is ~650 BPE tokens, not 380-400.
 - **Date:** 2026-09-09
 - **Decided by:** Claude (implementing P0-05)
 - **Status:** Active
@@ -564,3 +566,86 @@ SHA, and reason.
   right mechanism; only the stated reason was wrong.
 - **Revisit if:** OpenRouter changes its embeddings API surface, or a chosen embedding
   model needs a provider OpenRouter does not proxy.
+
+## DEC-027 — Embedding model: `qwen/qwen3-embedding-8b`
+- **Date:** 2026-09-10
+- **Decided by:** Krutik (measurements and options from Claude)
+- **Status:** Active
+- **Context:** Needed for Ragas `answer_relevance` (DEC-026) and for Phase 1 dense
+  retrieval. The corpus was measured first so the choice rested on data rather than
+  on defaults.
+- **Measured corpus size:** 6,221 articles = 14.1M chars / 2.34M words /
+  **2.96M tokens** (`cl100k_base`, so ±10% for any other tokenizer). Mean 476 tokens
+  per article, median 256, max 10,624. At `chunk_size=512` words: **8,694 chunks,
+  2.86M tokens**, mean 329, median 284, p95 644, max 1,326.
+- **What decided it:**
+  1. **Cost is irrelevant at this scale.** Embedding the whole index costs $0.03 at
+     $0.01/Mtok and $0.37 at the most expensive option considered. Re-indexing for a
+     chunking sweep is pennies, so quality and context length decide, not price.
+  2. **Context length is not irrelevant.** 2,983 of 8,694 chunks (34%) exceed 512
+     tokens. Every $0.005/Mtok option caps at 512 and would silently truncate a third
+     of the index — a retrieval confound baked into the index and invisible in the
+     metrics.
+- **Options considered:**
+  1. `qwen/qwen3-embedding-8b` — $0.010/Mtok, **32,768 context** — chosen. Clears our
+     1,326-token maximum with 25x headroom.
+  2. `baai/bge-m3` — $0.010/Mtok, 8,194 context — same price, adequate headroom.
+  3. `openai/text-embedding-3-small` — $0.020/Mtok, 8,192 context.
+  4. `sentence-transformers/all-minilm-l12-v2` — $0.005/Mtok but **512 context**;
+     rejected on the truncation finding above.
+- **Evidence:** Measured — corpus and chunk token counts above; OpenRouter list prices
+  and context lengths read 2026-09-10.
+- **Consequences:** Chunk-width experiments up to ~30,000 tokens need no embedding
+  model change, so chunking and embedding stay independent axes. Used for
+  `answer_relevance` today; Phase 1 dense retrieval will reuse it unless a decision
+  says otherwise.
+- **Revisit if:** dense retrieval quality becomes the object of study, or a chunking
+  experiment exceeds the context window.
+
+## DEC-028 — Generator and judge token budgets, and generator reasoning effort
+- **Date:** 2026-09-10
+- **Decided by:** Claude (implementing the Tier 2 smoke run; Krutik not in the loop)
+- **Status:** Active
+- **Context:** The first Tier 2 smoke run failed three times on token budgets, not on
+  logic. See MIS-006 for the sequence.
+- **Decision:**
+  - `generator_max_tokens: 2000` (was 800).
+  - `generator_reasoning_effort: "minimal"`.
+  - `judge_max_tokens: 4096`.
+  Each is a `RunConfig` field, so each is part of `config_hash`.
+- **Evidence:** Measured on `openai/gpt-5-nano` with an 812-word prompt.
+  `max_tokens=800`: `finish_reason=length`, **content `None`**, all 768 completion
+  tokens spent on reasoning. `max_tokens=3000`: worked, but 1,984 of 2,275 completion
+  tokens (87%) were reasoning. With `reasoning.effort="low"`: 256 reasoning tokens.
+  With `"minimal"`: **0 reasoning tokens** and a complete 1,257-character answer. The
+  judge needed 4096 because Ragas asks for structured output through `instructor`,
+  which raises `IncompleteOutputException` at `finish_reason=length`, and faithfulness
+  emits one statement per claim — the budget has to hold a whole decomposed answer.
+- **Consequences:** `"minimal"` means the generator does no reasoning. That is
+  consistent with DEC-017's rationale — it is a deliberately cheap constant backdrop
+  for retrieval comparisons — but it *is* a quality choice made without Krutik, and
+  `"low"` remains available at ~256 extra tokens per question. Measured per-question
+  generator usage on the smoke run: ~3,420 tokens in, 118-183 out.
+- **Revisit if:** generation quality becomes the object of study, or a stronger
+  generator is chosen for whom reasoning changes the answers materially.
+
+## DEC-029 — Corrects DEC-005: 512 whitespace words is ~650 tokens, not 380-400
+- **Date:** 2026-09-10
+- **Decided by:** Claude (correcting my own estimate)
+- **Status:** Active — **corrects DEC-005**
+- **Context:** DEC-005 chose whitespace words as the chunk unit and estimated that
+  512 of them is "roughly 380-400 BPE tokens". That estimate was never measured.
+- **What is actually true:** The measured ratio on this corpus is **1.27 tokens per
+  whitespace word**, so a full 512-word chunk is about **650 tokens** — I understated
+  it by roughly 60%. Measured chunk distribution: mean 329 tokens, median 284, p95
+  644, max 1,326 (chunks are usually short because most articles are).
+- **Decision:** The unit stays whitespace words (DEC-005's reasoning is unaffected).
+  Only the conversion figure is corrected. Use **1.27 tokens/word** for context-window
+  budgeting.
+- **Evidence:** Measured with `tiktoken` `cl100k_base` over all 6,221 frozen articles
+  and all 8,694 chunks.
+- **Consequences:** Any context-budget arithmetic done with the old figure understates
+  by ~60%. This directly mattered for DEC-027: at 1.27 tokens/word, a third of chunks
+  exceed a 512-token embedding context.
+- **Revisit if:** the tokenizer of a chosen model differs materially from
+  `cl100k_base`.

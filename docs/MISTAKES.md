@@ -29,7 +29,11 @@ Derived from the prevention rules below. Run through it and say in chat that you
 10. **To claim a capability is absent, probe the endpoint that would provide it and
     show the failure.** A missing entry in a neighbouring listing is not evidence, and
     a wrong "can't" is costlier than a wrong "can" because nobody re-tests it. (MIS-005)
-11. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+11. **Assert that a provider response contains what you asked for, at the point of
+    the call.** An empty completion is a broken call, not a bad answer, and a metric
+    will happily score nothing as zero. Check whether a new model spends completion
+    tokens on reasoning before setting its budget. (MIS-006)
+12. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -159,4 +163,43 @@ Derived from the prevention rules below. Run through it and say in chat that you
   listing is not evidence. And when a negative finding is about to become a recorded
   constraint that removes scope, say so out loud before writing it down — a wrong
   "can't" is more expensive than a wrong "can", because nobody re-tests it.
+- **Added to preflight:** yes
+
+## MIS-006 — A reasoning model returned no answer, and the harness crashed instead of saying so
+- **Date:** 2026-09-10
+- **Severity:** Medium — caught by the first Tier 2 smoke run; no results affected.
+- **What happened:** The first Tier 2 run died with
+  `TypeError: expected string or bytes-like object, got 'NoneType'` inside
+  `extract_steps`. The cause was upstream: `openai/gpt-5-nano` had returned
+  `content: None`. `max_tokens` was 800, and gpt-5-nano is a reasoning model whose
+  reasoning tokens count against that budget — all 768 completion tokens went to
+  reasoning and none to an answer (`finish_reason=length`). The generator handed the
+  `None` straight through as if it were an answer.
+- **How it was caught:** The crash. Which was luck: `is_refusal` already tolerated
+  `None`, and `citation_scores([])` returns `None` precision by design, so had
+  `extract_steps` been defensive the run would have **completed** and recorded five
+  empty answers as five genuinely bad answers — zero citations, zero step coverage,
+  low faithfulness. A silent infrastructure failure dressed as a quality finding.
+- **Root cause:** Two mistakes. A token budget set from an estimate that predates
+  reasoning models, and no assertion that a generated answer contains anything. The
+  second is the real one: the pipeline trusted a provider response without checking it.
+- **Impact:** No results affected. Three failed smoke runs, each on a token budget
+  rather than on logic:
+  1. generator `max_tokens=800` -> `content: None` -> crash;
+  2. Ragas `agenerate()` refused a *synchronous* OpenAI client (it detects the client
+     kind rather than adapting, so `AsyncOpenAI` is required for `ascore`);
+  3. judge hit `IncompleteOutputException` — `instructor` raises when structured
+     output is cut off at `finish_reason=length`, and faithfulness emits one statement
+     per claim, so 4096 tokens are needed to hold a decomposed answer.
+- **Fix applied:** `EmptyGenerationError` — the generator now raises when content is
+  empty, naming `finish_reason`, `completion_tokens`, `reasoning_tokens` and
+  `max_tokens`, so the message diagnoses itself. Budgets and reasoning effort set per
+  DEC-028. `extract_steps` also tolerates `None` as a belt-and-braces measure, but the
+  loud failure is the actual fix. `reasoning_tokens` is now carried on every generated
+  answer.
+- **Prevention rule:** Assert that a provider response contains what you asked for,
+  at the point of the call. An empty completion is a broken call, not a bad answer —
+  and never make a metric the thing that discovers it, because a metric will happily
+  score nothing as zero. When adding a model, check whether it spends completion
+  tokens on reasoning before budgeting.
 - **Added to preflight:** yes

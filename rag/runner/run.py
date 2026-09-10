@@ -177,6 +177,7 @@ def _run(
             "judge_model": config.judge_model,
             "judge_family": judge_meta.get("judge_family"),
             "judge_temperature": judge_meta.get("judge_temperature"),
+            "judge_embedding_model": judge_meta.get("judge_embedding_model"),
             "ragas_version": judge_meta.get("ragas_version"),
             "prompt_versions": json.dumps(_prompt_versions(config)),
             "metric_prompt_versions": json.dumps(judge_meta.get("metric_prompt_versions", {})),
@@ -214,6 +215,7 @@ def _judge_config(config: RunConfig) -> JudgeConfig:
         model=config.judge_model,
         temperature=config.judge_temperature,
         embedding_model=config.judge_embedding_model,
+        max_tokens=config.judge_max_tokens,
     )
 
 
@@ -329,7 +331,13 @@ def _tier2(
 ) -> dict[str, Any]:
     """Generate answers and judge them. The only part of a run that costs money."""
     assembler = ConcatAssembler(max_tokens=config.context_max_tokens)
-    generator = OpenRouterGenerator(GeneratorConfig(model=config.generator_model))
+    generator = OpenRouterGenerator(
+        GeneratorConfig(
+            model=config.generator_model,
+            max_tokens=config.generator_max_tokens,
+            reasoning_effort=config.generator_reasoning_effort,
+        )
+    )
     judge = RagasJudge(_judge_config(config))
 
     generated: dict[str, Any] = {}

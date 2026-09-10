@@ -55,8 +55,11 @@ class RunConfig:
     # this file gets to make. See CLAUDE.md section 10.
     generator_model: str = ""
     generator_prompt: str = "answer@v1"
+    generator_max_tokens: int = 2000
+    generator_reasoning_effort: str = "minimal"
     judge_model: str = ""
     judge_temperature: float = 0.0
+    judge_max_tokens: int = 4096
     # Ragas AnswerRelevancy needs an embedding model. OpenRouter supplies them, so
     # this is empty only because the model is unchosen — not because it is unavailable
     # (DEC-026 corrects DEC-022). Empty means answer_relevance is recorded as skipped.

@@ -48,9 +48,20 @@ class StepCoverage:
     applicable: bool
 
 
-def extract_steps(markdown: str) -> list[str]:
-    """Ordered step texts from a markdown answer. Empty if it is not a procedure."""
-    return [match.group(2).strip() for match in _NUMBERED_STEP.finditer(markdown) if match.group(2).strip()]
+def extract_steps(markdown: str | None) -> list[str]:
+    """Ordered step texts from a markdown answer. Empty if it is not a procedure.
+
+    Tolerates None so a metric never crashes a whole run on one odd answer. A None
+    answer is still a bug worth failing on, but that failure belongs at the point of
+    generation (see `EmptyGenerationError`), not here.
+    """
+    if not markdown:
+        return []
+    return [
+        match.group(2).strip()
+        for match in _NUMBERED_STEP.finditer(markdown)
+        if match.group(2).strip()
+    ]
 
 
 def _content_tokens(text: str) -> set[str]:

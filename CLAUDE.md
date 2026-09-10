@@ -474,6 +474,12 @@ Rules that outlive any particular library:
 - To establish that a capability is absent, probe the endpoint that would provide it
   and show the failure. A missing entry in a neighbouring listing is not evidence, and
   a wrong "can't" is costlier than a wrong "can" because nobody re-tests it. (MIS-005)
+- Assert that a provider response contains what you asked for, at the point of the
+  call. An empty completion is a broken call, not a bad answer — never let a metric be
+  the thing that discovers it, because a metric will score nothing as zero. (MIS-006)
+- Corpus size, measured: 6,221 articles = 2.96M tokens; 8,694 chunks at 512 words =
+  2.86M tokens (mean 329, p95 644, max 1,326). **1.27 tokens per whitespace word.**
+  (DEC-029 corrects DEC-005)
 
 ### Models
 
@@ -481,7 +487,7 @@ Rules that outlive any particular library:
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
 | Judge | `deepseek/deepseek-v3.2` — **PLACEHOLDER** | DEC-025 | Non-OpenAI family, as required. ~$0.36 per 100-question Tier 2 run. **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** — the real judge decision is still pending (DEC-018). |
-| Embedding | _not chosen_ | DEC-026, OQ-011 | Available via OpenRouter (33 models). Needed for Ragas `answer_relevance` and for Phase 1 dense retrieval. Watch context length: most cheap options cap at 512 tokens, which would truncate our 512-*word* chunks. |
+| Embedding | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
 An empty row is the honest state, not an omission to paper over. The benchmark's gold
@@ -494,10 +500,13 @@ Two constraints now bind this table, both enforced in code rather than by intent
 
 - **Judge family must differ from generator family.** `RunConfig` refuses the pairing
   outright — same-family judging carries unmeasured self-preference bias (P0-07).
-- **Ragas `answer_relevance` needs an embedding model.** OpenRouter supplies one, so
-  this is a configuration question, not a capability gap (DEC-026 corrects DEC-022).
-  Until `judge_embedding_model` is set, the criterion is recorded in
-  `skipped_criteria` on every run rather than quietly absent.
+- **Ragas `answer_relevance` needs an embedding model.** Now configured (DEC-027), so
+  all three judged metrics run. If `judge_embedding_model` is ever cleared, the
+  criterion is recorded in `skipped_criteria` rather than quietly absent.
+- **Reasoning models spend completion tokens before answering.** `gpt-5-nano` at
+  `max_tokens=800` returned `content: None`. The generator now raises
+  `EmptyGenerationError` rather than passing an empty answer to the metrics, which
+  would score as a genuinely bad answer. (MIS-006, DEC-028)
 
 Access is via **OpenRouter**; the API key is already in `.env` at the repo root
 (gitignored). Read it from the environment — never print, commit, or echo it.

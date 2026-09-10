@@ -88,6 +88,9 @@ COMPARABILITY_KEYS = (
     "doc_pooling",
     "judge_model",
     "judge_temperature",
+    # answer_relevance is computed through embeddings, so a different embedding model
+    # is a different metric.
+    "judge_embedding_model",
     # A Ragas upgrade can change a metric's internal prompts, which moves every
     # judged score without anything else in the config changing. MIS-004.
     "ragas_version",

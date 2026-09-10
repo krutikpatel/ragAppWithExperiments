@@ -21,6 +21,8 @@ doc_pooling: max
 generator_model: openai/gpt-5-nano
 judge_model: deepseek/deepseek-v3.2
 judge_temperature: 0.0
+# Exercises answer_relevance too, so all three judged metrics are covered.
+judge_embedding_model: qwen/qwen3-embedding-8b
 # Small on purpose: this checks the plumbing, not the corpus.
 eval_subsample_size: 5
 harness_smoke_test: true

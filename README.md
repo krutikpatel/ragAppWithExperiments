@@ -104,10 +104,15 @@ bad retriever; they are marked as such and are not experiments.
 
 **Models.** Generator `openai/gpt-5-nano` (DEC-017); judge `deepseek/deepseek-v3.2`
 (DEC-025), from a different family because `RunConfig` refuses same-family judging as
-self-preference bias. The judge is still a **plumbing placeholder** — its scores prove
-Tier 2 works and are not measurements. No embedding model is chosen yet, so Ragas's
-`answer_relevance` is recorded as skipped on every run until one is set; it is a
-configuration gap, not a capability one (DEC-026).
+self-preference bias. Embeddings are `qwen/qwen3-embedding-8b` (DEC-027), chosen on context length rather
+than price: 34% of our chunks exceed 512 tokens, and the whole index costs ~$0.03 to
+embed either way. The judge is still a **plumbing placeholder** — its scores prove
+Tier 2 works and are not measurements.
+
+**Tier 2 has been exercised end to end** (2026-09-10, 5 questions, toy retrieval): all
+three Ragas metrics returned values, provenance and per-question rows landed in the
+store. It took three attempts, all failing on token budgets rather than logic — see
+MIS-006, which is the most useful thing the run produced.
 
 ## Quickstart
 

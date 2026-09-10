@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS runs (
     judge_model           TEXT,
     judge_family          TEXT,
     judge_temperature     REAL,
+    judge_embedding_model TEXT,
     ragas_version         TEXT,
     prompt_versions       TEXT,
     metric_prompt_versions TEXT,

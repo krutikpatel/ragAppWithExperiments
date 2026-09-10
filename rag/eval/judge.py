@@ -79,6 +79,11 @@ class JudgeConfig:
     temperature: float = 0.0
     embedding_model: str = ""
     answer_correctness_weights: tuple[float, float] = ANSWER_CORRECTNESS_WEIGHTS
+    # Ragas asks for structured output through `instructor`, which raises
+    # IncompleteOutputException when a response is cut off at finish_reason=length.
+    # Faithfulness emits one statement per claim, so the budget has to hold a whole
+    # decomposed answer, not one sentence. Measured: 1024 was not enough. See MIS-006.
+    max_tokens: int = 4096
     timeout_s: float = 120.0
 
     @property
@@ -158,7 +163,13 @@ class RagasJudge(Judge):
         self._metrics: dict[str, Any] | None = None
 
     def _openrouter_client(self) -> Any:
-        from openai import OpenAI
+        """An **async** OpenAI-compatible client pointed at OpenRouter.
+
+        Async specifically: Ragas's collections metrics are driven through `ascore`,
+        and its LLM wrapper refuses `agenerate()` on a synchronous client. It detects
+        the client kind rather than adapting, so the choice has to be made here.
+        """
+        from openai import AsyncOpenAI
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -166,7 +177,7 @@ class RagasJudge(Judge):
                 "OPENROUTER_API_KEY is not set. It lives in .env at the repo root; "
                 "load it into the environment before a Tier 2 run."
             )
-        return OpenAI(
+        return AsyncOpenAI(
             api_key=api_key, base_url=OPENROUTER_BASE_URL, timeout=self.config.timeout_s
         )
 
@@ -180,6 +191,7 @@ class RagasJudge(Judge):
             provider="openai",
             client=client,
             temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens,
         )
 
         metrics: dict[str, Any] = {
@@ -247,6 +259,7 @@ def judge_provenance(config: JudgeConfig) -> dict[str, Any]:
         "judge_model": config.model,
         "judge_family": config.family,
         "judge_temperature": config.temperature,
+        "judge_embedding_model": config.embedding_model,
         "ragas_version": ragas_version(),
         "answer_correctness_weights": list(config.answer_correctness_weights),
         "metric_prompt_versions": {

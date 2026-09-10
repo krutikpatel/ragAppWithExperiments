@@ -58,9 +58,16 @@ the lexical matcher. Under 0.8 agreement, the threshold or the method needs to c
 ## OQ-008 — Does the lexical refusal detector agree with human judgment?
 `refusal-lexical-v1` is a pattern list (DEC-014). It will miss refusals phrased
 creatively and may fire on hedged but genuine answers.
+**First evidence, from the Tier 2 plumbing smoke run (2026-09-10, 5 questions, not a
+measurement):** the detector flagged 1 of 5 answers as a refusal. Reading them, at
+least 2 were non-answers — it caught *"I'm unable to find information in the provided
+articles"* and missed *"It isn't clear from the provided articles which exact page or
+image fit issue you're experiencing"*. So it under-detects the clarification-request
+shape of refusal, which is the one an underspecified question provokes. Five answers
+prove nothing about the rate; they do show the failure mode is real.
 **Decided by:** hand-label 50 generated answers spanning answerable and unanswerable
-questions; report precision and recall of the detector. **Status:** open (needs a
-Tier 2 run).
+questions; report precision and recall of the detector. **Status:** open, with a known
+gap to close (clarification-style refusals).
 
 ## OQ-009 — Is `strict_recall@1` worth reporting at all?
 It is structurally capped: ~20% of questions need 2-3 documents and can never score
@@ -100,6 +107,18 @@ judge, because faithfulness decomposes claims and verifies each one. That number
 allowance, not a measurement.
 **Decided by:** the first real Tier 2 run — compare estimated judge tokens against
 OpenRouter's reported usage and correct `RAGAS_CALL_MULTIPLIER`. **Status:** open.
+
+## OQ-013 — Does the generator keep obeying the `[doc:<id>]` citation format?
+DEC-017 flagged the risk that a cheap model ignores the citation instruction, which
+would tank citation precision for reasons unrelated to retrieval. **First evidence
+(Tier 2 smoke run, 2026-09-10, not a measurement):** of 5 answers, the 3 substantive
+ones each cited exactly one document and the 2 refusals cited none — which is the
+correct behaviour in both cases. So the flagged risk did not appear on 5 questions
+with deliberately bad retrieval.
+**Decided by:** the P0-13 Tier 2 run on BM25 retrieval — report the share of
+substantive answers containing at least one well-formed `[doc:<id>]` tag. Below ~0.95
+means the citation metrics are measuring instruction-following, not grounding.
+**Status:** open.
 
 ---
 
