@@ -706,6 +706,9 @@ It would still inflate any absolute figure quoted in the narrative.
   settled by measurement rather than by argument.
 
 ## DEC-031 — Tier 2's binding constraint is latency, not cost
+> **AMENDED by DEC-032 on 2026-09-10** — the finding held, the diagnosis did not.
+> The judge model was never slow; OpenRouter was routing to slow providers. The
+> ~4-hour figure below is obsolete: a 100-question run is now ~20 minutes.
 - **Date:** 2026-09-10
 - **Decided by:** Claude (recording a measurement; the response to it is Krutik's call)
 - **Status:** Active — **amends DEC-024's premise**
@@ -738,3 +741,81 @@ It would still inflate any absolute figure quoted in the narrative.
 - **Revisit if:** OQ-015 lands and changes the per-question figure, or a faster judge
   is chosen. Judge *latency* now belongs in the judge-selection tradeoff alongside
   price and bias — it was absent from DEC-025 and DEC-030 because it was unmeasured.
+
+## DEC-032 — Pin judge providers and judge concurrently
+- **Date:** 2026-09-10
+- **Decided by:** Claude (investigating at Krutik's request); the provider list is a
+  routing choice he can overrule
+- **Status:** Active — **amends DEC-031's diagnosis**
+
+### What was actually slow
+
+DEC-031 measured 156s per question and blamed the judge model. That was wrong. The
+model is fast: a direct call to `openai/gpt-oss-120b` returned 460 tokens in 1.6s
+(280 tok/s), and 486 tok/s when routed for throughput.
+
+Instrumenting every HTTP call during real Ragas metrics showed the cause. OpenRouter
+serves one model from many providers, and **it routed to whichever, with a 37x spread
+in speed** on comparable work:
+
+| Provider | Call time |
+|---|---|
+| Groq | 0.9s |
+| Google | 3.1s |
+| DeepInfra | 12.3s |
+| AkashML | 20.0s / 33.3s |
+| CoreWeave | 24.5s / 29.4s |
+| Together | 31.2s |
+
+Ragas's call volume is a secondary factor and is inherent to the metrics: 8 chat
+calls plus 2 embedding calls per question (faithfulness 2, answer correctness 3,
+answer relevance 3 — it generates `strictness=3` candidate questions). Eight calls at
+~20s each is the 156s. Eight calls at ~1s each is not a problem.
+
+### Decision
+
+1. **Pin providers.** Every judge call carries
+   `provider: {order: ["Cerebras", "Groq"], allow_fallbacks: true}`.
+   `judge_provider_order` is a `RunConfig` field, is recorded on every run, and is a
+   `rag diff` comparability key.
+2. **Judge concurrently.** `RagasJudge.score_batch` runs the whole batch in one event
+   loop under a semaphore, `judge_concurrency: 20`. Judging one question never
+   depends on another, so this is safe by construction.
+
+### Measured
+
+| Configuration | Per question |
+|---|---|
+| Default routing, serial judging (DEC-031 baseline) | 156s |
+| Providers pinned, serial | 9.6s |
+| Pinned, metrics concurrent within a question | 2.6s |
+| Pinned, 4 questions fully concurrent (synthetic) | 1.1s |
+| **Real 20-question run, pinned, concurrency 8** | **14.5s** |
+| **Real 20-question run, pinned, concurrency 20** | **11.8s** |
+
+End to end: **156s -> 11.8s per question, 13.3x.** A 100-question Tier 2 run goes from
+~4 hours to **~20 minutes**, an estimate by linear extrapolation. On the real 20-question
+run all 64 chat calls landed on Cerebras or Groq — no fallback leakage — mean 1.4s,
+max 5.8s.
+
+### Pinning is also a reproducibility control, and that matters more
+
+Providers serving the same open weights do not return identical outputs — different
+quantizations, kernels and sampling. Measured on one identical input, answer
+correctness scored **1.00 under default routing and 0.857 pinned**. Two runs of the
+same config on the same 20 questions gave faithfulness 0.7284 and 0.7236.
+
+So provider identity is part of the judge, not a delivery detail. Recording it and
+treating it as a comparability key is what stops a silent routing change from looking
+like a quality change. This argument stands even if the speed difference vanished.
+
+- **Evidence:** All measured, 2026-09-10, via HTTP-level instrumentation of real Ragas
+  calls and two full 20-question Tier 2 runs. The ~20-minute figure is an estimate.
+- **Consequences:** Tier 2 is now cheap enough in time to run on the full 200-question
+  `dev` split (~40 min estimated), which reopens DEC-024's subsample question — it was
+  decided when a full run looked like 8 hours. Not reopened here; flagged.
+  Generation is now the largest serial component (3.1s per question, 21% of the run)
+  and is the next lever (OQ-016). An additive store migration also landed, so a schema
+  change no longer tempts anyone to delete the results store (MIS-007).
+- **Revisit if:** Cerebras or Groq stop serving the model, throughput changes, or the
+  judge model changes — the provider list is model-specific and does not transfer.

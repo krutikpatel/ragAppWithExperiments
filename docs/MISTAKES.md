@@ -207,6 +207,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Added to preflight:** yes
 
 ## MIS-007 — Deleted the results store between two runs I wanted to compare
+> **UPDATE 2026-09-10** — "Fix applied: none in code" is no longer true. An additive
+> schema migration landed with DEC-032, so a schema change no longer tempts anyone to
+> delete the store.
 - **Date:** 2026-09-10
 - **Severity:** Low — cost one comparison; no recorded results lost.
 - **What happened:** I ran the Tier 2 smoke test with the `deepseek/deepseek-v3.2`

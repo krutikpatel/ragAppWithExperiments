@@ -91,6 +91,10 @@ COMPARABILITY_KEYS = (
     # answer_relevance is computed through embeddings, so a different embedding model
     # is a different metric.
     "judge_embedding_model",
+    # Providers serving the same model do not return identical outputs, so a
+    # different provider is a different judge. Measured: answer correctness 1.00 vs
+    # 0.857 on the same input. See DEC-032.
+    "judge_provider_order",
     # A Ragas upgrade can change a metric's internal prompts, which moves every
     # judged score without anything else in the config changing. MIS-004.
     "ragas_version",

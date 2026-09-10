@@ -132,7 +132,14 @@ is evidence of self-preference; comparable means are evidence against. Cheap, si
 reuses stored answers and only re-runs judging.
 **Status:** open. Matters most before any judged number is quoted in the narrative.
 
-## OQ-015 — How much does concurrent judging cut Tier 2 wall clock?
+## OQ-015 — How much does concurrent judging cut Tier 2 wall clock? **ANSWERED**
+**Answered 2026-09-10 by DEC-032 (harness measurement, not an experiment).** Concurrency
+was real but secondary: the dominant cause was OpenRouter routing to slow providers, a
+37x spread on the same model. Pinning providers took 156s -> 9.6s per question;
+concurrency took it to 11.8s on a real 20-question run (the isolated synthetic figure
+was 1.1s). Together 13.3x. Original text below.
+
+
 Measured: 156s per question, 98% of it waiting on the judge (DEC-031). `RagasJudge`
 calls `asyncio.run` once per metric per question, sequentially, so 100 questions x 3
 metrics is 300 serialized round trips with no overlap. The work is IO-bound.
@@ -141,6 +148,27 @@ metrics is 300 serialized round trips with no overlap. The work is IO-bound.
 against the 780s baseline. Scores must be identical — judging one question does not
 depend on another — so any score change means the change is wrong, not faster.
 **Status:** open. This gates whether a full-`dev` Tier 2 run is practical.
+
+## OQ-016 — Should generation be concurrent too?
+After DEC-032, generation is the largest serial component of a Tier 2 run: 3.1s per
+question, 21% of wall clock, because the generator client is synchronous while judging
+is batched. 100 questions is ~5 minutes of a ~20 minute run.
+**Decided by:** make generation concurrent under the same bounded semaphore and compare
+wall clock on the same 20-question subsample. Generated answers must be unchanged for
+questions that were deterministic before, or the change is wrong rather than faster.
+**Status:** open. Lower priority than it looks — 21% of 20 minutes is not what makes
+Tier 2 painful any more.
+
+## OQ-017 — How much do judged scores move between identical runs?
+Two runs of the same config on the same 20 questions gave faithfulness 0.7284 and
+0.7236. On one identical input, answer correctness scored 1.00 under default routing
+and 0.857 with providers pinned (DEC-032). So judged metrics carry run-to-run and
+provider-to-provider noise even at temperature 0.
+**Decided by:** run the same Tier 2 config 3 times on the fixed subsample with
+providers pinned; report the spread of each judged metric. That spread is the floor
+below which a judged difference is not a finding — the same rule the project already
+applies to seeds. Until it is measured, no judged delta should be called a result.
+**Status:** open. This one gates the credibility of every judged number.
 
 ---
 

@@ -178,6 +178,7 @@ def _run(
             "judge_family": judge_meta.get("judge_family"),
             "judge_temperature": judge_meta.get("judge_temperature"),
             "judge_embedding_model": judge_meta.get("judge_embedding_model"),
+            "judge_provider_order": json.dumps(judge_meta.get("judge_provider_order", [])),
             "ragas_version": judge_meta.get("ragas_version"),
             "prompt_versions": json.dumps(_prompt_versions(config)),
             "metric_prompt_versions": json.dumps(judge_meta.get("metric_prompt_versions", {})),
@@ -216,6 +217,8 @@ def _judge_config(config: RunConfig) -> JudgeConfig:
         temperature=config.judge_temperature,
         embedding_model=config.judge_embedding_model,
         max_tokens=config.judge_max_tokens,
+        provider_order=tuple(config.judge_provider_order),
+        concurrency=config.judge_concurrency,
     )
 
 

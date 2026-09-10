@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS runs (
     judge_family          TEXT,
     judge_temperature     REAL,
     judge_embedding_model TEXT,
+    judge_provider_order  TEXT,
     ragas_version         TEXT,
     prompt_versions       TEXT,
     metric_prompt_versions TEXT,
@@ -82,6 +83,23 @@ CREATE INDEX IF NOT EXISTS idx_run_questions_run ON run_questions(run_id);
 """
 
 
+def _declared_columns(table: str) -> list[tuple[str, str]]:
+    """(name, type) for each column the SCHEMA declares for `table`."""
+    block = SCHEMA.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split(");", 1)[0]
+    columns: list[tuple[str, str]] = []
+    for line in block.splitlines():
+        line = line.strip().rstrip(",")
+        if not line or line.startswith(("PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "--")):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            # NOT NULL cannot be added to an existing table without a default, and
+            # every added column must be nullable for old rows anyway.
+            decl = parts[1]
+            columns.append((parts[0], decl))
+    return columns
+
+
 class ResultsStore:
     def __init__(self, path: Path = DEFAULT_DB) -> None:
         self.path = path
@@ -89,7 +107,24 @@ class ResultsStore:
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns the schema has gained since this database was created.
+
+        Additive only, and deliberately so: deleting the store to get past a schema
+        change destroys the comparison `rag diff` exists to make, which is exactly
+        what MIS-007 records. Older rows keep NULL for new columns, which reads
+        correctly as "this run predates that field" rather than as a value.
+        """
+        for table in ("runs", "run_questions"):
+            existing = {
+                row["name"] for row in self.conn.execute(f"PRAGMA table_info({table})")
+            }
+            for name, decl in _declared_columns(table):
+                if name not in existing:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
     def close(self) -> None:
         self.conn.close()

@@ -113,3 +113,23 @@ def test_embeddings_backend_is_wired_rather_than_stubbed():
     source = inspect.getsource(RagasJudge._embeddings)
     assert "NotImplementedError" not in source
     assert "OpenAIEmbeddings" in source
+
+
+def test_judge_pins_providers_on_every_call():
+    """DEC-032: provider identity is part of the judge, not a delivery detail."""
+    from rag.eval.judge import JudgeConfig
+
+    body = JudgeConfig(model="openai/gpt-oss-120b").extra_body
+    assert body["provider"]["order"] == ["Cerebras", "Groq"]
+
+    unpinned = JudgeConfig(model="openai/gpt-oss-120b", provider_order=())
+    assert unpinned.extra_body == {}, "an empty order must send no routing preference"
+
+
+def test_provider_order_is_recorded_and_compared():
+    """A silent routing change must not be able to look like a quality change."""
+    from rag.eval.judge import JudgeConfig, judge_provenance
+    from rag.runner.diff import COMPARABILITY_KEYS
+
+    assert "judge_provider_order" in judge_provenance(JudgeConfig(model="x/y"))
+    assert "judge_provider_order" in COMPARABILITY_KEYS

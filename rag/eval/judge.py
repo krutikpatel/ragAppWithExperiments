@@ -94,13 +94,35 @@ class JudgeConfig:
     # Ragas asks for structured output through `instructor`, which raises
     # IncompleteOutputException when a response is cut off at finish_reason=length.
     # Faithfulness emits one statement per claim, so the budget has to hold a whole
-    # decomposed answer, not one sentence. Measured: 1024 was not enough. See MIS-006.
-    max_tokens: int = 4096
+    # decomposed answer, not one sentence. Measured: 1024 was not enough, and 4096
+    # still failed on real WixQA answers, where answer_correctness decomposes both the
+    # generated answer and a long procedural reference. See MIS-006.
+    max_tokens: int = 8192
+    # OpenRouter serves one model from many providers whose speed differs by ~37x,
+    # and whose outputs are not identical. Pinning is both a latency fix and a
+    # reproducibility fix. See DEC-032.
+    provider_order: tuple[str, ...] = ("Cerebras", "Groq")
+    provider_allow_fallbacks: bool = True
+    # Judging one question never depends on another, so this is bounded only by
+    # provider rate limits.
+    concurrency: int = 20
     timeout_s: float = 120.0
 
     @property
     def family(self) -> str:
         return model_family(self.model)
+
+    @property
+    def extra_body(self) -> dict[str, Any]:
+        """OpenRouter routing preferences, sent on every judge call."""
+        if not self.provider_order:
+            return {}
+        return {
+            "provider": {
+                "order": list(self.provider_order),
+                "allow_fallbacks": self.provider_allow_fallbacks,
+            }
+        }
 
     @property
     def criteria(self) -> tuple[str, ...]:
@@ -204,6 +226,7 @@ class RagasJudge(Judge):
             client=client,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
+            **({"extra_body": self.config.extra_body} if self.config.extra_body else {}),
         )
 
         metrics: dict[str, Any] = {
@@ -236,23 +259,63 @@ class RagasJudge(Judge):
     def score(
         self, *, question: str, answer: str, contexts: list[str], reference: str
     ) -> dict[str, JudgeScore]:
+        """Score one item. Convenience wrapper over `score_batch`."""
+        return self.score_batch(
+            [
+                {
+                    "question": question,
+                    "answer": answer,
+                    "contexts": contexts,
+                    "reference": reference,
+                }
+            ]
+        )[0]
+
+    def score_batch(self, items: list[dict[str, Any]]) -> list[dict[str, JudgeScore]]:
+        """Score many items, judging concurrently.
+
+        Judging is IO-bound and embarrassingly parallel — one question's score never
+        depends on another's — so the whole batch runs in a single event loop under a
+        semaphore. Measured: sequential judging of one question took 9.6s with
+        providers pinned; the same three metrics concurrently took 2.6s, and four
+        questions fully concurrent took 1.1s per question. See DEC-032.
+        """
         if self._metrics is None:
             self._metrics = self._build_metrics()
+        return asyncio.run(self._score_batch(items))
 
+    async def _score_batch(self, items: list[dict[str, Any]]) -> list[dict[str, JudgeScore]]:
+        semaphore = asyncio.Semaphore(self.config.concurrency)
+
+        async def one(item: dict[str, Any]) -> dict[str, JudgeScore]:
+            async with semaphore:
+                return await self._score_one(item)
+
+        return list(await asyncio.gather(*(one(item) for item in items)))
+
+    async def _score_one(self, item: dict[str, Any]) -> dict[str, JudgeScore]:
+        assert self._metrics is not None
         calls = {
             "faithfulness": lambda m: m.ascore(
-                user_input=question, response=answer, retrieved_contexts=contexts
+                user_input=item["question"],
+                response=item["answer"],
+                retrieved_contexts=item["contexts"],
             ),
             "answer_correctness": lambda m: m.ascore(
-                user_input=question, response=answer, reference=reference
+                user_input=item["question"],
+                response=item["answer"],
+                reference=item["reference"],
             ),
-            "answer_relevance": lambda m: m.ascore(user_input=question, response=answer),
+            "answer_relevance": lambda m: m.ascore(
+                user_input=item["question"], response=item["answer"]
+            ),
         }
-
-        scores: dict[str, JudgeScore] = {}
-        for criterion, metric in self._metrics.items():
-            result = asyncio.run(calls[criterion](metric))
-            scores[criterion] = JudgeScore(
+        criteria = list(self._metrics)
+        results = await asyncio.gather(
+            *(calls[criterion](self._metrics[criterion]) for criterion in criteria)
+        )
+        return {
+            criterion: JudgeScore(
                 criterion=criterion,
                 score=float(result.value),
                 judge_model=self.config.model,
@@ -262,7 +325,8 @@ class RagasJudge(Judge):
                 metric_fingerprint=metric_fingerprint(self.METRIC_PACKAGES[criterion]),
                 detail={"reason": getattr(result, "reason", None)},
             )
-        return scores
+            for criterion, result in zip(criteria, results, strict=True)
+        }
 
 
 def judge_provenance(config: JudgeConfig) -> dict[str, Any]:
@@ -272,6 +336,7 @@ def judge_provenance(config: JudgeConfig) -> dict[str, Any]:
         "judge_family": config.family,
         "judge_temperature": config.temperature,
         "judge_embedding_model": config.embedding_model,
+        "judge_provider_order": list(config.provider_order),
         "ragas_version": ragas_version(),
         "answer_correctness_weights": list(config.answer_correctness_weights),
         "metric_prompt_versions": {

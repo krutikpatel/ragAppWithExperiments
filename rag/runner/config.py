@@ -59,7 +59,12 @@ class RunConfig:
     generator_reasoning_effort: str = "minimal"
     judge_model: str = ""
     judge_temperature: float = 0.0
-    judge_max_tokens: int = 4096
+    judge_max_tokens: int = 8192
+    # Provider pinning is a latency AND reproducibility control: OpenRouter serves one
+    # model from many providers whose speed differs by ~37x and whose outputs are not
+    # identical. Part of config_hash, and a comparability key. See DEC-032.
+    judge_provider_order: tuple[str, ...] = ("Cerebras", "Groq")
+    judge_concurrency: int = 20
     # Ragas AnswerRelevancy needs an embedding model. OpenRouter supplies them, so
     # this is empty only because the model is unchosen — not because it is unavailable
     # (DEC-026 corrects DEC-022). Empty means answer_relevance is recorded as skipped.

@@ -245,3 +245,30 @@ def test_subsample_settings_are_part_of_run_identity():
     base = RunConfig(name="x")
     assert base.with_(eval_subsample_size=50).config_hash != base.config_hash
     assert base.with_(full_eval=True).config_hash != base.config_hash
+
+
+def test_store_migrates_instead_of_requiring_deletion(tmp_path):
+    """MIS-007: a schema change must never be a reason to delete the results store."""
+    import sqlite3
+
+    path = tmp_path / "runs.sqlite"
+    with ResultsStore(path) as store:
+        store.start_run(_row("run_old"))
+
+    # Simulate an older database that predates a column.
+    conn = sqlite3.connect(path)
+    conn.execute("ALTER TABLE runs DROP COLUMN judge_provider_order")
+    conn.commit()
+    conn.close()
+
+    with ResultsStore(path) as store:  # reopening must migrate, not fail
+        columns = {r["name"] for r in store.conn.execute("PRAGMA table_info(runs)")}
+        assert "judge_provider_order" in columns
+        assert store.get_run("run_old") is not None, "existing rows must survive"
+
+
+def test_judge_concurrency_is_part_of_config_but_not_of_results():
+    """Concurrency changes speed, not scores — but it is recorded for reproducibility."""
+    base = RunConfig(name="x")
+    assert base.judge_concurrency > 1
+    assert base.with_(judge_concurrency=1).config_hash != base.config_hash

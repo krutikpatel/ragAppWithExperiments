@@ -468,6 +468,10 @@ Rules that outlive any particular library:
   Ragas revises metric prompts between releases; an upgrade can move every historical
   score with no config change. `ragas_version` and `metric_prompt_versions` are
   recorded and checked by `rag diff`. (MIS-004, DEC-021)
+- Pin the *provider*, not just the model, for any hosted open-weights model. On
+  OpenRouter one model is served by many providers with a ~37x speed spread and
+  non-identical outputs. Provider identity is part of the judge and is a comparability
+  key. (DEC-032)
 - Third-party eval libraries are metric providers, never the experiment or dataset
   layer. Ragas lives behind the `Judge` interface and a test enforces the boundary,
   so swapping it is a one-file change. (DEC-019)
@@ -486,7 +490,7 @@ Rules that outlive any particular library:
 | Role | Model | Chosen in | Notes |
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
-| Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Measured **~152s per question**, which makes Tier 2 latency-bound (DEC-031). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
+| Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Judge calls pin `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
 | Embedding | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
