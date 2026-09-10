@@ -26,7 +26,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
 9. **Never upgrade Ragas without starting a new comparison family.** It revises
    metric prompts between releases; `ragas_version` and `metric_prompt_versions` are
    recorded and checked by `rag diff` for exactly this reason. (MIS-004)
-10. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+10. **To claim a capability is absent, probe the endpoint that would provide it and
+    show the failure.** A missing entry in a neighbouring listing is not evidence, and
+    a wrong "can't" is costlier than a wrong "can" because nobody re-tests it. (MIS-005)
+11. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -129,3 +132,31 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Note:** `ragas.metrics` is already deprecated for `ragas.metrics.collections`
   "removed in v1.0". This API is moving, and the pin is what stands between that and
   the results ledger.
+
+## MIS-005 — Concluded a capability did not exist after checking one endpoint
+- **Date:** 2026-09-10
+- **Severity:** Medium — wrote a false claim into DECISIONS.md, CLAUDE.md and the
+  README, and needlessly scoped one of P0-07's three judged metrics out of Phase 0.
+- **What happened:** To find out whether OpenRouter could supply the embedding model
+  Ragas's `AnswerRelevancy` needs, I fetched `GET /api/v1/models`, filtered ids for
+  "embed", got nothing, and recorded in DEC-022 that "OpenRouter serves no embedding
+  models". I then designed around the gap: `_embeddings()` raised
+  `NotImplementedError`, and the claim was repeated in CLAUDE.md's tech-stack table,
+  the models table and the README.
+- **How it was caught:** Krutik said it was wrong and named the actual endpoint.
+  `GET /api/v1/embeddings/models` returns 33 models.
+- **Root cause:** Checked an adjacent listing rather than the documented endpoint for
+  the capability, then treated one negative result as proof of absence. The
+  `/models` endpoint answers "which chat models are there", not "does this API do
+  embeddings" — I asked the wrong question and trusted the answer.
+- **Impact:** No results affected; nothing had been run. A false constraint was
+  written into three files and one metric was wrongly recorded as unavailable.
+- **Fix applied:** DEC-026 corrects DEC-022 (original kept, per the append-only rule).
+  `RagasJudge._embeddings()` is implemented against OpenRouter's embeddings API.
+  CLAUDE.md and the README are corrected.
+- **Prevention rule:** To establish that a capability is absent, probe the endpoint
+  that *would* provide it and show the failure. A missing entry in a neighbouring
+  listing is not evidence. And when a negative finding is about to become a recorded
+  constraint that removes scope, say so out loud before writing it down — a wrong
+  "can't" is more expensive than a wrong "can", because nobody re-tests it.
+- **Added to preflight:** yes

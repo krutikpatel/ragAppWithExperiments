@@ -80,14 +80,19 @@ reference; report the agreement of (a) ROUGE-L, (b) embedding cosine, (c) an LLM
 judge with the same labels. If a free method reaches judge-level agreement, it
 replaces the judge for correctness. **Status:** open. Raised by Krutik, 2026-09-09.
 
-## OQ-011 — Which embedding model unlocks `answer_relevance`?
-Ragas's `AnswerRelevancy` needs embeddings and OpenRouter serves none (DEC-022), so
-one of P0-07's three judged metrics cannot run. Phase 1 needs an embedding model for
-dense retrieval anyway, so the two decisions may as well be one.
-**Decided by:** Krutik chooses an embedding model (a second provider, or local
-`sentence-transformers`); relevance is then scored on the Tier 2 subsample and checked
-for whether it adds signal beyond answer correctness, which it largely overlaps.
-**Status:** open, blocking one P0-07 metric.
+## OQ-011 — Which embedding model should this project use?
+Ragas's `AnswerRelevancy` needs embeddings, and OpenRouter serves 33 embedding models
+through the same key (DEC-026, correcting DEC-022). So this is a choice, not a
+blocker. Phase 1 needs an embedding model for dense retrieval anyway, so the two
+decisions may as well be one — though they need not be the same model: judging
+relevance and indexing 6,221 documents are different jobs with different cost profiles.
+One thing to watch: most of the cheap options cap at a **512-token context**, which
+would truncate our 512-*word* chunks. `baai/bge-m3` ($0.01/Mtok, 8,194 ctx) and the
+OpenAI models do not.
+**Decided by:** Krutik chooses; `answer_relevance` is then scored on the Tier 2
+subsample and checked for whether it adds signal beyond answer correctness, which it
+largely overlaps. **Status:** open — needed for `answer_relevance`, and for Phase 1
+dense retrieval.
 
 ## OQ-012 — Does the Ragas call multiplier match reality?
 The Tier 2 cost estimate assumes roughly 3x the single-call token volume for the

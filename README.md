@@ -105,10 +105,9 @@ bad retriever; they are marked as such and are not experiments.
 **Models.** Generator `openai/gpt-5-nano` (DEC-017); judge `deepseek/deepseek-v3.2`
 (DEC-025), from a different family because `RunConfig` refuses same-family judging as
 self-preference bias. The judge is still a **plumbing placeholder** — its scores prove
-Tier 2 works and are not measurements. Ragas's `answer_relevance` additionally needs
-an embedding model and OpenRouter serves none, so two of three judged metrics are
-available today, with the third recorded as skipped rather than quietly missing
-(DEC-022).
+Tier 2 works and are not measurements. No embedding model is chosen yet, so Ragas's
+`answer_relevance` is recorded as skipped on every run until one is set; it is a
+configuration gap, not a capability one (DEC-026).
 
 ## Quickstart
 

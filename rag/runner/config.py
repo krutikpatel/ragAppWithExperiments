@@ -57,8 +57,9 @@ class RunConfig:
     generator_prompt: str = "answer@v1"
     judge_model: str = ""
     judge_temperature: float = 0.0
-    # Ragas AnswerRelevancy needs embeddings and OpenRouter serves none, so this is
-    # empty until a second provider or a local model is chosen (DEC-022).
+    # Ragas AnswerRelevancy needs an embedding model. OpenRouter supplies them, so
+    # this is empty only because the model is unchosen — not because it is unavailable
+    # (DEC-026 corrects DEC-022). Empty means answer_relevance is recorded as skipped.
     judge_embedding_model: str = ""
     context_max_tokens: int = 6000
 

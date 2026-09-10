@@ -91,3 +91,25 @@ def test_judge_family_is_derived_from_the_model_id():
 
     assert model_family("openai/gpt-5-nano") == "openai"
     assert model_family("anthropic/claude-sonnet-5") == "anthropic"
+
+
+def test_answer_relevance_is_available_once_an_embedding_model_is_set():
+    """DEC-026: it is gated on configuration, not on OpenRouter's capabilities."""
+    from rag.eval.judge import CRITERIA, JudgeConfig
+
+    configured = JudgeConfig(
+        model="deepseek/deepseek-v3.2", embedding_model="baai/bge-m3"
+    )
+    assert configured.criteria == CRITERIA
+    assert configured.skipped_criteria == ()
+
+
+def test_embeddings_backend_is_wired_rather_than_stubbed():
+    """MIS-005 regression: `_embeddings` used to raise on a false premise."""
+    import inspect
+
+    from rag.eval.judge import RagasJudge
+
+    source = inspect.getsource(RagasJudge._embeddings)
+    assert "NotImplementedError" not in source
+    assert "OpenAIEmbeddings" in source

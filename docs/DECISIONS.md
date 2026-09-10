@@ -432,6 +432,9 @@ SHA, and reason.
 - **Revisit if:** Ragas stabilises and publishes prompt versions we can record directly.
 
 ## DEC-022 — `answer_relevance` is unavailable until an embedding model is chosen
+> **CORRECTED by DEC-026 on 2026-09-10** — the premise below is factually wrong.
+> OpenRouter *does* serve embedding models, through a separate endpoint I did not
+> check. The entry stays as written; see DEC-026 and MIS-005.
 - **Date:** 2026-09-09
 - **Decided by:** Claude (implementing P0-07); the model choice itself is Krutik's
 - **Status:** Active — **blocking one of P0-07's three judged metrics**
@@ -534,3 +537,30 @@ SHA, and reason.
   printed before every Tier 2 run and OQ-012 will replace it with observed usage.
 - **Revisit if:** DeepSeek fails Ragas's structured-output requirement (surfaces as
   parse errors, not wrong scores), or judged numbers are about to enter the narrative.
+
+## DEC-026 — Corrects DEC-022: OpenRouter does serve embedding models
+- **Date:** 2026-09-10
+- **Decided by:** Krutik (corrected the claim); verification by Claude
+- **Status:** Active — **corrects DEC-022**
+- **Context:** DEC-022 recorded that "OpenRouter serves no embedding models" and
+  concluded that Ragas's `answer_relevance` could not run. That conclusion rested on
+  a single check of `GET /api/v1/models`, which does not list embedding models.
+- **What is actually true:** OpenRouter exposes a unified embeddings API at
+  `POST /api/v1/embeddings`, and its embedding models are listed at
+  `GET /api/v1/embeddings/models` — a **different endpoint**. Verified 2026-09-10:
+  33 embedding models are available through the same key, including
+  `openai/text-embedding-3-small`, `openai/text-embedding-3-large`,
+  `qwen/qwen3-embedding-8b`, `google/gemini-embedding-001` and `baai/bge-m3`.
+- **Decision:** `answer_relevance` is available. It is gated on *configuration*, not
+  capability: set `judge_embedding_model` and the criterion runs.
+  `RagasJudge._embeddings()` now returns `ragas.embeddings.OpenAIEmbeddings` backed by
+  an OpenAI-compatible client pointed at OpenRouter — Ragas accepts any such client,
+  so no custom wrapper is needed.
+- **Evidence:** Measured — `GET /api/v1/embeddings/models` returns 33 models with
+  pricing from $0.004/Mtok. See MIS-005 for how the wrong conclusion was reached.
+- **Consequences:** All three of P0-07's judged metrics are reachable. The embedding
+  model itself is still unchosen, and that is Krutik's call (OQ-011). Until it is set,
+  `skipped_criteria` records `answer_relevance` as skipped — which was always the
+  right mechanism; only the stated reason was wrong.
+- **Revisit if:** OpenRouter changes its embeddings API surface, or a chosen embedding
+  model needs a provider OpenRouter does not proxy.

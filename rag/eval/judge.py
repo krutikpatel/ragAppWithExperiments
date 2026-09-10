@@ -33,15 +33,18 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 CRITERIA = ("faithfulness", "answer_correctness", "answer_relevance")
 
-# Metrics that need no embedding model. `answer_relevance` is absent on purpose —
-# see EMBEDDING_REQUIRED below.
+# Metrics that need no embedding model.
 CRITERIA_WITHOUT_EMBEDDINGS = ("faithfulness", "answer_correctness")
 
-# Ragas's AnswerRelevancy requires an embeddings model, and OpenRouter serves none
-# (checked 2026-09-09: no model on OpenRouter exposes an embeddings endpoint). So
-# this criterion cannot run through our only configured access path until an
-# embedding model is chosen. See DEC-022 and OQ-011.
+# Ragas's AnswerRelevancy embeds generated questions to compare against the original,
+# so it needs an embedding model. OpenRouter supplies one through its embeddings API
+# (`POST /api/v1/embeddings`; models are listed at `/api/v1/embeddings/models`, a
+# different endpoint from `/api/v1/models`). So this is a configuration question, not
+# a capability gap: set `judge_embedding_model` and the criterion runs. See DEC-026,
+# which corrects DEC-022.
 EMBEDDING_REQUIRED = ("answer_relevance",)
+
+OPENROUTER_EMBEDDINGS_MODELS_URL = "https://openrouter.ai/api/v1/embeddings/models"
 
 # [factuality, semantic similarity]. Similarity is weighted to zero: it is the
 # component P0-07 warns is noisy on long procedural answers, and zeroing it also
@@ -154,10 +157,8 @@ class RagasJudge(Judge):
         super().__init__(config)
         self._metrics: dict[str, Any] | None = None
 
-    def _build_metrics(self) -> dict[str, Any]:
+    def _openrouter_client(self) -> Any:
         from openai import OpenAI
-        from ragas.llms import llm_factory
-        from ragas.metrics.collections import AnswerCorrectness, Faithfulness
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
@@ -165,9 +166,15 @@ class RagasJudge(Judge):
                 "OPENROUTER_API_KEY is not set. It lives in .env at the repo root; "
                 "load it into the environment before a Tier 2 run."
             )
-        client = OpenAI(
+        return OpenAI(
             api_key=api_key, base_url=OPENROUTER_BASE_URL, timeout=self.config.timeout_s
         )
+
+    def _build_metrics(self) -> dict[str, Any]:
+        from ragas.llms import llm_factory
+        from ragas.metrics.collections import AnswerCorrectness, Faithfulness
+
+        client = self._openrouter_client()
         llm = llm_factory(
             model=self.config.model,
             provider="openai",
@@ -190,10 +197,16 @@ class RagasJudge(Judge):
         return metrics
 
     def _embeddings(self) -> Any:
-        raise NotImplementedError(
-            "no embeddings backend is wired. OpenRouter serves no embedding models, "
-            "so answer_relevance needs a second provider or a local model. See "
-            "DEC-022 and OQ-011."
+        """Ragas embeddings backed by OpenRouter's embeddings API.
+
+        `ragas.embeddings.OpenAIEmbeddings` accepts any OpenAI-compatible client, and
+        OpenRouter's embeddings endpoint is one, so no custom wrapper is needed — the
+        model id is just an OpenRouter embedding model.
+        """
+        from ragas.embeddings import OpenAIEmbeddings
+
+        return OpenAIEmbeddings(
+            client=self._openrouter_client(), model=self.config.embedding_model
         )
 
     def score(

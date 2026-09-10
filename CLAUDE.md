@@ -447,7 +447,7 @@ Two notes on where things live:
 | Tests | `pytest` | |
 | IR metrics | `ranx` | never hand-roll recall/nDCG/MRR |
 | Results store | SQLite | `runs` and `run_questions` tables |
-| LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. **No embedding models** — see DEC-022 |
+| LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. Chat at `/chat/completions`, embeddings at `/embeddings` (models listed at `/embeddings/models`, NOT `/models`) |
 | Judged metrics | `ragas==0.4.3` (exact pin) | metric library ONLY. Not its dataset or experiment layer |
 | Config objects | frozen dataclasses today; `pydantic` declared for P0-10 | must hash to a stable `config_hash` |
 
@@ -471,6 +471,9 @@ Rules that outlive any particular library:
 - Third-party eval libraries are metric providers, never the experiment or dataset
   layer. Ragas lives behind the `Judge` interface and a test enforces the boundary,
   so swapping it is a one-file change. (DEC-019)
+- To establish that a capability is absent, probe the endpoint that would provide it
+  and show the failure. A missing entry in a neighbouring listing is not evidence, and
+  a wrong "can't" is costlier than a wrong "can" because nobody re-tests it. (MIS-005)
 
 ### Models
 
@@ -478,7 +481,7 @@ Rules that outlive any particular library:
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
 | Judge | `deepseek/deepseek-v3.2` — **PLACEHOLDER** | DEC-025 | Non-OpenAI family, as required. ~$0.36 per 100-question Tier 2 run. **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** — the real judge decision is still pending (DEC-018). |
-| Embedding | _not chosen_ | DEC-022, OQ-011 | OpenRouter serves none. Blocks Ragas `answer_relevance`, one of P0-07's three judged metrics. Phase 1 needs one for dense retrieval anyway. |
+| Embedding | _not chosen_ | DEC-026, OQ-011 | Available via OpenRouter (33 models). Needed for Ragas `answer_relevance` and for Phase 1 dense retrieval. Watch context length: most cheap options cap at 512 tokens, which would truncate our 512-*word* chunks. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
 An empty row is the honest state, not an omission to paper over. The benchmark's gold
@@ -491,9 +494,10 @@ Two constraints now bind this table, both enforced in code rather than by intent
 
 - **Judge family must differ from generator family.** `RunConfig` refuses the pairing
   outright — same-family judging carries unmeasured self-preference bias (P0-07).
-- **Ragas `answer_relevance` needs embeddings and OpenRouter has none.** Two of three
-  judged metrics ship; the third is recorded as skipped on every run rather than
-  quietly absent (DEC-022).
+- **Ragas `answer_relevance` needs an embedding model.** OpenRouter supplies one, so
+  this is a configuration question, not a capability gap (DEC-026 corrects DEC-022).
+  Until `judge_embedding_model` is set, the criterion is recorded in
+  `skipped_criteria` on every run rather than quietly absent.
 
 Access is via **OpenRouter**; the API key is already in `.env` at the repo root
 (gitignored). Read it from the environment — never print, commit, or echo it.
