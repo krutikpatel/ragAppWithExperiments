@@ -482,6 +482,8 @@ SHA, and reason.
   similarity component adds signal rather than variance.
 
 ## DEC-024 — Tier 2 scores a fixed 100-question subsample by default
+> **AMENDED by DEC-031 on 2026-09-10** — the decision stands, but its premise was
+> incomplete. Cost is not the binding constraint on Tier 2; wall-clock latency is.
 - **Date:** 2026-09-09
 - **Decided by:** Krutik (P0-09 updated to specify it)
 - **Status:** Active
@@ -702,3 +704,37 @@ It would still inflate any absolute figure quoted in the narrative.
 - **Revisit if:** OQ-014 shows measurable self-preference between the two, or a real
   (non-placeholder) judge is chosen — at which point the family question should be
   settled by measurement rather than by argument.
+
+## DEC-031 — Tier 2's binding constraint is latency, not cost
+- **Date:** 2026-09-10
+- **Decided by:** Claude (recording a measurement; the response to it is Krutik's call)
+- **Status:** Active — **amends DEC-024's premise**
+- **Context:** DEC-024 capped Tier 2 at a 100-question subsample because Ragas is
+  expensive per question. The first full Tier 2 run with the real judge
+  (`openai/gpt-oss-120b`, DEC-030) shows the money was never the problem.
+- **Measured** — run `run_20260910_175820_b8b5`, 5 questions, 3 Ragas metrics,
+  toy retrieval, judge `openai/gpt-oss-120b`:
+  - **780s wall clock for 5 questions — 156s per question.**
+  - Generator: **19s total, 2% of wall clock** (per-question 2.3-7.4s).
+  - Judge and indexing: **760s, ~152s per question.**
+  - A single isolated judge call (2 metrics, no embeddings) measured 45.9s.
+- **Extrapolated, an estimate and not a measurement:** a 100-question Tier 2 run is
+  on the order of **4 hours** if latency scales linearly. Cost over the same run is
+  cents.
+- **What this changes:** Tier 2 is something to schedule, not iterate on. The
+  two-tier design still holds — Tier 1 runs `dev` in ~12s with zero LLM calls, which
+  is where sweeps belong — but "promoted configs only" now means promoted for reasons
+  of *time*, and a full-`dev` (200 question) Tier 2 run is an overnight job.
+- **The largest and most obvious lever is our own implementation, not the model.**
+  `RagasJudge.score` calls `asyncio.run` once per metric per question, strictly
+  sequentially, so nothing overlaps: 100 questions x 3 metrics is 300 serialized
+  round trips, each of which is mostly waiting. Concurrency across questions is the
+  fix, and it is untried — tracked as OQ-015. No conclusion is recorded here about how
+  much it would help, because none has been measured.
+- **Evidence:** Measured as above. The 4-hour figure is an engineering estimate,
+  labelled as such.
+- **Consequences:** Any plan that assumed Tier 2 could be re-run casually needs
+  revising. P0-13's Tier 2 smoke run should stay small until OQ-015 is settled.
+- **Revisit if:** OQ-015 lands and changes the per-question figure, or a faster judge
+  is chosen. Judge *latency* now belongs in the judge-selection tradeoff alongside
+  price and bias — it was absent from DEC-025 and DEC-030 because it was unmeasured.

@@ -132,6 +132,16 @@ is evidence of self-preference; comparable means are evidence against. Cheap, si
 reuses stored answers and only re-runs judging.
 **Status:** open. Matters most before any judged number is quoted in the narrative.
 
+## OQ-015 — How much does concurrent judging cut Tier 2 wall clock?
+Measured: 156s per question, 98% of it waiting on the judge (DEC-031). `RagasJudge`
+calls `asyncio.run` once per metric per question, sequentially, so 100 questions x 3
+metrics is 300 serialized round trips with no overlap. The work is IO-bound.
+**Decided by:** run the same 5-question subsample with questions judged concurrently
+(a bounded worker pool, so provider rate limits are respected) and compare wall clock
+against the 780s baseline. Scores must be identical — judging one question does not
+depend on another — so any score change means the change is wrong, not faster.
+**Status:** open. This gates whether a full-`dev` Tier 2 run is practical.
+
 ---
 
 ## External claims to test, not to cite

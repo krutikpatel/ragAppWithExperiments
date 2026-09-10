@@ -114,6 +114,11 @@ three Ragas metrics returned values, provenance and per-question rows landed in 
 store. It took three attempts, all failing on token budgets rather than logic — see
 MIS-006, which is the most useful thing the run produced.
 
+Measured on that run: **156s per question, 98% of it waiting on the judge.** So Tier 2
+is latency-bound, not cost-bound — a 100-question run is on the order of hours while
+costing cents (DEC-031). Judging is currently serialized one metric at a time;
+concurrency is the untried lever (OQ-015).
+
 ## Quickstart
 
 ```bash

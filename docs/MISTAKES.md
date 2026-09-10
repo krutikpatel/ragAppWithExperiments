@@ -33,7 +33,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
     the call.** An empty completion is a broken call, not a bad answer, and a metric
     will happily score nothing as zero. Check whether a new model spends completion
     tokens on reasoning before setting its budget. (MIS-006)
-12. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+12. **Never delete the results store to get past a schema change.** Migrate it, or
+    use a different database file. `rag diff` needs both runs to exist. (MIS-007)
+13. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -202,4 +204,27 @@ Derived from the prevention rules below. Run through it and say in chat that you
   and never make a metric the thing that discovers it, because a metric will happily
   score nothing as zero. When adding a model, check whether it spends completion
   tokens on reasoning before budgeting.
+- **Added to preflight:** yes
+
+## MIS-007 — Deleted the results store between two runs I wanted to compare
+- **Date:** 2026-09-10
+- **Severity:** Low — cost one comparison; no recorded results lost.
+- **What happened:** I ran the Tier 2 smoke test with the `deepseek/deepseek-v3.2`
+  judge, then swapped to `openai/gpt-oss-120b` (DEC-030) and re-ran it — prefixing each
+  run with `rm -f results/runs.sqlite` to start clean. The judged aggregates differed
+  substantially between the two runs (answer correctness 0.44 then 0.10 on the same 5
+  questions), which is the most interesting thing either run produced.
+- **How it was caught:** Wanting to explain the gap, and finding the earlier
+  per-question rows gone.
+- **Root cause:** `rm` used as a convenience to avoid schema-migration friction, on
+  the store whose entire purpose is to make two runs comparable. `rag diff` was built
+  for exactly this question and I destroyed its input.
+- **Impact:** The 0.44 -> 0.10 gap cannot be attributed. It could be the judge change,
+  or the generator producing different answers between runs, or both. Two placeholder
+  runs of 5 questions each, so nothing of value was measured — but the comparison was
+  available and is now not.
+- **Fix applied:** None in code. The rule below is the fix.
+- **Prevention rule:** Never delete the results store to get past a schema change.
+  Migrate it, or point the run at a different database file. A run that exists is
+  evidence; the ledger is append-only for the same reason the markdown journals are.
 - **Added to preflight:** yes
