@@ -52,12 +52,24 @@ OPENROUTER_EMBEDDINGS_MODELS_URL = "https://openrouter.ai/api/v1/embeddings/mode
 ANSWER_CORRECTNESS_WEIGHTS = (1.0, 0.0)
 
 
+# OpenRouter namespaces `gpt-oss-*` under `openai/` because OpenAI released the
+# weights, but these are open-weights models with their own training, served by
+# third-party providers — not the hosted GPT line. For self-preference purposes they
+# are treated as a distinct family. This is a judgment call, recorded as DEC-030,
+# and the residual risk (shared lineage may still correlate preferences) is stated
+# there rather than assumed away.
+_FAMILY_OVERRIDES = (("openai/gpt-oss", "openai-oss"),)
+
+
 def model_family(model_id: str) -> str:
     """The provider family of an OpenRouter model id: `openai/gpt-5-nano` -> `openai`.
 
     Used to enforce that the judge is not from the generator's family, which would
     make every judged score carry an unmeasured self-preference bias.
     """
+    for prefix, family in _FAMILY_OVERRIDES:
+        if model_id.startswith(prefix):
+            return family
     return model_id.split("/", 1)[0] if "/" in model_id else model_id
 
 

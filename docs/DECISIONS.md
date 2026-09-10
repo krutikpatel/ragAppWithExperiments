@@ -501,6 +501,9 @@ SHA, and reason.
 - **Revisit if:** a Tier 2 slice is consistently too small to support a finding.
 
 ## DEC-025 — The placeholder judge must leave the generator's family
+> **SUPERSEDED by DEC-030 on 2026-09-10** — the judge model changes from
+> `deepseek/deepseek-v3.2` to `openai/gpt-oss-120b`. The different-family requirement
+> and the placeholder status both still stand.
 - **Date:** 2026-09-09
 - **Decided by:** Krutik (options and recommendation from Claude)
 - **Status:** Active — **resolved: `deepseek/deepseek-v3.2`**
@@ -649,3 +652,53 @@ SHA, and reason.
   exceed a 512-token embedding context.
 - **Revisit if:** the tokenizer of a chosen model differs materially from
   `cl100k_base`.
+
+## DEC-030 — Ragas judge LLM: `openai/gpt-oss-120b`
+- **Date:** 2026-09-10
+- **Decided by:** Krutik
+- **Status:** Active — **supersedes DEC-025's model choice**
+- **Decision:** The LLM that drives every Ragas metric is `openai/gpt-oss-120b`, via
+  OpenRouter. $0.037/$0.170 per Mtok, 131,072 context — roughly 7x cheaper on input
+  than the `deepseek/deepseek-v3.2` it replaces ($0.27/$0.40).
+- **Placeholder status is unchanged.** DEC-018's deferral still stands: this judge
+  proves the Tier 2 plumbing. Its faithfulness, answer-correctness and
+  answer-relevance scores are **not measurements** and must not enter
+  `docs/EXPERIMENTS.md` or `NARRATIVE.md`.
+
+### The family question — a judgment call, not a derivation
+
+P0-07 requires the judge to be a different model family from the generator, to avoid
+self-preference bias. The generator is `openai/gpt-5-nano` (DEC-017), and OpenRouter
+namespaces this judge under `openai/` too, so a literal prefix reading makes them the
+same family and `RunConfig` would refuse the pairing outright.
+
+They are treated as **different** families here, and `model_family()` maps
+`openai/gpt-oss-*` to `openai-oss`. The reasoning: `gpt-oss-120b` is an open-weights
+model with its own training, served by third-party providers — it is not the hosted
+GPT-5 line, and self-preference bias is a model preferring *its own* outputs, not a
+vendor's. A shared namespace is a packaging fact, not a lineage one.
+
+**The residual risk is real and unmeasured:** shared provenance may still correlate
+what the two models consider a good answer, and nothing here rules that out. Two
+things make it tolerable rather than resolved — the judge is a placeholder whose scores
+are not being believed, and this bias, if present, applies equally to every retrieval
+configuration, so it would shift absolute judged numbers rather than reorder configs.
+It would still inflate any absolute figure quoted in the narrative.
+
+- **Options considered:**
+  1. Treat `gpt-oss-*` as a distinct family and use it — chosen.
+  2. Change the generator to a non-OpenAI model so the prefix rule passes literally —
+     rejected: it discards DEC-017 to satisfy a string comparison.
+  3. Relax P0-07's different-family requirement — rejected: the rule is sound; the
+     prefix heuristic implementing it is what was too crude.
+- **Evidence:** Model availability, pricing and 131k context read from OpenRouter
+  2026-09-10. The bias question has **no measured data on this corpus**; it is a
+  judgment call, and OQ-014 records what would settle it.
+- **Consequences:** Judged metrics get materially cheaper, which makes a full-`dev`
+  Tier 2 run (200 questions) affordable rather than something to ration. The
+  `openai-oss` family label is now load-bearing: anyone adding a model under
+  `openai/gpt-oss-*` inherits this decision, and anyone who disagrees with it should
+  change `_FAMILY_OVERRIDES` rather than work around the guard.
+- **Revisit if:** OQ-014 shows measurable self-preference between the two, or a real
+  (non-placeholder) judge is chosen — at which point the family question should be
+  settled by measurement rather than by argument.

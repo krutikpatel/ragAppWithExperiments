@@ -120,6 +120,18 @@ substantive answers containing at least one well-formed `[doc:<id>]` tag. Below 
 means the citation metrics are measuring instruction-following, not grounding.
 **Status:** open.
 
+## OQ-014 — Does `gpt-oss-120b` show self-preference toward `gpt-5-nano` answers?
+DEC-030 treats them as different families on the argument that `gpt-oss-120b` is an
+open-weights model with its own training rather than the hosted GPT-5 line. That is an
+argument, not a measurement, and shared provenance could still correlate what the two
+consider a good answer.
+**Decided by:** score the same Tier 2 subsample answers with two judges — the current
+one and a clearly unrelated family (e.g. `anthropic/*`) — and compare mean
+faithfulness and answer correctness. A systematic gap in favour of the `gpt-oss` judge
+is evidence of self-preference; comparable means are evidence against. Cheap, since it
+reuses stored answers and only re-runs judging.
+**Status:** open. Matters most before any judged number is quoted in the narrative.
+
 ---
 
 ## External claims to test, not to cite

@@ -486,7 +486,7 @@ Rules that outlive any particular library:
 | Role | Model | Chosen in | Notes |
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
-| Judge | `deepseek/deepseek-v3.2` — **PLACEHOLDER** | DEC-025 | Non-OpenAI family, as required. ~$0.36 per 100-question Tier 2 run. **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** — the real judge decision is still pending (DEC-018). |
+| Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
 | Embedding | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
@@ -500,6 +500,10 @@ Two constraints now bind this table, both enforced in code rather than by intent
 
 - **Judge family must differ from generator family.** `RunConfig` refuses the pairing
   outright — same-family judging carries unmeasured self-preference bias (P0-07).
+  Family comes from `model_family()`, which maps `openai/gpt-oss-*` to `openai-oss`
+  because those are open-weights models rather than the hosted GPT line. Disagree with
+  that? Change `_FAMILY_OVERRIDES` in `rag/eval/judge.py` and log a decision — do not
+  work around the guard. (DEC-030)
 - **Ragas `answer_relevance` needs an embedding model.** Now configured (DEC-027), so
   all three judged metrics run. If `judge_embedding_model` is ever cleared, the
   criterion is recorded in `skipped_criteria` rather than quietly absent.
