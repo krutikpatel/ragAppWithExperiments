@@ -819,3 +819,28 @@ like a quality change. This argument stands even if the speed difference vanishe
   change no longer tempts anyone to delete the results store (MIS-007).
 - **Revisit if:** Cerebras or Groq stop serving the model, throughput changes, or the
   judge model changes — the provider list is model-specific and does not transfer.
+
+## DEC-033 — Tier 2 stays at 100 questions after the speedup
+- **Date:** 2026-09-10
+- **Decided by:** Krutik
+- **Status:** Active — **reaffirms DEC-024**
+- **Context:** DEC-024 capped Tier 2 at a fixed 100-question subsample because Ragas
+  looked expensive per question. DEC-031 found the real constraint was latency, and
+  DEC-032 removed most of it — 13.3x, so a full 200-question `dev` Tier 2 run is now
+  roughly 40 minutes rather than 8 hours. That made the cap worth reconsidering, since
+  the reason for it had changed.
+- **Decision:** Keep the cap. `eval_subsample_size: 100`, seed 7, subsample
+  `sub100:b551f7f49c91`, unchanged. `full_eval: true` remains available per run.
+- **Evidence:** No measured data; judgment call. Affordability was never the only
+  argument for a fixed subsample — a stable question set is what makes two Tier 2 runs
+  differ by configuration rather than by which questions they scored, and that holds
+  regardless of speed.
+- **Consequences:** Judged metrics keep the error bars of 100 questions, and the
+  slices stay small: 26 multi-gold, 32 procedural. Any judged finding on those slices
+  rests on tens of questions, and `aggregate_by_slice` carries the `n` next to every
+  number for that reason. Changing the size later starts a new `eval_subsample_id` and
+  breaks comparability with every Tier 2 run before it — which is the cost this
+  decision avoids paying twice.
+- **Revisit if:** a judged slice proves too small to separate configurations once
+  OQ-017 has measured the run-to-run spread, which is the number that would say
+  whether 100 is enough.
