@@ -35,7 +35,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
     tokens on reasoning before setting its budget. (MIS-006)
 12. **Never delete the results store to get past a schema change.** Migrate it, or
     use a different database file. `rag diff` needs both runs to exist. (MIS-007)
-13. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+13. **A provider pin is a purchasing decision, not a tuning knob.** Cost it before
+    committing it, and put it to Krutik. When optimising one dimension, check what it
+    spends in the others before recording the change as a win. (MIS-008)
+14. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -230,4 +233,32 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** Never delete the results store to get past a schema change.
   Migrate it, or point the run at a different database file. A run that exists is
   evidence; the ledger is append-only for the same reason the markdown journals are.
+- **Added to preflight:** yes
+
+## MIS-008 — Pinned the two most expensive providers without checking prices
+- **Date:** 2026-09-10
+- **Severity:** Low in money, medium in process — no results affected.
+- **What happened:** Fixing the Tier 2 latency problem (DEC-032), I pinned judge calls
+  to Cerebras and Groq purely on measured speed. I never looked at what they cost.
+  They are the **most expensive and fifth-most expensive** of the 22 providers serving
+  `openai/gpt-oss-120b` — Cerebras at $0.350/Mtok input against $0.030 at the cheapest,
+  a 12x spread. The shipped configuration costs ~$0.48 per 100-question Tier 2 run
+  where DEC-030 recorded a price implying cents.
+- **How it was caught:** Krutik asked why Groq and Cerebras were appearing at all, and
+  whether he was paying for them. Not by any check of mine.
+- **Root cause:** I treated provider choice as a performance setting rather than a
+  purchasing decision. Having just measured a 37x speed spread, I assumed the pricing
+  was flat because the *model-level* price is a single number — the per-provider
+  prices live behind a different endpoint I did not open. That is MIS-005 again in a
+  new costume: a conclusion drawn from the listing I happened to be looking at.
+- **Impact:** No results affected and the absolute amounts are small. But the
+  recorded price in DEC-030 was wrong for the shipped config, and Krutik was spending
+  ~6x what the documentation said without having been asked.
+- **Fix applied:** DEC-034 records the real per-provider table and the ~$0.48/run
+  figure, and the choice was put to Krutik, who kept the fast pair. DEC-030 carries a
+  correction pointer.
+- **Prevention rule:** A provider pin is a purchasing decision, not a tuning knob.
+  Cost it before committing it, and put it to Krutik like any other model choice —
+  cost is one of the tradeoffs he is owed. More generally: when optimising one
+  dimension, check what it spends in the others before recording the change as a win.
 - **Added to preflight:** yes

@@ -656,6 +656,9 @@ SHA, and reason.
   `cl100k_base`.
 
 ## DEC-030 — Ragas judge LLM: `openai/gpt-oss-120b`
+> **CORRECTED by DEC-034 on 2026-09-10** — the model choice stands; the price below
+> is wrong for the config actually shipped. $0.037/$0.170 is DeepInfra's rate. With
+> providers pinned to Cerebras/Groq (DEC-032) the real rate is up to $0.350/$0.750.
 - **Date:** 2026-09-10
 - **Decided by:** Krutik
 - **Status:** Active — **supersedes DEC-025's model choice**
@@ -743,6 +746,9 @@ It would still inflate any absolute figure quoted in the narrative.
   price and bias — it was absent from DEC-025 and DEC-030 because it was unmeasured.
 
 ## DEC-032 — Pin judge providers and judge concurrently
+> **AMENDED by DEC-034 on 2026-09-10** — the speed and reproducibility findings hold.
+> What is missing below is that pinning these two providers also raised the price
+> ~6x, and that tradeoff was never surfaced. See MIS-008.
 - **Date:** 2026-09-10
 - **Decided by:** Claude (investigating at Krutik's request); the provider list is a
   routing choice he can overrule
@@ -844,3 +850,47 @@ like a quality change. This argument stands even if the speed difference vanishe
 - **Revisit if:** a judged slice proves too small to separate configurations once
   OQ-017 has measured the run-to-run spread, which is the number that would say
   whether 100 is enough.
+
+## DEC-034 — Judge provider pricing, and the decision to keep the fast pair
+- **Date:** 2026-09-10
+- **Decided by:** Krutik (raised the question; costing and options from Claude)
+- **Status:** Active — **corrects DEC-030's price, amends DEC-032**
+- **Context:** Krutik asked why Groq and Cerebras were appearing when he had not asked
+  for them, and whether he was paying for them. Answering it surfaced a cost fact that
+  DEC-032 had not checked: OpenRouter prices the *same model* differently per
+  provider, across a 12x range.
+- **The corrected figures** — `openai/gpt-oss-120b`, 22 providers, read 2026-09-10:
+
+| Provider | $/Mtok in | $/Mtok out | Quantization | Observed latency |
+|---|---|---|---|---|
+| AkashML | 0.030 | 0.170 | bf16 | 20-33s |
+| CoreWeave | 0.030 | 0.170 | fp4 | 24-29s |
+| DeepInfra | 0.037 | 0.170 | bf16 | 12.3s |
+| **Groq** (pinned) | 0.150 | 0.600 | unknown | 0.9s |
+| **Cerebras** (pinned) | 0.350 | 0.750 | fp16 | 0.4-0.8s |
+
+  DEC-030 recorded $0.037/$0.170 — DeepInfra's rate, and the model-level headline
+  price. It is not what the shipped configuration pays. **Cerebras is the most
+  expensive of all 22 providers.**
+- **Measured cost per 100-question Tier 2 run**, from instrumented token counts
+  (~7,240 in / ~2,990 out per question across 8 judge calls): **~$0.48 pinned to
+  Cerebras/Groq, versus ~$0.07 on the cheapest providers.**
+- **Decision:** Keep `["Cerebras", "Groq"]`. 41 cents per run to avoid roughly 3.5
+  hours of wall clock is worth paying, and Cerebras serves **fp16** — the highest
+  fidelity quantization on the list, where several cheaper providers serve fp4. For a
+  judge whose scores need to be stable, that is a second reason to prefer it, not just
+  speed.
+- **The structural point:** the cheap providers *are* the slow ones. Speed on
+  OpenRouter is bought, not found. Any future provider pin should be costed before it
+  is committed — which is what did not happen in DEC-032 (MIS-008).
+- **Evidence:** Measured — per-provider pricing and quantization from OpenRouter's
+  endpoints API; latencies from the DEC-032 instrumentation; token counts from the
+  same instrumented run. Account spend at the time of this decision: $24.42 total,
+  $0.76 that day.
+- **Consequences:** Tier 2 costs roughly $0.48 per 100-question run rather than the
+  cents implied by DEC-030. Twenty such runs is about $10. The pre-run cost estimator
+  (`rag/runner/cost.py`) reads model-level prices, so **it under-reports the judge
+  cost for a pinned configuration** — tracked as OQ-018.
+- **Revisit if:** Tier 2 run frequency rises enough for the difference to matter, a
+  cheaper provider becomes fast, or OQ-017 shows fp16 versus fp4 does not measurably
+  affect judged scores — in which case the cheap providers become defensible.

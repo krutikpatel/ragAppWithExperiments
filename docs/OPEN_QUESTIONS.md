@@ -170,6 +170,16 @@ below which a judged difference is not a finding — the same rule the project a
 applies to seeds. Until it is measured, no judged delta should be called a result.
 **Status:** open. This one gates the credibility of every judged number.
 
+## OQ-018 — The cost estimator under-reports pinned judge cost
+`rag/runner/cost.py` reads the model-level price from OpenRouter's models endpoint
+($0.037/$0.170 for `gpt-oss-120b`). With providers pinned to Cerebras/Groq the real
+rate is up to $0.350/$0.750, so the pre-run estimate is low by roughly 6x on the judge
+side — the one number it exists to get right.
+**Decided by:** make the estimator read per-provider pricing from the endpoints API for
+the pinned providers, then compare its estimate against OpenRouter's reported spend for
+a full Tier 2 run. Within ~20% is good enough for a number labelled an estimate.
+**Status:** open. Cheap to fix and it is actively misleading today.
+
 ---
 
 ## External claims to test, not to cite
