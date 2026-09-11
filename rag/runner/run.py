@@ -17,7 +17,7 @@ from rag.assembly import ConcatAssembler
 from rag.chunking.base import FixedTokenChunker
 from rag.chunking.index_map import ChunkIndex
 from rag.corpus.loader import load_corpus
-from rag.dataset.splits import load_split
+from rag.dataset.loader import load_split
 from rag.eval.generation_metrics import deterministic_metrics, refusal_summary
 from rag.eval.judge import CRITERIA, JudgeConfig, RagasJudge, judge_provenance
 from rag.eval.qrels import qrels_from_split, run_from_results
@@ -54,7 +54,9 @@ def make_run_id(config: RunConfig) -> str:
     return f"run_{stamp}_{short_id(config.config_hash, stamp, length=4)}"
 
 
-def check_test_split_guard(config: RunConfig, *, open_test: bool, store: ResultsStore) -> None:
+def check_test_split_guard(
+    config: RunConfig, *, open_test: bool, store: ResultsStore, reason: str | None = None
+) -> None:
     """P0-09 / P0-12 — the held-out split does not open by accident.
 
     400 gold questions across dozens of experiments is few enough that iterating on
@@ -69,12 +71,17 @@ def check_test_split_guard(config: RunConfig, *, open_test: bool, store: Results
             "append a row to the openings log in docs/DECISIONS.md with the date, "
             "config hash, git SHA and reason."
         )
+    if not (reason or "").strip():
+        raise PermissionError(
+            "opening the test split requires --reason. It is written into the "
+            "openings log in docs/DECISIONS.md, and 'no reason' is not a reason."
+        )
     previous = store.test_openings()
-    print(f"\n*** OPENING THE TEST SPLIT ***")
+    print("\n*** OPENING THE TEST SPLIT ***")
     print(f"    previous openings: {len(previous)}")
     if previous:
         print(f"    last opening:      {previous[-1]['timestamp']} ({previous[-1]['run_id']})")
-    print("    log this in docs/DECISIONS.md — date, config hash, git SHA, reason.\n")
+    print("    this opening will be appended to docs/DECISIONS.md.\n")
 
 
 def build_index(config: RunConfig) -> tuple[ChunkIndex, dict[str, str]]:
@@ -111,7 +118,7 @@ def run(
 def _run(
     config: RunConfig, *, open_test: bool, store: ResultsStore, reason: str | None
 ) -> dict[str, Any]:
-    check_test_split_guard(config, open_test=open_test, store=store)
+    check_test_split_guard(config, open_test=open_test, store=store, reason=reason)
 
     git = git_state()
     if git.dirty:
@@ -137,8 +144,10 @@ def _run(
             full=config.full_eval,
         )
         frame = frame[frame["question_id"].isin(subsample.question_ids)].reset_index(drop=True)
-        print(format_estimate(_cost_estimate(config, frame)))
+        cost_estimate = _cost_estimate(config, frame)
+        print(format_estimate(cost_estimate))
     else:
+        cost_estimate = {}
         subsample = build_subsample(
             frame, size=len(frame), seed=config.eval_subsample_seed,
             split_hash=split_hash, full=True,
@@ -187,8 +196,18 @@ def _run(
         }
     )
 
+    if config.split == HELD_OUT_SPLIT:
+        from rag.runner.test_openings import record_test_opening
+
+        count = record_test_opening(
+            config_hash=config.config_hash, git_sha=git.sha, reason=reason or "", run_id=run_id
+        )
+        print(f"    recorded as test-split opening #{count} in docs/DECISIONS.md\n")
+
     try:
-        row = _execute(config, run_id, frame, index, chunk_text, slices, store, reason)
+        row = _execute(
+            config, run_id, frame, index, chunk_text, slices, store, reason, cost_estimate
+        )
     except Exception as exc:
         # An abandoned run is recorded as VOID rather than left out. Silent gaps in
         # the ledger are what make a results document untrustworthy.
@@ -198,7 +217,7 @@ def _run(
 
 
 def _split_hash(split: str) -> str:
-    from rag.dataset.splits import describe_split
+    from rag.dataset.loader import describe_split
 
     return describe_split(split)["split_hash"]
 
@@ -242,6 +261,7 @@ def _execute(
     slices,
     store: ResultsStore,
     reason: str | None,
+    cost_estimate: dict[str, Any],
 ) -> dict[str, Any]:
     retriever = build_retriever(
         config.retriever,
@@ -251,11 +271,16 @@ def _execute(
         **config.retriever_params,
     )
 
+    import time
+
     rows = frame.to_dict("records")
-    results = [
-        retriever.retrieve(row["question_id"], row["question"], top_k=config.retrieval_depth)
-        for row in rows
-    ]
+    results = []
+    retrieval_latency_ms: dict[str, int] = {}
+    for row in rows:
+        started = time.perf_counter()
+        result = retriever.retrieve(row["question_id"], row["question"], top_k=config.retrieval_depth)
+        retrieval_latency_ms[row["question_id"]] = int((time.perf_counter() - started) * 1000)
+        results.append(result)
     results_by_question = {result.question_id: result for result in results}
 
     qrels = qrels_from_split(frame)
@@ -291,6 +316,27 @@ def _execute(
             if values:
                 aggregate[criterion] = sum(values) / len(values)
 
+    # P0-13 asks for p95 latency and cost per query on the baseline row. Retrieval
+    # latency is measured per question; generation latency is added in Tier 2. Cost
+    # per query is exactly zero in Tier 1 — no LLM is called — and in Tier 2 is the
+    # pre-run estimate divided by questions, labelled as such.
+    latencies = sorted(
+        retrieval_latency_ms[qid] + generated.get(qid, {}).get("latency_ms", 0)
+        for qid in retrieval_latency_ms
+    )
+    aggregate["p95_latency_ms"] = latencies[int(0.95 * (len(latencies) - 1))] if latencies else None
+    aggregate["p50_latency_ms"] = latencies[len(latencies) // 2] if latencies else None
+    if config.eval_tier is EvalTier.TIER_1:
+        aggregate["cost_per_query_usd"] = 0.0
+    elif "total_usd" in cost_estimate and rows:
+        aggregate["cost_per_query_usd"] = round(cost_estimate["total_usd"] / len(rows), 5)
+    else:
+        aggregate["cost_per_query_usd"] = None
+    aggregate["cost_per_query_source"] = (
+        "exact: Tier 1 makes no LLM calls" if config.eval_tier is EvalTier.TIER_1
+        else "estimate: pre-run cost estimate / questions"
+    )
+
     slice_report = aggregate_by_slice(per_question, slices)
     aggregate["slice_meta"] = slices.meta
 
@@ -307,6 +353,7 @@ def _execute(
                 "generated_answer": generated.get(row["question_id"], {}).get("text"),
                 "cited_doc_ids": json.dumps(generated.get(row["question_id"], {}).get("cited", [])),
                 "latency_ms": generated.get(row["question_id"], {}).get("latency_ms", 0),
+                "retrieval_latency_ms": retrieval_latency_ms[row["question_id"]],
                 "tokens_in": generated.get(row["question_id"], {}).get("tokens_in", 0),
                 "tokens_out": generated.get(row["question_id"], {}).get("tokens_out", 0),
                 "cost_usd": None,

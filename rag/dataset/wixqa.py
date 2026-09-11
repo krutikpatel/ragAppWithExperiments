@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from rag.corpus.freeze import HF_DATASET, HF_REVISION
+from rag.corpus.freeze import HF_DATASET, HF_REVISION, KB_SNAPSHOT_DATE
+from rag.dataset.adapter import DatasetAdapter, QARow
 from rag.hashing import short_id
 
 QA_CONFIGS = {
@@ -45,3 +46,34 @@ def load_qa_config(source_config: str) -> list[dict[str, Any]]:
         )
     rows.sort(key=lambda r: r["question_id"])
     return rows
+
+
+class WixQAAdapter(DatasetAdapter):
+    """The WixQA benchmark (Wix.com AI Research, arXiv:2505.08643, MIT)."""
+
+    name = "wixqa"
+
+    def source_configs(self) -> list[str]:
+        return list(QA_CONFIGS)
+
+    def load_questions(self, source_config: str) -> list[QARow]:
+        return [
+            QARow(
+                question_id=row["question_id"],
+                question=row["question"],
+                answer=row["answer"],
+                gold_doc_ids=list(row["gold_doc_ids"]),
+                source_config=row["source_config"],
+                metadata={"hf_config": QA_CONFIGS[source_config]},
+            )
+            for row in load_qa_config(source_config)
+        ]
+
+    def provenance(self) -> dict[str, Any]:
+        return {
+            "hf_dataset": HF_DATASET,
+            "hf_revision": HF_REVISION,
+            "kb_snapshot_date": KB_SNAPSHOT_DATE,
+            "license": "MIT",
+            "citation": "Cohen et al. (2025), WixQA, arXiv:2505.08643",
+        }

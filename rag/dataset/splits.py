@@ -26,47 +26,19 @@ from rag.corpus.freeze import HF_DATASET, HF_REVISION
 from rag.corpus.loader import load_corpus
 from rag.dataset.unanswerable import build_unanswerable_rows
 from rag.dataset.wixqa import load_qa_config
-from rag.hashing import hash_records
+from rag.dataset.loader import (
+    DEV_LARGE_WARNING,
+    ROW_FIELDS,
+    counts as _counts,
+    fields_for as _fields_for,
+    hash_split as _hash_split,
+)
 from rag.paths import SPLIT_PATHS, SPLITS_META, ensure_frozen_dir
 
 SPLIT_SEED = 1729
 
 HELD_OUT_SOURCES = ("expertwritten", "simulated")
 N_TEST_PER_SOURCE = 100
-
-ROW_FIELDS = [
-    "question_id",
-    "question",
-    "answer",
-    "gold_doc_ids",
-    "source_config",
-    "n_gold_docs",
-    "article_types",
-]
-
-# dev_large is generated data: each synthetic question was written *from* the
-# article it is grounded in, so question and gold document share vocabulary that a
-# real support ticket would not. Lexical retrievers score optimistically on it.
-DEV_LARGE_WARNING = (
-    "LEAKAGE WARNING: wixqa_synthetic questions were LLM-generated from the article "
-    "they are grounded in. Question-document lexical overlap is inflated and BM25 "
-    "numbers are optimistic. Use dev_large for statistical power on retrieval-only "
-    "sweeps. Never quote a dev_large number as a headline result."
-)
-
-
-# The unanswerable split carries two extra authored columns; they are part of its
-# hash so an edit to the seed file shows up as a new split_hash.
-EXTRA_FIELDS = {"unanswerable": ["reason", "seed_id"]}
-
-
-def _fields_for(name: str) -> list[str]:
-    return ROW_FIELDS + EXTRA_FIELDS.get(name, [])
-
-
-def _hash_split(rows: list[dict[str, Any]], name: str = "") -> str:
-    return hash_records(rows, sort_key="question_id", fields=_fields_for(name))
-
 
 def _deal_stratified(
     rows: list[dict[str, Any]], *, seed_key: str, n_first: int
@@ -125,13 +97,6 @@ def _write(name: str, rows: list[dict[str, Any]], *, force: bool) -> dict[str, A
     }
 
 
-def _counts(rows: list[dict[str, Any]], field: str) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for row in rows:
-        counts[str(row[field])] = counts.get(str(row[field]), 0) + 1
-    return dict(sorted(counts.items()))
-
-
 def build_splits(*, force: bool = False) -> dict[str, Any]:
     """Build all four splits and write `splits.meta.json`."""
     ensure_frozen_dir()
@@ -183,31 +148,6 @@ def build_splits(*, force: bool = False) -> dict[str, Any]:
     return meta
 
 
-def load_split(name: str) -> pd.DataFrame:
-    """Read a built split. Emits the leakage warning for dev_large."""
-    import warnings
-
-    path = SPLIT_PATHS[name]
-    if not path.exists():
-        raise FileNotFoundError(f"split {name!r} not built. Run `rag data splits`.")
-    if name == "dev_large":
-        warnings.warn(DEV_LARGE_WARNING, stacklevel=2)
-    return pd.read_parquet(path)
-
-
-def describe_split(name: str) -> dict[str, Any]:
-    frame = load_split(name)
-    rows = frame.to_dict("records")
-    for row in rows:
-        row["gold_doc_ids"] = list(row["gold_doc_ids"])
-        row["article_types"] = list(row["article_types"])
-    described = {
-        "split": name,
-        "n_questions": len(rows),
-        "split_hash": _hash_split(rows, name),
-        "n_gold_docs_counts": _counts(rows, "n_gold_docs"),
-        "source_config_counts": _counts(rows, "source_config"),
-    }
-    if name == "dev_large":
-        described["warning"] = DEV_LARGE_WARNING
-    return described
+# Reading built splits lives in `rag.dataset.loader`, which has no benchmark import,
+# so the runner can depend on it without depending on WixQA (P0-11).
+from rag.dataset.loader import describe_split, load_split  # noqa: E402,F401

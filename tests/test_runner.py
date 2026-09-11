@@ -213,7 +213,11 @@ def test_test_split_requires_the_explicit_flag(store):
     with pytest.raises(PermissionError, match="--open-test"):
         check_test_split_guard(config, open_test=False, store=store)
 
-    check_test_split_guard(config, open_test=True, store=store)  # allowed, and logged
+    # P0-12: the flag alone is not enough — the reason goes into the openings log.
+    with pytest.raises(PermissionError, match="--reason"):
+        check_test_split_guard(config, open_test=True, store=store, reason="")
+
+    check_test_split_guard(config, open_test=True, store=store, reason="phase boundary")
 
 
 def test_dev_split_needs_no_flag(store):

@@ -20,6 +20,7 @@ dependencies = [
     # langchain-community 0.4.x removed. Its own dependency spec does not exclude
     # 0.4.x, so this ceiling is ours to hold. See MIS-004.
     "langchain-community<0.4",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]

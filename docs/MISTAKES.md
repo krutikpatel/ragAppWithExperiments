@@ -262,3 +262,24 @@ Derived from the prevention rules below. Run through it and say in chat that you
   cost is one of the tradeoffs he is owed. More generally: when optimising one
   dimension, check what it spends in the others before recording the change as a win.
 - **Added to preflight:** yes
+
+## MIS-009 — Risk on record: the test split is small enough to overfit by iteration
+- **Date:** 2026-09-11 (seeded by P0-12, before any opening)
+- **Severity:** Not yet a mistake. Recorded here so that when it happens it is a
+  failure of a known rule rather than a surprise.
+- **The risk, as P0-12 states it:** *"Risk: 400 gold pairs, dozens of experiments.
+  Iterating on test numbers will produce a system tuned to the test set and
+  disappointing real performance. Test split opens at phase boundaries only."*
+- **Why it is real here:** `test` is 200 questions, `dev` is 200. Every retrieval
+  technique in Phases 1-2 will be tuned on `dev`, and each tuning step is a chance to
+  fit `dev`'s particular questions. `test` is the only number that says whether the
+  gains transfer — and it says so exactly once per opening. Each opening after the
+  first is a little less informative, because the previous number is already known.
+- **What is enforced:** `--open-test` plus a `--reason`, or the runner refuses. Every
+  opening is appended automatically to the log at the end of `docs/DECISIONS.md` with
+  date, config hash, git SHA and reason, and the runner prints the count of previous
+  openings before it proceeds.
+- **Prevention rule:** Open `test` at phase boundaries only, on a configuration that
+  was chosen on `dev` before `test` was looked at. Never change a configuration in
+  response to a `test` number.
+- **Added to preflight:** yes (item 5 already covers the mechanics; this is the why)

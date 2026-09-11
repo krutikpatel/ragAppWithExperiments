@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS run_questions (
     generated_answer   TEXT,
     cited_doc_ids      TEXT,
     latency_ms         INTEGER,
+    retrieval_latency_ms INTEGER,
     tokens_in          INTEGER,
     tokens_out         INTEGER,
     cost_usd           REAL,
