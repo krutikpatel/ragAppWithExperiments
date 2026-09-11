@@ -7,6 +7,7 @@ produced one.
 | Exp | Run ID | Date | Axis | Change vs baseline | Strict R@5 | Loose R@5 | nDCG@10 | MRR (1-doc) | Cit. prec. | p95 ms | $/query | Status | Detail |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | EXP-0001 | `run_20260911_051054_ef08` | 2026-09-11 | baseline | BM25, fixed-512/0, top-5, Tier 1, dev | **0.405** | 0.505 | 0.384 | 0.332 (n=160) | — | 35 | 0.0000 | VALID | [→](experiments/EXP-0001.md) |
+| EXP-0002 | `run_20260911_051322_3bcb` | 2026-09-11 | chunking | whole documents (paper's retrieval config) | 0.410 | 0.500 | 0.378 | 0.329 (n=160) | — | 21 | 0.0000 | VALID | [→](experiments/EXP-0002.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 

@@ -952,3 +952,68 @@ like a quality change. This argument stands even if the speed difference vanishe
   emits and needs a fresh calibration run — which is one instrumented 5-question run.
 - **Revisit if:** judge model, Ragas version, or metric set changes; or the estimate
   drifts more than ~20% from reported spend on a real run.
+
+## DEC-036 — Our metrics versus the WixQA paper's: where they match, where they differ, and why the numbers are not placed side by side
+- **Date:** 2026-09-11
+- **Decided by:** Claude (P0-14 research; Krutik not in the loop)
+- **Status:** Active
+- **Context:** P0-14 asks where our metric definitions match the paper's (Cohen et
+  al., *WixQA*, arXiv:2505.08643) and where they deliberately differ, and to run the
+  paper's baseline if comparable. The full text was read on 2026-09-11.
+
+### What the paper measures
+
+| Aspect | Paper | This project |
+|---|---|---|
+| Retrieval metric | **Context Recall**: GPT-4o judges, 0-1, whether "essential information required to formulate the ground truth answer is present within the retrieved context" | **Strict / loose recall@k, nDCG@10, MRR** over gold `article_ids` — labelled, deterministic, no judge |
+| Retrieval unit | Whole documents, top-5 | 512-word chunks pooled to documents, top-5 shown, 100 ranked |
+| Retrievers | BM25; `e5-large-v2` dense | BM25 (Phase 0); dense in Phase 1 |
+| BM25 tokenizer / params | Not stated | lowercase `[a-z0-9]+`, Okapi k1=1.5 b=0.75 |
+| Generation metrics | token F1, BLEU, ROUGE-1/2; **Factuality** (GPT-4o judge, 0-1) | citation precision/recall, step coverage, refusal (deterministic); Ragas faithfulness / correctness / relevance (judged, placeholder) |
+| Generators | Claude 3.7, Gemini 2.0 Flash, GPT-4o, GPT-4o mini | `gpt-5-nano`, held constant |
+| Question sets | all 200 ExpertWritten, all 200 Simulated, all 6,221 Synthetic | `dev` = 100 + 100, `test` held out; `dev_large` = Synthetic with a leakage warning |
+| Splits | none — all test-only | dev / test / dev_large / unanswerable |
+| Unanswerable set | none | 45 authored |
+
+### Where we match
+- Same corpus and question sets, pinned to one revision.
+- Same retrieval unit at the point of scoring: documents. (We chunk, then pool.)
+- Same top-5 for what a generator sees. Same BM25 baseline family.
+- Same multi-article proportions, as a sanity check: the paper reports 27%
+  ExpertWritten and 14% Simulated; we measured 26% and 13.5%.
+
+### Where we deliberately differ, and why
+1. **No judged retrieval metric.** The paper's Context Recall is exactly what
+   DEC-020 rejected: an LLM estimate of retrieval quality for a dataset that ships
+   labelled `article_ids`. Ours is cheaper, deterministic, and answers a sharper
+   question ("were all the required documents retrieved?") rather than a softer one
+   ("was enough information present?"). The paper's number is also a property of the
+   judge model, and GPT-4o at the time of writing is not the GPT-4o of the paper.
+2. **Strict recall.** The paper has no metric that penalises finding one of two
+   required articles. 79 of the 400 human-grounded questions need 2-3 documents, and
+   EXP-0001 shows loose 0.675 vs strict 0.175 on them — the metric the paper lacks is
+   where the largest effect in our baseline lives.
+3. **No token-overlap generation metrics.** F1/BLEU/ROUGE against a reference answer
+   are weak on long procedural text — a correct paraphrase scores low. We use the
+   gold `article_ids` for citation precision instead, which the paper does not, and
+   step coverage, which nothing in the paper resembles.
+4. **A held-out split.** The paper evaluates on everything; we hold 200 back. So
+   even an identical metric would be computed on different questions.
+
+### Decision
+- **The paper's numbers are not placed next to ours.** Context Recall 0.73 and strict
+  recall@5 0.41 measure different things on different question sets, and putting them
+  in one table would invite a comparison that is invalid.
+- **The paper's retrieval configuration was run**, as EXP-0002 — BM25, whole
+  documents, top-5 — because it is reproducible as a *configuration* even though its
+  *numbers* are not comparable. It differs from EXP-0001 on one axis (chunking) and
+  scored strict recall@5 0.410 against the baseline's 0.405: no measurable difference.
+  That is the anchor the narrative gets: "on the paper's own retrieval setup, our
+  labelled headline metric is 0.41".
+- **Evidence:** The paper's tables 3-5, read 2026-09-11; EXP-0001 and EXP-0002.
+- **Consequences:** Nothing in this project can be described as reproducing the
+  paper's results. The narrative may say the paper's *setup* was run and what it
+  scored on our metrics, and must say why the two are not comparable.
+- **Revisit if:** the paper releases its BM25 implementation or a labelled-recall
+  number, or if we ever compute a judged context-recall for another reason and want
+  a one-off comparison, clearly labelled as such.
