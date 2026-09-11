@@ -1,0 +1,27 @@
+# EXP-0002 — the WixQA paper's retrieval configuration, scored with our metrics.
+#
+# Cohen et al. (arXiv:2505.08643) retrieve WHOLE documents with BM25, top-5. This
+# reproduces that configuration as far as the paper specifies it: their tokenizer
+# and BM25 parameters are not stated, so ours are used (DEC-036).
+#
+# Differs from EXP-0001 on one axis only: chunk_size 512 -> 7000 words. The longest
+# article is 6,653 words, so every document becomes exactly one chunk — this is
+# "no chunking" expressed through the existing chunker, with no new code path.
+#
+# The paper's numbers are NOT comparable to this row: they report an LLM-judged
+# Context Recall, not labelled recall. This is an anchor, not a reproduction.
+name: EXP-0002 paper config — BM25, whole documents, top-5, Tier 1, dev
+split: dev
+eval_tier: tier1
+retriever: bm25
+retriever_params:
+  k1: 1.5
+  b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 7000
+  overlap: 0
+retrieval_depth: 100
+top_k: 5
+doc_pooling: max
+seed: 1
