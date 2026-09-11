@@ -88,6 +88,11 @@ def diff(
 
     report = diff_runs(run_a, run_b, metric=metric)
     typer.echo(report["comparability"]["verdict"])
+    judged = {k: v for k, v in report["aggregate_deltas"].items() if v["verdict"] != "no floor measured"}
+    if judged:
+        typer.echo("noise-floor verdicts (DEC-037):")
+        for k, v in judged.items():
+            typer.echo(f"  {k:<22} {v['a']:.4f} -> {v['b']:.4f}  Δ{v['delta']:+.4f}  {v['verdict'].upper()}")
     typer.echo(
         f"{report['n_gained']} gained, {report['n_lost']} lost, "
         f"{report['n_unchanged']} unchanged, over {report['n_shared_questions']} questions"

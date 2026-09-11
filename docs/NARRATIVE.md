@@ -76,6 +76,19 @@ generated *from* the articles they are grounded in, so lexical overlap is inflat
 before. And a run that crashes is recorded as `VOID` rather than dropped, because
 silent gaps in the ledger are what make a results document untrustworthy.
 
+**How noise was handled.** Retrieval is deterministic — three runs of the baseline
+matched to twelve decimal places — so every retrieval difference is real. The judged
+metrics are not, and before interpreting any of them I measured how much they move
+when nothing changes: three identical runs on the same hundred questions, then the
+same hundred answers judged three times. Faithfulness and answer relevance range about
+0.03 between identical runs; answer correctness about 0.01. Nearly all of it is the
+judge changing its mind about the same answer — on 12 of 100 questions, re-judging an
+identical answer moved faithfulness by a quarter point or more. Those ranges are the
+floor: a judged difference inside them is written as no measurable difference, and
+`rag diff` says so automatically (DEC-037). Step coverage's floor turned out to be half
+its own value, which means that as built it cannot detect anything, and I say so rather
+than report it.
+
 The most useful thing built here is not a metric. It is `run_questions`: one row per
 question per run, with the ranked documents, the gold ranks, and the per-question
 metric values. Aggregates say a technique gained four points; those rows say which
@@ -198,10 +211,9 @@ not "this run did not happen". Two voided runs taught that (MIS-010, MIS-011).
 Every retrieval technique — that is Phase 1. Within Phase 0 itself, the open questions
 that gate what the numbers can be trusted to mean:
 
-- **The judge's own noise (OQ-017).** No judged difference is a finding until the
-  run-to-run spread is measured. The same 20 questions scored faithfulness 0.7284 and
-  0.7236 on two runs; one input scored answer correctness 1.00 and 0.857 on two
-  providers.
+- ~~The judge's own noise (OQ-017).~~ Measured: faithfulness and relevance range
+  ~0.03 between identical runs, correctness ~0.01, almost entirely the judge
+  (DEC-037). Now the floor every judged delta is read against.
 - **Whether step coverage measures the answers or the matcher (OQ-007).** The
   lexical matcher misses paraphrases; the proportion of misses is unknown.
 - **Whether refusal metrics should condition on retrieval (OQ-019).** As defined,

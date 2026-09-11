@@ -55,12 +55,26 @@ def _diff(store: ResultsStore, run_a: str, run_b: str, metric: str) -> dict[str,
         }
         (gained if after > before else lost).append(entry)
 
+    # Aggregate deltas for every metric both runs report, each with the noise-floor
+    # verdict where one has been measured (DEC-037). A judged delta inside the floor
+    # is reported as such rather than left for the reader to remember.
+    from rag.eval.noise_floor import verdict
+
+    agg_a = json.loads(meta_a.get("metrics_json") or "{}")
+    agg_b = json.loads(meta_b.get("metrics_json") or "{}")
+    aggregate_deltas = {}
+    for key in sorted(set(agg_a) & set(agg_b)):
+        va, vb = agg_a[key], agg_b[key]
+        if isinstance(va, (int, float)) and isinstance(vb, (int, float)) and not isinstance(va, bool):
+            aggregate_deltas[key] = {"a": va, "b": vb, "delta": round(vb - va, 4), "verdict": verdict(key, vb - va)}
+
     return {
         "run_a": run_a,
         "run_b": run_b,
         "metric": metric,
         "comparable": comparability["comparable"],
         "comparability": comparability,
+        "aggregate_deltas": aggregate_deltas,
         "n_shared_questions": len(shared),
         "n_gained": len(gained),
         "n_lost": len(lost),

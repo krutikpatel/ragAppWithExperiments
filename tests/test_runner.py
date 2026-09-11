@@ -276,3 +276,29 @@ def test_judge_concurrency_is_part_of_config_but_not_of_results():
     base = RunConfig(name="x")
     assert base.judge_concurrency > 1
     assert base.with_(judge_concurrency=1).config_hash != base.config_hash
+
+
+def test_noise_floor_verdicts():
+    """DEC-037: a judged delta inside the measured spread is not a finding."""
+    from rag.eval.noise_floor import JUDGED_NOISE_FLOOR, MEASURED_ON, verdict
+
+    assert len(MEASURED_ON["runs"]) == 3
+    assert verdict("faithfulness", 0.02) == "within noise"
+    assert verdict("faithfulness", -0.05) == "finding"
+    assert verdict("answer_correctness", 0.011) == "within noise"   # equal to floor is not above it
+    assert verdict("strict_recall@5", 0.005) == "no floor measured"  # deterministic: any delta is real
+    assert JUDGED_NOISE_FLOOR["step_coverage"] if "step_coverage" in JUDGED_NOISE_FLOOR else True
+
+
+def test_diff_applies_noise_floor_to_judged_aggregates(store):
+    import json as _json
+
+    for run_id, faith in (("run_a", 0.80), ("run_b", 0.82)):
+        store.conn.execute(
+            "UPDATE runs SET metrics_json = ? WHERE run_id = ?",
+            (_json.dumps({"strict_recall@5": 0.5, "faithfulness": faith}), run_id),
+        )
+    store.conn.commit()
+    report = diff_runs("run_a", "run_b", store=store)
+    assert report["aggregate_deltas"]["faithfulness"]["verdict"] == "within noise"
+    assert report["aggregate_deltas"]["strict_recall@5"]["verdict"] == "no floor measured"

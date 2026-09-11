@@ -397,7 +397,8 @@ rag/
                     retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
                     generation_metrics.py (citations, refusal — no LLM calls),
                     steps.py (procedural step coverage), slices.py (P0-08),
-                    judge.py — the ONLY module that may import Ragas
+                    judge.py — the ONLY module that may import Ragas,
+                    noise_floor.py — measured judged-metric spread; rag diff uses it
   generation/       base.py — Generator interface + OpenRouter generator
   runner/           config.py (RunConfig, EvalTier, config_hash), run.py
                     (run(config) -> row), store.py (SQLite runs + run_questions),

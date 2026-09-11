@@ -57,7 +57,10 @@ matcher missing paraphrases — *"Enabling Sandbox Collections"* vs *"Enable San
 your CMS"* scores 0.2 because *enabling* ≠ *enable* — alongside genuine omissions
 (11 reference steps, 3 generated). The proportion is unknown, so the number currently
 describes the matcher as much as the answers. Stemming or lemmatising content tokens
-is the obvious first change to test.
+is the obvious first change to test. **DEC-037 raises the stakes:** step coverage's
+run-to-run range is 0.064 against values of 0.08-0.14, so as built it cannot detect a
+difference of any size yet observed. Fixing the matcher is now a prerequisite for the
+metric existing in any useful sense, not a refinement.
 **Decided by:** hand-label 30 reference/generated step pairs; report agreement with
 the lexical matcher. Under 0.8 agreement, the threshold or the method needs to change.
 **Status:** open.
@@ -176,7 +179,16 @@ questions that were deterministic before, or the change is wrong rather than fas
 **Status:** open. Lower priority than it looks — 21% of 20 minutes is not what makes
 Tier 2 painful any more.
 
-## OQ-017 — How much do judged scores move between identical runs?
+## OQ-017 — How much do judged scores move between identical runs? **ANSWERED**
+**Answered 2026-09-11 by DEC-037.** Range over three identical runs: faithfulness
+0.031, answer correctness 0.010, answer relevance 0.031 — and almost all of it is the
+judge, not the generator (judge-only re-scoring of identical answers: 0.025 / 0.013 /
+0.030). Generator is non-deterministic (0/100 identical answers) but barely moves the
+aggregates. Step coverage's range (0.064) is half its value; it cannot currently detect
+anything. Floors are encoded in `rag/eval/noise_floor.py` and applied by `rag diff`.
+Original text below.
+
+
 Two runs of the same config on the same 20 questions gave faithfulness 0.7284 and
 0.7236. On one identical input, answer correctness scored 1.00 under default routing
 and 0.857 with providers pinned (DEC-032). So judged metrics carry run-to-run and
@@ -185,7 +197,7 @@ provider-to-provider noise even at temperature 0.
 providers pinned; report the spread of each judged metric. That spread is the floor
 below which a judged difference is not a finding — the same rule the project already
 applies to seeds. Until it is measured, no judged delta should be called a result.
-**Status:** open. This one gates the credibility of every judged number.
+**Status:** answered by DEC-037.
 
 ## OQ-018 — The cost estimator under-reports pinned judge cost **ANSWERED**
 **Answered 2026-09-11 by DEC-035.** It was worse than under-reporting — it printed

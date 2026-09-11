@@ -1017,3 +1017,96 @@ like a quality change. This argument stands even if the speed difference vanishe
 - **Revisit if:** the paper releases its BM25 implementation or a labelled-recall
   number, or if we ever compute a judged context-recall for another reason and want
   a one-off comparison, clearly labelled as such.
+
+## DEC-037 — The judged-metric noise floor, measured; and the rule it imposes
+- **Date:** 2026-09-11
+- **Decided by:** Claude (running OQ-017 at Krutik's request); the floors are
+  measurements, the rule follows from CLAUDE.md section 3
+- **Status:** Active
+- **Context:** OQ-017 asked how much judged scores move between identical runs. Until
+  answered, no judged difference could honestly be called a finding, because the rule
+  "a difference smaller than the run-to-run spread is not a finding" had no spread to
+  compare against.
+
+### What was run
+1. **Three identical full runs** of EXP-0001's Tier 2 config on the fixed 100-question
+   subsample: `run_20260911_053316_510b`, `run_20260911_055914_a8b3`,
+   `run_20260911_061624_3792`. Same config hash, zero judge failures, zero retries.
+   (Runs 2 and 3 carry `git_dirty=1`; the only uncommitted change was an edit to
+   `user_stories/phase1stories.md`, not code.)
+2. **Two judge-only re-scorings** of run 1's stored answers — identical answers,
+   contexts and references, so any change is the judge alone. Saved as
+   `results/oq017/rejudge_*.json`; summary in `results/oq017/summary.json`.
+
+### Measured — full pipeline (generator and judge both vary)
+
+| Metric | run 1 | run 2 | run 3 | **range** | stdev |
+|---|---|---|---|---|---|
+| faithfulness | 0.8185 | 0.8338 | 0.8025 | **0.031** | 0.016 |
+| answer_correctness | 0.3486 | 0.3476 | 0.3577 | **0.010** | 0.006 |
+| answer_relevance | 0.7577 | 0.7603 | 0.7288 | **0.031** | 0.018 |
+| citation_precision | 0.3883 | 0.3815 | 0.3841 | 0.007 | 0.003 |
+| citation_recall | 0.3950 | 0.3933 | 0.3983 | 0.005 | 0.003 |
+| false_refusal_rate | 0.020 | 0.030 | 0.030 | 0.010 | 0.006 |
+| step_coverage | 0.1234 | 0.0800 | 0.1434 | **0.064** | 0.032 |
+| strict_recall@5 | 0.400 | 0.400 | 0.400 | 0.000 | 0.000 |
+
+### Measured — judge only (same 100 answers, judged three times)
+
+| Metric | original | pass 1 | pass 2 | range | stdev |
+|---|---|---|---|---|---|
+| faithfulness | 0.8185 | 0.8241 | 0.7988 | 0.025 | 0.013 |
+| answer_correctness | 0.3486 | 0.3356 | 0.3454 | 0.013 | 0.007 |
+| answer_relevance | 0.7577 | 0.7873 | 0.7660 | 0.030 | 0.015 |
+
+### What the numbers say
+- **The noise is the judge, not the generator.** The judge-only range is nearly the
+  whole full-pipeline range (faithfulness 0.025 of 0.031; relevance 0.030 of 0.031).
+  The generator is *not* deterministic — **0 of 100 answers were byte-identical
+  across the three runs** — but its variations barely move the aggregates: citation
+  precision, which depends only on the generator, ranged 0.007.
+- **At the question level the judge is unstable; at the aggregate it averages out.**
+  Re-judging the identical answer, faithfulness moved by ≥0.25 on **12 of 100
+  questions** and was identical on 50. Mean absolute movement 0.08, median 0.002.
+  A per-question judged score is not evidence of anything on its own.
+- **Step coverage cannot currently detect anything.** Its range (0.064) is half its
+  value (0.08-0.14). It applies to 32 questions and its lexical matcher flips on
+  paraphrase (OQ-007). Until the matcher is fixed, no step-coverage difference is a
+  finding, at any size that has been observed.
+- **Retrieval metrics have zero spread**, as expected: BM25 is deterministic. Every
+  retrieval delta is real; the floors are for the judged and generated half only.
+
+### Decision — the floors, and the rule
+Encoded in `rag/eval/noise_floor.py` with their provenance, and applied by
+`rag diff`, which now prints a verdict for every judged and generated aggregate:
+
+| Metric | Floor (range, 3 runs) |
+|---|---|
+| faithfulness | **0.032** |
+| answer_correctness | **0.011** |
+| answer_relevance | **0.032** |
+| citation_precision | 0.007 |
+| citation_recall | 0.005 |
+| false_refusal_rate | 0.010 |
+| step_coverage | 0.064 |
+
+**A judged or generated delta at or below its floor is written as "no measurable
+difference".** Not "a slight improvement", not "directionally positive". The range
+is used rather than a standard-deviation multiple because three samples cannot
+support a distributional claim, and the range is the conservative reading.
+
+- **Evidence:** All measured as above; artifacts in the results store and
+  `results/oq017/`.
+- **Consequences:**
+  - These floors hold for *this* judge, provider pin, Ragas version and subsample.
+    Any change to those re-measures them: three runs, ~$2.50, ~1 hour.
+  - DEC-033 kept Tier 2 at 100 questions pending this number. At n=100 the floor on
+    faithfulness is ~0.03 — usable for detecting effects of a few points, not for
+    finer ones. Whether that is enough depends on effect sizes not yet seen.
+  - The judge is still a placeholder (DEC-018). A real judge would need its own
+    three runs before any of its numbers are interpreted.
+  - Per-question judged scores must not be used to explain individual failures in
+    `FAILURES.md` without a re-judge to confirm them; 12% of them move by a quarter
+    point on identical input.
+- **Revisit if:** judge, provider, Ragas version, subsample or generator changes; or
+  if a fourth-plus replicate on any config shows a range outside these floors.
