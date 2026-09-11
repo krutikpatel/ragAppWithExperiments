@@ -1,0 +1,28 @@
+# EXP-0001, Tier 2 variant — the same retrieval configuration as
+# exp_0001_baseline.yaml, run once so generation and judge metrics are exercised end
+# to end on the real baseline (P0-13, last criterion).
+#
+# Retrieval metrics from this run are on the fixed 100-question Tier 2 subsample
+# (DEC-024/033), not the full dev split; the Tier 1 row is the retrieval baseline.
+# Judged metrics (faithfulness, answer correctness, answer relevance) come from a
+# PLACEHOLDER judge (DEC-018/030) and are recorded in the results store only — they
+# must not be transcribed into EXPERIMENTS.md or NARRATIVE.md. Citation precision /
+# recall, refusal and step coverage are deterministic and may be.
+name: EXP-0001 baseline, Tier 2 variant — BM25, fixed-512/0, top-5, dev subsample
+split: dev
+eval_tier: tier2
+retriever: bm25
+retriever_params:
+  k1: 1.5
+  b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 512
+  overlap: 0
+retrieval_depth: 100
+top_k: 5
+doc_pooling: max
+seed: 1
+generator_model: openai/gpt-5-nano
+judge_model: openai/gpt-oss-120b
+judge_embedding_model: qwen/qwen3-embedding-8b
