@@ -45,7 +45,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
     failure as `None` with a reason and a run-level count — never as zero, never by
     discarding the questions that succeeded. VOID is for failures of the run itself.
     (MIS-011)
-16. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+16. **A generation metric that judges a decision the generator made must condition
+    on what the generator was given.** Refusing when retrieval failed is correct;
+    answering when it failed is the failure. (MIS-012)
+17. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -349,4 +352,37 @@ Derived from the prevention rules below. Run through it and say in chat that you
   per-question failures as `None` with a reason and a run-level count — never as
   zero, and never by discarding the questions that succeeded. Reserve VOID for
   failures of the run itself.
+- **Added to preflight:** yes
+
+## MIS-012 — `false_refusal` penalises the generator for retrieval's failure
+- **Date:** 2026-09-11
+- **Severity:** Medium — a metric definition that would have misattributed a
+  failure across every Tier 2 run. No results affected: caught on the first real
+  Tier 2 run, by reading the examples.
+- **What happened:** EXP-0001's Tier 2 variant reported `false_refusal_rate = 0.02`.
+  Reading the two refused questions: both had `strict_recall@5 = 0`. The articles
+  needed were not retrieved, and the generator said it could not find the
+  information — which is precisely what the answer prompt instructs and what a
+  grounded system should do. The metric counted both as failures.
+- **How it was caught:** The contract's rule that observations are written only after
+  reading actual failing examples. The aggregate looked fine.
+- **Root cause:** `false_refusal` was defined as "refused on a question that has gold
+  documents", with "has" meaning *in the corpus* — decided when the metric was
+  designed (P0-07), before any retrieval had run. The right condition is *in the
+  retrieved context*. A question can be answerable in principle and unanswerable
+  from what this run retrieved, and refusing in the second case is correct.
+- **Impact:** As defined, every future run would report refusals-on-retrieval-failure
+  as generator faults. Worse, the mirror-image failure is invisible: on the same run,
+  the generator **answered anyway on 58 of 60 questions where retrieval had failed**,
+  and nothing in the deterministic metrics flags those 58 as ungrounded.
+- **Fix applied:** None to code — redefining a metric needs Krutik's sign-off
+  (CLAUDE.md section 9). Proposed: condition refusal metrics on retrieval outcome.
+  `false_refusal` = refused when all gold documents were in the context.
+  `correct_refusal_on_miss` = refused when they were not. `answered_on_miss` = the
+  58: answered when the gold documents were absent — the ungrounded-answer rate, and
+  probably the most important cheap generation metric this project has. Tracked as
+  OQ-019.
+- **Prevention rule:** A generation metric that judges a decision the generator made
+  must condition on what the generator was given. Retrieval outcome is an input to
+  every generation metric, not a separate axis.
 - **Added to preflight:** yes

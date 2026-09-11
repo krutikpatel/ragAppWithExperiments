@@ -51,6 +51,13 @@ rather than question difficulty. **Status:** open.
 ## OQ-007 — Does lexical step matching agree with human reading?
 Step coverage matches a reference step to a generated one by Jaccard overlap of
 content words at 0.5 (DEC-015). A reworded but correct step may score as missing.
+**Evidence from EXP-0001 Tier 2 (2026-09-11):** coverage was 0.123 over 32 procedural
+questions, and 0.159 even when every gold document was retrieved. Read pairs show the
+matcher missing paraphrases — *"Enabling Sandbox Collections"* vs *"Enable Sandbox in
+your CMS"* scores 0.2 because *enabling* ≠ *enable* — alongside genuine omissions
+(11 reference steps, 3 generated). The proportion is unknown, so the number currently
+describes the matcher as much as the answers. Stemming or lemmatising content tokens
+is the obvious first change to test.
 **Decided by:** hand-label 30 reference/generated step pairs; report agreement with
 the lexical matcher. Under 0.8 agreement, the threshold or the method needs to change.
 **Status:** open.
@@ -113,7 +120,12 @@ allowance, not a measurement.
 **Decided by:** the first real Tier 2 run — compare estimated judge tokens against
 OpenRouter's reported usage and correct `RAGAS_CALL_MULTIPLIER`. **Status:** open.
 
-## OQ-013 — Does the generator keep obeying the `[doc:<id>]` citation format?
+## OQ-013 — Does the generator keep obeying the `[doc:<id>]` citation format? **ANSWERED**
+**Answered by EXP-0001 Tier 2 (2026-09-11):** 88 of 100 answers on real BM25 retrieval
+carried at least one well-formed tag; the 12 that did not include the 2 refusals.
+Citation precision (0.388) tracks strict recall@5 (0.400) on the same questions — the
+generator cites what it is given. Format compliance is not a confound. Original text
+below.
 DEC-017 flagged the risk that a cheap model ignores the citation instruction, which
 would tank citation precision for reasons unrelated to retrieval. **First evidence
 (Tier 2 smoke run, 2026-09-10, not a measurement):** of 5 answers, the 3 substantive
@@ -190,6 +202,17 @@ side — the one number it exists to get right.
 the pinned providers, then compare its estimate against OpenRouter's reported spend for
 a full Tier 2 run. Within ~20% is good enough for a number labelled an estimate.
 **Status:** open. Cheap to fix and it is actively misleading today.
+
+## OQ-019 — Should refusal metrics condition on retrieval outcome?
+MIS-012: `false_refusal` currently counts a refusal as wrong whenever the question has
+gold documents in the corpus, so it penalises correct refusals after retrieval fails.
+On EXP-0001 Tier 2, both "false" refusals were correct, and the real problem — the
+generator answering anyway on 58 of 60 retrieval failures — has no metric at all.
+**Proposed:** `false_refusal` = refused with all gold docs in context;
+`answered_on_miss` = answered with gold docs absent (the ungrounded-answer rate).
+**Decided by:** Krutik's sign-off on the redefinition (CLAUDE.md section 9); then
+recompute on `run_20260911_053316_510b`, whose per-question rows already hold
+everything needed. **Status:** open — blocks any refusal claim in the narrative.
 
 ---
 
