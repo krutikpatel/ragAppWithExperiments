@@ -49,6 +49,9 @@ indexes/
 # Run artifacts (config.yaml, metrics.json, predictions.jsonl, env.json,
 # stdout.log) are the source of truth for every number in docs/. See CLAUDE.md section 2.
 
+# Local scratch
+temp
+
 # Editors / OS
 .DS_Store
 .idea/

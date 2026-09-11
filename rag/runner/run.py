@@ -229,6 +229,7 @@ def _cost_estimate(config: RunConfig, frame) -> dict:
         context_words=context_words,
         generator_model=config.generator_model,
         judge_model=config.judge_model,
+        judge_provider_order=tuple(config.judge_provider_order),
     )
 
 

@@ -101,7 +101,12 @@ subsample and checked for whether it adds signal beyond answer correctness, whic
 largely overlaps. **Status:** open — needed for `answer_relevance`, and for Phase 1
 dense retrieval.
 
-## OQ-012 — Does the Ragas call multiplier match reality?
+## OQ-012 — Does the Ragas call multiplier match reality? **ANSWERED**
+**Answered 2026-09-11 by DEC-035.** No — it under-reported judge output by 9x. The
+multiplier is gone; the estimator is calibrated on a measured run (11,164 in / 5,575
+out per question) and validated out of sample to within 4%. Original text below.
+
+
 The Tier 2 cost estimate assumes roughly 3x the single-call token volume for the
 judge, because faithfulness decomposes claims and verifies each one. That number is an
 allowance, not a measurement.
@@ -170,7 +175,13 @@ below which a judged difference is not a finding — the same rule the project a
 applies to seeds. Until it is measured, no judged delta should be called a result.
 **Status:** open. This one gates the credibility of every judged number.
 
-## OQ-018 — The cost estimator under-reports pinned judge cost
+## OQ-018 — The cost estimator under-reports pinned judge cost **ANSWERED**
+**Answered 2026-09-11 by DEC-035.** It was worse than under-reporting — it printed
+$0.00 for a $0.04 run. Now reads per-provider prices and is calibrated on a real run;
+out-of-sample validation on 8 different questions: cost within 3%. Real figure for a
+100-question Tier 2 run is ~$0.84, not the $0.48 in DEC-034. Original text below.
+
+
 `rag/runner/cost.py` reads the model-level price from OpenRouter's models endpoint
 ($0.037/$0.170 for `gpt-oss-120b`). With providers pinned to Cerebras/Groq the real
 rate is up to $0.350/$0.750, so the pre-run estimate is low by roughly 6x on the judge

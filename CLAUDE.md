@@ -475,6 +475,10 @@ Rules that outlive any particular library:
 - **A provider pin is a purchasing decision.** Per-provider prices vary ~12x for the
   same model and live behind `/models/<id>/endpoints`, not the model listing. Cost a
   pin before committing it, and put it to Krutik. (MIS-008, DEC-034)
+- **Calibrate estimators on a measured run, then validate them out of sample.** The
+  cost estimator's `x3.0` guess was 9x low on output tokens; matching the calibration
+  run to 0% proves nothing. `rag/runner/cost.py` records its calibration run id and
+  was validated on different questions to within 4%. (DEC-035)
 - Third-party eval libraries are metric providers, never the experiment or dataset
   layer. Ragas lives behind the `Judge` interface and a test enforces the boundary,
   so swapping it is a one-file change. (DEC-019)
@@ -493,7 +497,7 @@ Rules that outlive any particular library:
 | Role | Model | Chosen in | Notes |
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
-| Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030, DEC-034 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Judge calls pin `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Real rate is Cerebras' $0.350/$0.750, not the model-level $0.037/$0.170**: ~$0.48 per 100-question Tier 2 run (DEC-034). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
+| Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030, DEC-034 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Judge calls pin `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Real rate is Cerebras' $0.350/$0.750, not the model-level $0.037/$0.170**: measured **~$0.84 per 100-question Tier 2 run** (DEC-035 corrects DEC-034's $0.48). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
 | Embedding | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 

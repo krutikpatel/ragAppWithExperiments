@@ -852,6 +852,10 @@ like a quality change. This argument stands even if the speed difference vanishe
   whether 100 is enough.
 
 ## DEC-034 — Judge provider pricing, and the decision to keep the fast pair
+> **CORRECTED by DEC-035 on 2026-09-11** — the decision stands; the "~$0.48 per
+> 100-question run" figure was from a synthetic probe with a one-sentence context.
+> Measured on a real run it is **$0.81**. The cheap-provider figure of ~$0.07 was
+> similarly low; at real token volumes it is ~$0.13.
 - **Date:** 2026-09-10
 - **Decided by:** Krutik (raised the question; costing and options from Claude)
 - **Status:** Active — **corrects DEC-030's price, amends DEC-032**
@@ -894,3 +898,57 @@ like a quality change. This argument stands even if the speed difference vanishe
 - **Revisit if:** Tier 2 run frequency rises enough for the difference to matter, a
   cheaper provider becomes fast, or OQ-017 shows fp16 versus fp4 does not measurably
   affect judged scores — in which case the cheap providers become defensible.
+
+## DEC-035 — The cost estimator reads pinned-provider prices and is calibrated on a real run
+- **Date:** 2026-09-11
+- **Decided by:** Claude (fixing OQ-018 at Krutik's request)
+- **Status:** Active — **corrects DEC-034's cost figures**
+- **Context:** OQ-018 recorded that `rag/runner/cost.py` under-reported pinned judge
+  cost. Measuring it properly showed it was worse than "under-reports": on a 5-question
+  run that cost $0.0404, the estimator printed **$0.00**. Two causes — it read the
+  model-level price (DeepInfra's $0.037, not Cerebras' $0.350), and its output-token
+  model was a `x3.0 call allowance` guess that was **9x low**. Ragas emits far more
+  than one sentence per call: statement lists, per-claim verdicts with reasons.
+- **Measured** — `run_20260911_045508_9f7c`, 5 real `dev` questions, real 5-chunk
+  contexts, all three Ragas metrics, judge pinned to Cerebras (all 40 chat calls
+  landed there); cost is OpenRouter's own per-call `usage.cost`:
+
+| | Per question | Synthetic probe (DEC-034) had |
+|---|---|---|
+| Chat calls | 8.0 | 8.0 |
+| Embedding calls | 2.0 | 2.0 |
+| Judge tokens in | **11,164** | 7,241 |
+| Judge tokens out | **5,575** | 2,993 |
+| Judge cost | **$0.0081** | $0.0048 |
+
+  Embedding cost was below $0.00001 per question and is ignored.
+
+- **Decision:** The estimator now (a) reads per-provider pricing from
+  `/models/<id>/endpoints` and charges the judge at the first pinned provider that
+  serves the model; (b) uses per-question token volumes calibrated on the run above,
+  scaling input linearly with context size (faithfulness re-sends the context) and
+  holding output at the measured figure; (c) prints which provider it priced at and
+  the rate; (d) says **UNAVAILABLE — do not read as free** rather than $0.00 when it
+  cannot price something. The generator is unpinned, so it is priced at model level
+  and labelled as a floor.
+- **Validation, out of sample** — `run_20260911_045705_cc73`, **8 different questions**
+  (seed 11), not the calibration set: judge tokens in **+1%**, tokens out **+4%**, cost
+  **+3%** versus OpenRouter's reported spend. Matching the calibration run itself to 0%
+  is a tautology and is not claimed as evidence.
+- **The corrected headline figures:**
+  - 100-question Tier 2 run, judge pinned to Cerebras: **~$0.84** ($0.81 judge +
+    $0.03 generator). DEC-034 said $0.48.
+  - Same run on the cheapest providers (AkashML/CoreWeave, $0.030/$0.170): **~$0.13**,
+    at 20-33s per call. DEC-034 said $0.07.
+  - The tradeoff Krutik accepted in DEC-034 is therefore ~$0.71 per run, not ~$0.41,
+    to save roughly 3.5 hours. Recorded so the decision rests on the real number; it
+    was not re-put to him, since it does not change the shape of the choice.
+- **Evidence:** All measured as above. The estimator's own output is an estimate and
+  says so on every line it prints.
+- **Consequences:** The pre-run estimate is now within a few percent of the bill for
+  the default configuration. Calibration is tied to `top_k=5`, `chunk_size=512` and
+  this judge; a chunking experiment that changes context size is covered by the
+  linear scaling, but a different judge model or Ragas version changes how much it
+  emits and needs a fresh calibration run — which is one instrumented 5-question run.
+- **Revisit if:** judge model, Ragas version, or metric set changes; or the estimate
+  drifts more than ~20% from reported spend on a real run.
