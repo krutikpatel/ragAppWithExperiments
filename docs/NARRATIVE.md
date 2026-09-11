@@ -84,11 +84,61 @@ actually made of.
 
 ## 3. The baseline
 
-_Pending P0-13. No baseline has been run._
+The naive system is BM25 over fixed 512-word chunks, pooled to documents by best
+chunk, showing five documents. No reranker, no query rewriting, no dense retrieval —
+the dumbest configuration that could be defended, so that everything after it has a
+number to beat (EXP-0001).
+
+It found **all** the required articles in its top five for **40.5%** of `dev`
+questions, and **at least one** for 50.5%. nDCG@10 was 0.384; mean reciprocal rank on
+the 160 single-document questions was 0.332. It runs in-process at 35 ms p95 and
+costs nothing per query. The number is exactly reproducible: three runs of the
+configuration produced identical metrics to twelve decimal places, because nothing in
+the pipeline is random (EXP-0001).
+
+Two things about the failures matter more than the headline.
+
+The failure is mostly total. Of 200 questions, 81 had every gold document in the top
+five, 20 had some, and **99 had none**. Half the questions get nothing useful.
+
+And multi-document questions fail on the second document. On the 40 questions that
+need two or three articles, BM25 found at least one of them 67.5% of the time and all
+of them **17.5%** of the time. This is the gap that strict recall exists to expose: a
+system that reliably finds one of two required articles looks healthy under any
+looser definition and still cannot answer the question (EXP-0001).
+
+Reading the misses rather than counting them: of the 136 gold documents absent from a
+top five, 87 were in the top hundred (median rank 18) and 49 were not. So about two
+thirds of misses are ranking failures — the right document was scored, and five
+others scored higher — and a third are documents BM25 never surfaced. The failing
+questions read in full split the same way. Some name the thing differently from the
+article — the question says *published*, the article says *visibility*; the question
+says *static pages*, and the one article containing *static* is about converting
+dynamic pages, while the gold article, which is about adding pages, is not in the top
+hundred. Others have the gold article at rank four to nine behind a topically adjacent
+one. These are descriptions of the baseline, not claims about what fixes them.
 
 ## 4. What was tried, axis by axis
 
-_Pending. No experiments have been run._
+### Chunking: whole documents versus 512-word chunks (EXP-0002)
+
+The WixQA paper retrieves whole articles rather than chunks, so its retrieval
+configuration was run as-is — one axis away from the baseline — to anchor against the
+published setup and to answer a question I had: does chunking the longest third of
+the corpus (1,661 articles exceed 512 words) cost or gain anything at the document
+level?
+
+Nothing measurable. Strict recall@5 went from 0.405 to 0.410 — one question net, and
+`rag diff` shows the truth of it: eleven questions gained, ten lost, 179 unchanged.
+The flips show no pattern in gold-document length (median 716 words gained, 660
+lost) and the rank movements are small in both directions. Deeper recall was slightly
+lower without chunking (strict recall@20 0.635 → 0.610). I record this as no
+measurable difference, which is what it is (EXP-0002).
+
+The paper's own number for this configuration is a GPT-4o-judged "Context Recall" of
+about 0.73 on all 200 ExpertWritten questions. Ours is a labelled strict recall of
+0.41 on a 100+100 dev split. They measure different things on different questions and
+are not placed side by side; the comparison of definitions is in DEC-036.
 
 ## 5. What actually moved the needle
 

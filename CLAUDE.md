@@ -385,11 +385,14 @@ rag/
   assembly.py       ContextAssembler — retrieved chunks into the generator prompt
   corpus/           freeze.py (pinned HF revision -> parquet), normalize.py
                     (norm-vN), loader.py (the ONLY runtime read path)
-  dataset/          wixqa.py (QA configs), splits.py (test/dev/dev_large),
+  dataset/          adapter.py (DatasetAdapter, QARow), wixqa.py (WixQAAdapter),
+                    loader.py (reads frozen splits — NO benchmark import; the
+                    runner's only dataset dependency), splits.py (builds them),
                     unanswerable.py (the authored refusal set)
   chunking/         base.py (Chunker, Chunk, FixedTokenChunker),
                     index_map.py (ChunkIndex — persists chunk_id -> doc_id)
-  retrieval/        base.py (Retriever, RetrievalResult), pooling.py (doc_pooling)
+  retrieval/        base.py (Retriever, RetrievalResult), pooling.py (doc_pooling),
+                    bm25.py (the baseline; rank-bm25 Okapi), toy.py (smoke tests only)
   eval/             qrels.py (binary document-level qrels + alignment check),
                     retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
                     generation_metrics.py (citations, refusal — no LLM calls),
@@ -399,16 +402,19 @@ rag/
   runner/           config.py (RunConfig, EvalTier, config_hash), run.py
                     (run(config) -> row), store.py (SQLite runs + run_questions),
                     diff.py (rag diff), registry.py (retrievers by name),
-                    subsample.py (fixed Tier 2 subsample), cost.py (pre-run estimate)
-  embedding/        (planned, P0-11)   Embedder
-  reranking/        (planned, P0-11)   Reranker — interface only in Phase 0
+                    subsample.py (fixed Tier 2 subsample), cost.py (pre-run estimate),
+                    test_openings.py (appends each test-split opening to DECISIONS.md)
+  embedding/        base.py — Embedder interface + OpenRouter embedder (Phase 1 seam)
+  reranking/        base.py — Reranker interface ONLY; a test fails if an
+                    implementation appears without a story
 
 prompts/            versioned YAML, addressed by (id, version). answer.yaml only —
                     Ragas owns the judge prompts. Never inline a prompt in Python.
                     Content hashes are pinned in tests/test_prompts.py, so an edit
                     without a version bump fails the suite.
-configs/            experiment configs. smoke_toy*.yaml are harness smoke tests,
-                    not experiments.
+configs/            experiment configs. exp_NNNN_*.yaml are experiments and are
+                    committed BEFORE their run so git_sha is clean. smoke_toy*.yaml
+                    and tier2_smoke.yaml are harness smoke tests, not experiments.
 results/            runs.sqlite — the results store. GITIGNORED.
 
 data/
@@ -419,7 +425,7 @@ data/
                     tracked by hash rather than by content.
 
 docs/               the documentation contract (section 2). Deliverables.
-  experiments/      (planned) per-experiment EXP-NNNN.md files
+  experiments/      per-experiment EXP-NNNN.md files, written from the results store
 tests/              pytest. A story is not done until its criteria are a test
                     or a runnable command.
 user_stories/       phase handover documents. Input, not deliverable.
@@ -446,6 +452,7 @@ Two notes on where things live:
 | Authored data | `pyyaml` | seed files under `data/authored/` |
 | Tests | `pytest` | |
 | IR metrics | `ranx` | never hand-roll recall/nDCG/MRR |
+| Baseline retriever | `rank-bm25` (Okapi) | tokenizer is ours: lowercase `[a-z0-9]+`, nothing else |
 | Results store | SQLite | `runs` and `run_questions` tables |
 | LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. Chat at `/chat/completions`, embeddings at `/embeddings` (models listed at `/embeddings/models`, NOT `/models`) |
 | Judged metrics | `ragas==0.4.3` (exact pin) | metric library ONLY. Not its dataset or experiment layer |
