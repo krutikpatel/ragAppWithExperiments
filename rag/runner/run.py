@@ -325,6 +325,9 @@ def _execute(
         for qid in retrieval_latency_ms
     )
     aggregate["p95_latency_ms"] = latencies[int(0.95 * (len(latencies) - 1))] if latencies else None
+    retried = sum(1 for g in generated.values() if isinstance(g, dict) and g.get("attempts", 1) > 1)
+    if config.eval_tier is EvalTier.TIER_2:
+        aggregate["generation_retries_questions"] = retried
     aggregate["p50_latency_ms"] = latencies[len(latencies) // 2] if latencies else None
     if config.eval_tier is EvalTier.TIER_1:
         aggregate["cost_per_query_usd"] = 0.0
@@ -424,6 +427,7 @@ def _tier2(
             "text": answer.text,
             "cited": answer.cited_doc_ids,
             "latency_ms": answer.latency_ms,
+            "attempts": answer.meta.get("attempts", 1),
             # Ragas does not surface per-call token usage, so only the generator's
             # tokens are counted here. Judge cost is the pre-run estimate.
             "tokens_in": answer.tokens_in,

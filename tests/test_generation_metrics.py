@@ -118,3 +118,43 @@ def test_refusal_summary_reports_both_rates_with_counts():
     assert summary["false_refusal_rate"] == 0.0
     assert summary["false_refusal_rate_n"] == 1
     assert summary["refusal_detector"]
+
+
+def test_generator_retries_transient_failures_and_counts_attempts(monkeypatch):
+    """MIS-010: one timeout in 100 calls must not void a run, and retries are visible."""
+    import httpx
+
+    from rag.generation.base import Completion, GeneratorConfig, OpenRouterGenerator
+
+    gen = OpenRouterGenerator(GeneratorConfig(model="x/y", max_attempts=3, backoff_s=0.0))
+    calls = {"n": 0}
+
+    def flaky(prompt):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise httpx.ReadTimeout("slow")
+        return Completion(text="ok [doc:abcdef12]", tokens_in=1, tokens_out=1,
+                          reasoning_tokens=0, finish_reason="stop")
+
+    monkeypatch.setattr(gen, "_complete_once", flaky)
+    monkeypatch.setattr("rag.prompts.load_prompt", lambda i, v: type("P", (), {
+        "ref": "answer@v1", "render": staticmethod(lambda **k: "p")})())
+    answer = gen.generate("q", "ctx")
+    assert answer.meta["attempts"] == 3
+    assert answer.cited_doc_ids == ["abcdef12"]
+
+
+def test_generator_does_not_retry_non_transient_errors(monkeypatch):
+    import httpx
+
+    from rag.generation.base import GeneratorConfig, OpenRouterGenerator
+
+    gen = OpenRouterGenerator(GeneratorConfig(model="x/y", max_attempts=3, backoff_s=0.0))
+    resp = httpx.Response(401, request=httpx.Request("POST", "https://x"))
+
+    def unauthorized(prompt):
+        raise httpx.HTTPStatusError("nope", request=resp.request, response=resp)
+
+    monkeypatch.setattr(gen, "_complete_once", unauthorized)
+    with pytest.raises(httpx.HTTPStatusError):
+        gen._complete("p")

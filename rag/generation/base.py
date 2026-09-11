@@ -28,6 +28,7 @@ class Completion:
     tokens_out: int
     reasoning_tokens: int
     finish_reason: str
+    attempts: int = 1
 
 
 class EmptyGenerationError(RuntimeError):
@@ -69,6 +70,12 @@ class GeneratorConfig:
     # backdrop for retrieval comparisons, so it does not need to think.
     reasoning_effort: str = "minimal"
     timeout_s: float = 90.0
+    # A Tier 2 run is 100 sequential calls. Without retries, one transient timeout
+    # voids the whole run — which is exactly what happened to the first EXP-0001
+    # Tier 2 attempt (MIS-010). Retries are bounded, backed off, and counted: the
+    # attempt count travels on every answer so a run that needed them is visible.
+    max_attempts: int = 4
+    backoff_s: float = 2.0
 
 
 class Generator(ABC):
@@ -100,7 +107,7 @@ class Generator(ABC):
             tokens_out=completion.tokens_out,
             reasoning_tokens=completion.reasoning_tokens,
             latency_ms=elapsed_ms,
-            meta={"finish_reason": completion.finish_reason},
+            meta={"finish_reason": completion.finish_reason, "attempts": completion.attempts},
         )
 
 
@@ -115,7 +122,32 @@ def extract_citations(text: str) -> list[str]:
 class OpenRouterGenerator(Generator):
     name = "openrouter"
 
+    # Transient by nature: retry. Anything else — auth, bad request, empty content —
+    # is not, and is raised on the first occurrence.
+    _RETRY_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+
     def _complete(self, prompt: str) -> Completion:
+        import httpx
+
+        last_error: Exception | None = None
+        for attempt in range(1, self.config.max_attempts + 1):
+            try:
+                completion = self._complete_once(prompt)
+                return Completion(**{**completion.__dict__, "attempts": attempt})
+            except httpx.TimeoutException as exc:
+                last_error = exc
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code not in self._RETRY_STATUS:
+                    raise
+                last_error = exc
+            if attempt < self.config.max_attempts:
+                time.sleep(self.config.backoff_s * (2 ** (attempt - 1)))
+        raise RuntimeError(
+            f"{self.config.model}: {self.config.max_attempts} attempts failed; "
+            f"last error {type(last_error).__name__}: {last_error}"
+        ) from last_error
+
+    def _complete_once(self, prompt: str) -> Completion:
         import httpx
 
         api_key = os.environ.get("OPENROUTER_API_KEY")

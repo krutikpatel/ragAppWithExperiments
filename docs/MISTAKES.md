@@ -38,7 +38,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
 13. **A provider pin is a purchasing decision, not a tuning knob.** Cost it before
     committing it, and put it to Krutik. When optimising one dimension, check what it
     spends in the others before recording the change as a win. (MIS-008)
-14. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+14. **Loops over network calls get bounded, backed-off retries on transient
+    failures — and the retry count is recorded.** Retry only what is transient; a
+    retried auth error is a hidden bug. (MIS-010)
+15. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -283,3 +286,31 @@ Derived from the prevention rules below. Run through it and say in chat that you
   was chosen on `dev` before `test` was looked at. Never change a configuration in
   response to a `test` number.
 - **Added to preflight:** yes (item 5 already covers the mechanics; this is the why)
+
+## MIS-010 — A hundred sequential API calls with no retry
+- **Date:** 2026-09-11
+- **Severity:** Low — one voided run, ~15 minutes and a few cents; no results affected.
+- **What happened:** The first Tier 2 run of EXP-0001 (`run_20260911_051150_6b65`)
+  died with `ReadTimeout` partway through generation. One `gpt-5-nano` call out of a
+  hundred exceeded the 90-second timeout, the generator had no retry, and the runner
+  recorded the run as `VOID` and stopped.
+- **How it was caught:** The runner's own VOID record with the exception as its reason.
+  That part worked exactly as designed — a crashed run is a row, not a gap.
+- **Root cause:** The generator made raw `httpx.post` calls with no retry policy. A
+  sequence of a hundred network calls has a transient failure somewhere in it as a
+  matter of course; treating each as fatal makes the run's success a coin toss that
+  gets worse with length. The judge side was already covered — the `openai` client
+  Ragas uses retries by default — so the asymmetry was an oversight, not a decision.
+- **Impact:** One VOID run in the store, kept. The Tier 2 criterion of P0-13 was met
+  on the re-run.
+- **Fix applied:** Bounded retries with exponential backoff on timeouts and on
+  408/409/425/429/5xx, four attempts. Nothing else retries — an auth failure or an
+  empty completion is raised on the first occurrence, because retrying those hides a
+  real problem. The attempt count travels on every generated answer and the run row
+  records how many questions needed a retry, so a run that leaned on retries is
+  visible rather than silently lucky.
+- **Prevention rule:** Any loop over network calls gets a bounded, backed-off retry on
+  transient failures before it is used for a run whose numbers matter — and the retry
+  count is recorded, never swallowed. Retry only what is transient; a retried auth
+  error is a hidden bug.
+- **Added to preflight:** yes
