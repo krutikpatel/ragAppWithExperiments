@@ -76,13 +76,20 @@ def model_family(model_id: str) -> str:
 @dataclass(frozen=True)
 class JudgeScore:
     criterion: str
-    score: float
+    # None means the judge failed on this criterion for this question — an
+    # infrastructure failure, recorded as such, never as a zero. See MIS-011.
+    score: float | None
     judge_model: str
     judge_family: str
     judge_temperature: float
     ragas_version: str
     metric_fingerprint: str
     detail: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+
+    @property
+    def failed(self) -> bool:
+        return self.score is None
 
 
 @dataclass(frozen=True)
@@ -96,8 +103,9 @@ class JudgeConfig:
     # Faithfulness emits one statement per claim, so the budget has to hold a whole
     # decomposed answer, not one sentence. Measured: 1024 was not enough, and 4096
     # still failed on real WixQA answers, where answer_correctness decomposes both the
-    # generated answer and a long procedural reference. See MIS-006.
-    max_tokens: int = 8192
+    # generated answer and a long procedural reference; 8192 held for 20 questions
+    # and failed once in 100. Both pinned providers allow 40k+. See MIS-006, MIS-011.
+    max_tokens: int = 16384
     # OpenRouter serves one model from many providers whose speed differs by ~37x,
     # and whose outputs are not identical. Pinning is both a latency fix and a
     # reproducibility fix. See DEC-032.
@@ -311,22 +319,37 @@ class RagasJudge(Judge):
             ),
         }
         criteria = list(self._metrics)
+        # return_exceptions: one criterion failing on one question is recorded on
+        # that criterion for that question, and every other score in the run stands.
+        # Voiding a hundred-question run for one truncated structured output is what
+        # happened before this (MIS-011).
         results = await asyncio.gather(
-            *(calls[criterion](self._metrics[criterion]) for criterion in criteria)
+            *(calls[criterion](self._metrics[criterion]) for criterion in criteria),
+            return_exceptions=True,
         )
-        return {
-            criterion: JudgeScore(
+        scores: dict[str, JudgeScore] = {}
+        for criterion, result in zip(criteria, results, strict=True):
+            common = dict(
                 criterion=criterion,
-                score=float(result.value),
                 judge_model=self.config.model,
                 judge_family=self.config.family,
                 judge_temperature=self.config.temperature,
                 ragas_version=ragas_version(),
                 metric_fingerprint=metric_fingerprint(self.METRIC_PACKAGES[criterion]),
-                detail={"reason": getattr(result, "reason", None)},
             )
-            for criterion, result in zip(criteria, results, strict=True)
-        }
+            if isinstance(result, BaseException):
+                scores[criterion] = JudgeScore(
+                    score=None,
+                    error=f"{type(result).__name__}: {str(result)[:200]}",
+                    **common,
+                )
+            else:
+                scores[criterion] = JudgeScore(
+                    score=float(result.value),
+                    detail={"reason": getattr(result, "reason", None)},
+                    **common,
+                )
+        return scores
 
 
 def judge_provenance(config: JudgeConfig) -> dict[str, Any]:

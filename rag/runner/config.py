@@ -59,7 +59,7 @@ class RunConfig:
     generator_reasoning_effort: str = "minimal"
     judge_model: str = ""
     judge_temperature: float = 0.0
-    judge_max_tokens: int = 8192
+    judge_max_tokens: int = 16384
     # Provider pinning is a latency AND reproducibility control: OpenRouter serves one
     # model from many providers whose speed differs by ~37x and whose outputs are not
     # identical. Part of config_hash, and a comparability key. See DEC-032.

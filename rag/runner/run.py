@@ -308,6 +308,9 @@ def _execute(
     generated: dict[str, Any] = {}
     if config.eval_tier is EvalTier.TIER_2:
         generated = _tier2(config, rows, results_by_question, chunk_text, per_question)
+        judge_failures = generated.pop("__judge_failures__", [])
+        aggregate["judge_failures"] = len(judge_failures)
+        aggregate["judge_failure_detail"] = judge_failures
         aggregate.update(refusal_summary(per_question))
         for criterion in CRITERIA:
             values = [

@@ -133,3 +133,29 @@ def test_provider_order_is_recorded_and_compared():
 
     assert "judge_provider_order" in judge_provenance(JudgeConfig(model="x/y"))
     assert "judge_provider_order" in COMPARABILITY_KEYS
+
+
+def test_a_failing_criterion_is_recorded_not_fatal():
+    """MIS-011: one truncated structured output must not void a hundred-question run."""
+    import asyncio
+
+    from rag.eval.judge import JudgeConfig, RagasJudge
+
+    judge = RagasJudge(JudgeConfig(model="openai/gpt-oss-120b"))
+
+    class Good:
+        async def ascore(self, **kw):
+            return type("R", (), {"value": 0.5, "reason": "fine"})()
+
+    class Bad:
+        async def ascore(self, **kw):
+            raise RuntimeError("The output is incomplete due to a max_tokens length limit.")
+
+    judge._metrics = {"faithfulness": Good(), "answer_correctness": Bad()}
+    scores = asyncio.run(judge._score_one(
+        {"question": "q", "answer": "a", "contexts": ["c"], "reference": "r"}
+    ))
+    assert scores["faithfulness"].score == 0.5 and not scores["faithfulness"].failed
+    assert scores["answer_correctness"].score is None
+    assert scores["answer_correctness"].failed
+    assert "max_tokens" in scores["answer_correctness"].error

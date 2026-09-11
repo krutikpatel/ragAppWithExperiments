@@ -41,7 +41,11 @@ Derived from the prevention rules below. Run through it and say in chat that you
 14. **Loops over network calls get bounded, backed-off retries on transient
     failures — and the retry count is recorded.** Retry only what is transient; a
     retried auth error is a hidden bug. (MIS-010)
-15. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
+15. **Fail at the unit that failed.** A per-question pipeline records a per-question
+    failure as `None` with a reason and a run-level count — never as zero, never by
+    discarding the questions that succeeded. VOID is for failures of the run itself.
+    (MIS-011)
+16. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
 
@@ -313,4 +317,36 @@ Derived from the prevention rules below. Run through it and say in chat that you
   transient failures before it is used for a run whose numbers matter — and the retry
   count is recorded, never swallowed. Retry only what is transient; a retried auth
   error is a hidden bug.
+- **Added to preflight:** yes
+
+## MIS-011 — One judge failure voided a hundred-question run
+- **Date:** 2026-09-11
+- **Severity:** Low in cost, medium in design — two voided Tier 2 runs of EXP-0001
+  in a row, ~30 minutes and ~$1; no results affected.
+- **What happened:** The second Tier 2 attempt (`run_20260911_052616_aa4b`) got
+  through generation — the MIS-010 retries held — and then died in judging:
+  `IncompleteOutputException` from `instructor`, one question's structured output
+  exceeding the 8,192-token judge budget. 8,192 had held for runs of 5, 8 and 20
+  questions and failed once in 100. Ninety-nine judged questions were discarded with
+  it, along with every generated answer, because per-question rows are written only
+  after judging completes.
+- **How it was caught:** The runner's VOID record, again. Correct behaviour for a
+  crashed run; wrong behaviour to crash.
+- **Root cause:** A judge failure on one criterion of one question was treated as
+  fatal to the run. That is the wrong unit. Judging one question does not depend on
+  another; a failure there is a fact about that question, and the honest record is
+  "this criterion could not be scored here", not "this run did not happen".
+- **Impact:** Two VOID rows kept in the store. The Tier 2 criterion of P0-13 was met
+  on the third attempt.
+- **Fix applied:** `RagasJudge._score_one` gathers criteria with
+  `return_exceptions=True`. A failing criterion becomes a `JudgeScore` with
+  `score=None` and the error text; the run row records `judge_failures` and the
+  detail; aggregates exclude `None` (the MIS-002 rule, applied to infrastructure
+  failure); the runner warns loudly. Judge budget raised to 16,384 — both pinned
+  providers allow 40k+, and the longest reference answer in the subsample is 1,166
+  tokens, so 8,192 overflowing was the judge's output ballooning, not the input.
+- **Prevention rule:** Fail at the unit that failed. A per-question pipeline records
+  per-question failures as `None` with a reason and a run-level count — never as
+  zero, and never by discarding the questions that succeeded. Reserve VOID for
+  failures of the run itself.
 - **Added to preflight:** yes
