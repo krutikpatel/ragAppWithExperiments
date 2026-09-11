@@ -1,0 +1,24 @@
+# EXP-0001 — the baseline. Every later result is measured against this row.
+#
+# P0-13 spec, verbatim: BM25, fixed 512-token chunks (no overlap), top-5, no
+# reranker, Tier 1, on dev. "Token" is a whitespace word here (DEC-005); a full
+# 512-word chunk is ~650 BPE tokens (DEC-029).
+#
+# retrieval_depth is 100 so that recall@10 and @20 are real measurements rather
+# than recall@5 wearing a different label (DEC-012). top_k=5 is what a generator
+# would see and is what the Tier 2 variant uses.
+name: EXP-0001 baseline — BM25, fixed-512/0, top-5, Tier 1, dev
+split: dev
+eval_tier: tier1
+retriever: bm25
+retriever_params:
+  k1: 1.5
+  b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 512
+  overlap: 0
+retrieval_depth: 100
+top_k: 5
+doc_pooling: max
+seed: 1
