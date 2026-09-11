@@ -180,6 +180,37 @@ multi-document questions, precision when nothing was cited: each has a "not
 applicable" that is not zero. Averaging zeros there produces numbers that look like
 system failures and are actually category errors.
 
+**A generation metric must know what the generator was given.** The first Tier 2 run
+reported a 2% false-refusal rate. Both refusals were on questions whose articles had
+not been retrieved, and the generator had said so — correct behaviour, scored as
+failure. Meanwhile on 58 of the 60 questions where retrieval failed, the generator
+answered anyway, and no metric noticed. The metric was designed before any retrieval
+had run, with "answerable" meaning *in the corpus* rather than *in the context*. I
+found it by reading the two examples, not by looking at the aggregate (MIS-012).
+
+**Fail at the unit that failed.** A hundred-question judging run was voided by one
+question's structured output overflowing a token budget. Judging one question never
+depends on another; the honest record was "this criterion could not be scored here",
+not "this run did not happen". Two voided runs taught that (MIS-010, MIS-011).
+
 ## 10. What remains untested
 
-Everything. See `OPEN_QUESTIONS.md`.
+Every retrieval technique — that is Phase 1. Within Phase 0 itself, the open questions
+that gate what the numbers can be trusted to mean:
+
+- **The judge's own noise (OQ-017).** No judged difference is a finding until the
+  run-to-run spread is measured. The same 20 questions scored faithfulness 0.7284 and
+  0.7236 on two runs; one input scored answer correctness 1.00 and 0.857 on two
+  providers.
+- **Whether step coverage measures the answers or the matcher (OQ-007).** The
+  lexical matcher misses paraphrases; the proportion of misses is unknown.
+- **Whether refusal metrics should condition on retrieval (OQ-019).** As defined,
+  they do not, and the ungrounded-answer rate has no metric.
+- **Whether `feature_request` articles act as distractors (OQ-006).** A third of the
+  index is never a right answer for any `dev` question.
+- **Whether the unanswerable set is detectable by keyword rather than grounding
+  (OQ-004)**, and — before any of that — whether its 45 questions survive a human
+  read. They were LLM-drafted and have not been verified.
+
+The full list, each with the decision rule that would settle it, is in
+`OPEN_QUESTIONS.md`.
