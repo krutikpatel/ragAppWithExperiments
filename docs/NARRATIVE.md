@@ -206,6 +206,54 @@ question's structured output overflowing a token budget. Judging one question ne
 depends on another; the honest record was "this criterion could not be scored here",
 not "this run did not happen". Two voided runs taught that (MIS-010, MIS-011).
 
+**Measure the instrument before you measure with it.** This one cost the most and
+taught the most, so it gets the full story.
+
+The judged metrics — faithfulness, answer correctness, answer relevance — come from
+an LLM reading each answer and forming a judgment. The first Tier 2 run took 156
+seconds per question, and I wrote that up as the judge model being slow (DEC-031).
+It was not. Instrumenting every HTTP call showed the model returning 460 tokens in
+1.6 seconds when I called it directly; the time was going to OpenRouter routing the
+same model to whichever of twenty-two providers it liked, with a 37× spread between
+the fastest and slowest (DEC-032). Pinning two providers and judging concurrently
+took it to 12 seconds a question. Then I discovered I had pinned the most expensive
+provider of the twenty-two without checking, and the cost estimate I had built was
+reading the wrong price and printing $0.00 for runs that cost $0.04 (DEC-034,
+DEC-035). Each of these was found by measuring the thing I had just assumed, and
+each is in `MISTAKES.md`.
+
+But the finding that changed how every later number gets read was smaller and
+quieter. Along the way, one identical answer scored 1.00 on one provider and 0.857 on
+another. Two runs of the same configuration on the same twenty questions gave
+faithfulness 0.728 and 0.724. If the judge moves when nothing changes, then a
+technique that moves faithfulness by 0.03 has not necessarily done anything — and I
+had no idea whether the judge's own wobble was 0.003 or 0.3.
+
+So before Phase 1, I measured it. Three identical runs of the baseline's Tier 2
+configuration on the same hundred questions, then the same hundred answers judged
+three times with nothing else changing. The spread across identical runs was 0.031
+for faithfulness, 0.010 for correctness, 0.031 for relevance — and re-judging
+byte-identical answers reproduced almost all of it. The generator turned out not to
+be deterministic either: zero of a hundred answers came back identical across runs.
+But its variation barely touched the aggregates. The noise was the judge, changing
+its mind about the same answer. On twelve questions in a hundred it changed its mind
+by a quarter point or more (DEC-037).
+
+Two consequences. First, those spreads are now the floor: a judged difference inside
+them is written as "no measurable difference", and `rag diff` says so automatically
+rather than leaving it to whoever is reading. Second, one metric did not survive the
+measurement. Step coverage's run-to-run range was 0.064 against values between 0.08
+and 0.14 — the noise is half the signal, so as built it cannot detect anything, and
+it is reported as such rather than as a number. What it cost: about three hours of
+wall clock across the false starts, roughly four dollars, and eleven entries in the
+mistakes ledger. What it bought: the right to interpret a judged number at all.
+
+The transferable part is not "LLM judges are noisy" — that is well known. It is
+that the noise has to be *measured on your judge, your prompt, your questions*
+before the first comparison, because the figure is specific to all three, and
+because the cheapest time to learn it is before you have written a results table
+against it.
+
 ## 10. What remains untested
 
 Every retrieval technique — that is Phase 1. Within Phase 0 itself, the open questions
