@@ -67,61 +67,47 @@ row and the detail file are written.
 
 ## Status
 
-**Phase 0 — evaluation harness. Stories P0-01 through P0-10 are complete.**
+**Phase 0 complete — P0-01 through P0-14.** The evaluation harness is built, tested,
+and has produced its first two experiments.
 
-Done:
+**The baseline exists.** EXP-0001: BM25 over 512-word chunks, top-5, on the 200-question
+`dev` split — **strict recall@5 0.405**, loose 0.505, nDCG@10 0.384, deterministic to
+twelve decimal places across three runs. Half the questions get no gold document in
+the top five; multi-document questions find one required article two thirds of the
+time and all of them under a fifth. EXP-0002 ran the WixQA paper's own retrieval
+configuration (whole documents) one axis away: no measurable difference.
+
+What the harness does:
 
 - **Inputs are pinned and hashed.** Corpus frozen to one HuggingFace commit (6,221
-  articles, snapshot 2024-12-02) with a reproducible `corpus_hash`; one versioned
-  normalization rule; four hashed splits built by a seeded stratified deal; 45
-  authored unanswerable questions (**LLM-drafted, human verification pending**).
-- **Document-level scoring.** Binary qrels, an explicit chunk-to-document pooling
-  rule recorded on every run, strict and loose recall@{1,3,5,10,20}, nDCG@10, and MRR
-  restricted to the single-gold subset with its size attached.
-- **Generation metrics.** Citation precision/recall and step coverage computed from
-  artifacts with no LLM call; refusal and false-refusal tracked separately. Judged
-  metrics come from **Ragas**, pinned exactly and confined behind the `Judge`
-  interface — a test asserts nothing else imports it, so swapping judge libraries is
-  a one-file change. Its dataset and experiment abstractions are deliberately not
-  adopted; they would fork the results store.
-- **Slice reporting** on every axis P0-08 requires, with `n` carried alongside each
-  number and empty slices omitted.
-- **Two-tier loop.** Tier 1 (retrieval only, zero LLM calls) runs `dev` end to end in
-  about 12 seconds. Tier 2 adds generation and judging, scores a fixed 100-question
-  subsample so runs stay comparable and affordable, and prints a cost estimate before
-  it starts. The held-out `test` split refuses to open without an explicit flag and
-  prints its opening history.
-- **Runner and results store.** `run(config) -> row`, SQLite with `runs` and
-  `run_questions`, full provenance including git dirty state, crashed runs recorded
-  as `VOID`, and `rag diff` listing the questions that flipped in either direction
-  with their gold ranks — refusing to call two runs comparable when their inputs
+  articles, 2.96M tokens); four hashed splits; 45 authored unanswerable questions
+  (**LLM-drafted, human verification pending**).
+- **Document-level scoring** with strict and loose recall@{1,3,5,10,20}, nDCG@10, and
+  MRR on the single-gold subset, all via `ranx`, all on labelled `article_ids`.
+- **Generation metrics.** Citation precision/recall, step coverage and refusal are
+  deterministic and free. Judged metrics come from **Ragas**, pinned exactly, behind
+  the `Judge` interface, with providers pinned for speed and reproducibility.
+- **Two tiers.** Tier 1 scores `dev` in ~12 seconds with zero LLM calls. Tier 2 scores
+  a fixed 100-question subsample in ~20 minutes for ~$0.84, and prints a validated
+  cost estimate first.
+- **A results store** with per-question rows and `rag diff`, which refuses to call two
+  runs comparable when their corpus, split, pooling, judge, provider or Ragas version
   differ.
+- **Interfaces for Phase 1** — `DatasetAdapter`, `Embedder`, `Reranker` (interface
+  only) — with a test that the runner has no benchmark-specific import.
+- **Test-split discipline.** Opening `test` needs `--open-test` and a reason, and
+  every opening is appended to `docs/DECISIONS.md` automatically. It has been opened
+  zero times.
 
-Not yet built: the remaining P0-11 interfaces, the P0-12 test-openings log wiring,
-and the P0-13 baseline run. **No experiments have been run, so there are no results
-to report.** The only runs in the store are harness smoke tests using a deliberately
-bad retriever; they are marked as such and are not experiments.
+**Models.** Generator `openai/gpt-5-nano` (DEC-017). Judge `openai/gpt-oss-120b`,
+pinned to Cerebras/Groq (DEC-030/032) — still a **plumbing placeholder** whose scores
+are not measurements. Embeddings `qwen/qwen3-embedding-8b` (DEC-027).
 
-**Models.** Generator `openai/gpt-5-nano` (DEC-017); judge `deepseek/deepseek-v3.2`
-(DEC-025), from a different family because `RunConfig` refuses same-family judging as
-self-preference bias. Embeddings are `qwen/qwen3-embedding-8b` (DEC-027), chosen on context length rather
-than price: 34% of our chunks exceed 512 tokens, and the whole index costs ~$0.03 to
-embed either way. The judge is still a **plumbing placeholder** — its scores prove
-Tier 2 works and are not measurements.
-
-**Tier 2 has been exercised end to end** (2026-09-10, 5 questions, toy retrieval): all
-three Ragas metrics returned values, provenance and per-question rows landed in the
-store. It took three attempts, all failing on token budgets rather than logic — see
-MIS-006, which is the most useful thing the run produced.
-
-Tier 2 was measured at 156s per question and then investigated. The judge model was
-never slow — OpenRouter was routing the same model to providers with a **37x speed
-spread**. Pinning providers and judging concurrently took it to **11.8s per question,
-13.3x**, so a 100-question run is ~20 minutes rather than ~4 hours (DEC-032).
-
-Pinning is also a reproducibility control: providers serving the same open weights
-return different scores (answer correctness 1.00 vs 0.857 on one identical input), so
-`judge_provider_order` is recorded and is a `rag diff` comparability key.
+**The investigation is recorded as it happened.** `docs/DECISIONS.md` has 36 entries,
+`docs/MISTAKES.md` has 9 — including three wrong premises in the handover caught by
+counting, a metric that scored a different ranking than the system returned, a
+capability I wrongly declared absent, and a provider pin that cost 6× more than
+recorded. Each carries the rule that prevents it recurring.
 
 ## Quickstart
 
