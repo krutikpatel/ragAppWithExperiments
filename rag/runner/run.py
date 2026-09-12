@@ -443,6 +443,8 @@ def _tier2(
     generator = OpenRouterGenerator(
         GeneratorConfig(
             model=config.generator_model,
+            prompt_id=config.generator_prompt_id,
+            prompt_version=config.generator_prompt_version,
             max_tokens=config.generator_max_tokens,
             reasoning_effort=config.generator_reasoning_effort,
         )
@@ -457,6 +459,11 @@ def _tier2(
         context_chunks = results_by_question[question_id].context_chunks
         context = assembler.assemble(context_chunks, chunk_text)
         answer = generator.generate(row["question"], context.text)
+        if answer.prompt_ref != config.generator_prompt:
+            raise RuntimeError(
+                f"generator used prompt {answer.prompt_ref!r} but the run recorded "
+                f"{config.generator_prompt!r} (MIS-015)"
+            )
 
         per_question[question_id].update(
             deterministic_metrics(

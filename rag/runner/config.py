@@ -63,7 +63,9 @@ class RunConfig:
     # Tier 2 only. Empty by default: model choice is Krutik's call, not a default
     # this file gets to make. See CLAUDE.md section 10.
     generator_model: str = ""
-    generator_prompt: str = "answer@v1"
+    # `<id>@<version>` of the answer prompt. The Phase 1 control prompt (P1-05,
+    # DEC-042); Phase 0 configs pin `answer@v1` explicitly to stay reproducible.
+    generator_prompt: str = "baseline_answer@v1"
     generator_max_tokens: int = 2000
     generator_reasoning_effort: str = "minimal"
     judge_model: str = ""
@@ -133,6 +135,16 @@ class RunConfig:
                 )
         if self.eval_subsample_size < 1:
             raise ValueError("eval_subsample_size must be at least 1")
+        if "@" not in self.generator_prompt:
+            raise ValueError(f"generator_prompt must be '<id>@<version>', got {self.generator_prompt!r}")
+
+    @property
+    def generator_prompt_id(self) -> str:
+        return self.generator_prompt.split("@", 1)[0]
+
+    @property
+    def generator_prompt_version(self) -> str:
+        return self.generator_prompt.split("@", 1)[1]
 
     @property
     def generator_family(self) -> str:

@@ -179,6 +179,17 @@ Acceptance criteria:
 
 ### P1-05 — The single baseline prompt
 
+> **Status: DONE** (2026-09-12) — `prompts/baseline_answer.yaml` v1, hash
+> `sha256:a5e9b4d936151a8` pinned; DEC-042 records the controlled confound. Found and
+> fixed on the way: `generator_prompt` was recorded but never used (MIS-015).
+> - [x] exactly one prompt, `baseline_answer@v1`, loaded by id and version
+> - [x] numbered step-list output for procedural questions (one prompt, in-prompt condition)
+> - [x] cite by `doc_id` for every claim
+> - [x] no URLs: `has_url` per question, `answers_with_url` per run; detector unit-tested;
+>       `test_recorded_generated_answers_contain_no_urls` scans stored output (skips until a run exists)
+> - [x] DECISIONS.md: controlled confound (DEC-042)
+> - [x] frozen: content hash pinned in `tests/test_prompts.py`
+
 **As the baseline, I need one frozen prompt whose output format matches the reference answers,
 so quality metrics measure substance rather than formatting.**
 
@@ -198,6 +209,14 @@ Acceptance criteria:
 ---
 
 ### P1-06 — Citation rendering and the traceable source paragraph
+
+> **Status: DONE** (2026-09-12) — `rag/citations.py`, `rag/ask.py`, `rag ask`.
+> - [x] citations carried internally as `doc_id` (unchanged)
+> - [x] rendered: title, URL from the doc store, exact retrieved chunk; invented ids flagged
+> - [x] `rag ask "question"` / `rag ask --question-id <id>` prints question → answer → sources
+> - [x] citation precision/recall from `doc_id`s with no LLM call, verified end to end on
+>       four `dev` questions (`--question-id` prints the scores). Observed on the way:
+>       `[doc: id]` with a space is dropped by the parser (MIS-016, needs sign-off).
 
 **As a user, I need to see the exact paragraph an answer came from.**
 

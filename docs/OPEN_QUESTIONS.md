@@ -83,6 +83,13 @@ prove nothing about the rate; they do show the failure mode is real.
 questions; report precision and recall of the detector. **Status:** open, with a known
 gap to close (clarification-style refusals).
 
+2026-09-12 (P1-05): one concrete miss. On a `dev` question with neither gold document
+retrieved, `baseline_answer@v1` returned "Restoring the selection … isn't described in
+the provided articles … they do not specify how …" — a correct refusal — and
+`is_refusal` returned False, because the model paraphrased instead of using the
+prompt's fixed phrase. The detector cannot be extended without a metric-definition
+decision; count these when the Tier 2 control runs.
+
 ## OQ-009 — Is `strict_recall@1` worth reporting at all?
 It is structurally capped: ~20% of questions need 2-3 documents and can never score
 at k=1 (DEC-010).

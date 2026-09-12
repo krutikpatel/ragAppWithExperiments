@@ -16,6 +16,8 @@ from rag.prompts import list_prompts, load_prompt
 # fail here instead of showing up as a mysterious metric shift weeks later.
 PINNED_HASHES = {
     "answer@v1": "sha256:cb49635996bd8e0",
+    # P1-05: frozen for the whole of Phase 1. An edit here is a v2 and a new control.
+    "baseline_answer@v1": "sha256:a5e9b4d936151a8",
 }
 
 
@@ -47,3 +49,67 @@ def test_answer_prompt_asks_for_citations_and_refusal():
     assert "CTX" in rendered and "Q" in rendered
     assert "[doc:<id>]" in rendered
     assert "do not guess" in rendered
+
+
+# --- P1-05: the Phase 1 control prompt ----------------------------------------
+
+def test_baseline_prompt_asks_for_steps_citations_and_no_urls():
+    rendered = load_prompt("baseline_answer", "v1").render(context="CTX", question="Q")
+    assert "numbered list of steps" in " ".join(rendered.split())
+    assert "Answer in English" in rendered
+    assert "[doc:<id>]" in rendered
+    assert "Do not write any URL" in rendered
+    assert "The provided articles do not cover this." in rendered
+
+
+def test_baseline_prompt_refusal_phrase_is_what_the_detector_matches():
+    """DEC-014's refusal detector is lexical; the prompt's fixed refusal phrase must
+    be one it recognises, or every refusal would be scored as an answer."""
+    from rag.eval.generation_metrics import is_refusal
+
+    assert is_refusal("The provided articles do not cover this. Nothing mentions refunds.")
+
+
+def test_run_config_default_prompt_is_the_phase_1_control():
+    from rag.runner.config import RunConfig
+
+    config = RunConfig(name="t")
+    assert config.generator_prompt == "baseline_answer@v1"
+    assert (config.generator_prompt_id, config.generator_prompt_version) == ("baseline_answer", "v1")
+    load_prompt(config.generator_prompt_id, config.generator_prompt_version)
+
+
+def test_url_detector_matches_links_not_domain_names():
+    from rag.eval.generation_metrics import find_urls
+
+    assert find_urls("Go to https://support.wix.com/en/article/x for details.") == ["https://support.wix.com/en/article/x"]
+    assert find_urls("See www.wix.com/my-account.") == ["www.wix.com/my-account."]
+    assert find_urls("Connect example.com in your Domains settings [doc:abc12345].") == []
+    assert find_urls("") == [] and find_urls(None) == []
+
+
+def test_recorded_generated_answers_contain_no_urls():
+    """P1-05's acceptance test on real model output: every stored answer produced
+    with baseline_answer@v1 is URL-free. Skips when no such run exists yet."""
+    import json
+
+    from rag.runner.store import DEFAULT_DB, ResultsStore
+
+    if not DEFAULT_DB.exists():
+        pytest.skip("no results store on this machine")
+    from rag.eval.generation_metrics import find_urls
+
+    with ResultsStore() as store:
+        runs = [
+            r for r in store.list_runs(200)
+            if r["status"] == "VALID" and not r["harness_smoke_test"]
+            and json.loads(r["prompt_versions"] or "{}").get("answer") == "baseline_answer@v1"
+        ]
+        if not runs:
+            pytest.skip("no VALID run with baseline_answer@v1 recorded yet")
+        offenders = []
+        for run in runs:
+            for qid, row in store.get_questions(run["run_id"]).items():
+                if row["generated_answer"] and find_urls(row["generated_answer"]):
+                    offenders.append((run["run_id"], qid, find_urls(row["generated_answer"])))
+    assert offenders == [], f"URL-shaped strings in raw model output: {offenders[:5]}"

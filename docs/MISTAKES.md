@@ -63,6 +63,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
     tokens, max 1,336). Check a candidate model's `max_seq_length` against the chunk
     token distribution before indexing with it; truncation is silent and lands in the
     index, not the metrics. (DEC-027 for the hosted model; measured again for P1-04.)
+20. **Provenance on a run row is read back from the component that used it, or
+    asserted against it — never copied from the config alone.** (MIS-015)
+21. **Test every parser of model output on stored model output**, not on the format
+    the prompt asked for. Count what the parser drops. (MIS-016)
 
 ---
 
@@ -444,3 +448,50 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** Retry on the transport library's transient *superclass*, not on
   the one subclass you have seen. Auth and bad-request errors stay non-retryable.
 - **Added to preflight:** folded into item 14.
+
+## MIS-015 — `generator_prompt` was recorded on every run but never passed to the generator
+- **Date:** 2026-09-12
+- **Severity:** Low — caught while adding the second prompt; every run so far used the
+  only prompt that existed, so recorded and actual agree for all of them.
+- **What happened:** `RunConfig.generator_prompt` ("answer@v1") went into the run
+  row's `prompt_versions`, but `_tier2` built `GeneratorConfig` without it, so the
+  generator always loaded `answer@v1` from its own defaults. With
+  `baseline_answer@v1` configured, a run would have recorded the new prompt and
+  used the old one.
+- **How it was caught:** Reading the generator construction before wiring P1-05.
+- **Root cause:** Two sources of truth for the prompt ref — the run config and the
+  generator config — with nothing asserting they agree.
+- **Impact:** None to results. Would have silently invalidated every Phase 1 Tier 2
+  comparison against Phase 0.
+- **Fix applied:** The runner passes the configured id and version through, and
+  raises if the answer's `prompt_ref` differs from what the run recorded.
+- **Prevention rule:** Provenance recorded on a run row must be read back from the
+  component that used it, or asserted against it — never copied from the config
+  alone.
+- **Added to preflight:** yes
+
+## MIS-016 — The citation parser drops `[doc: id]` (with a space); 1.5–4% of citations in the Phase 0 Tier 2 runs were lost
+- **Date:** 2026-09-12
+- **Severity:** Low-to-medium — affects citation precision/recall on every Tier 2 run
+  by a few citations per hundred answers; no VOID.
+- **What happened:** `extract_citations` matches `\[doc:([0-9a-f]{8,64})\]` exactly.
+  `rag ask` output showed `[doc: ec3f…]` with a space after the colon, silently
+  dropped. Counting in the stored answers of the three EXP-0001 Tier 2 runs: strict
+  matches 271 / 277 / 271, tolerant matches 275 / 289 / 284 — **4, 12 and 13
+  citations per run** the metric never saw.
+- **How it was caught:** Reading a rendered answer in full, not its aggregate.
+- **Root cause:** The parser was written against the prompt's example format and never
+  tested on what the model actually emits.
+- **Impact:** Citation precision and recall for those runs are slightly understated;
+  the direction is known, the size is a few points at most. DEC-037's citation
+  floors (0.007 / 0.005) were measured with the same parser, so they are internally
+  consistent.
+- **Fix applied:** **None.** Loosening the parser changes the citation metric's
+  definition and the historical numbers on recomputation — Krutik's sign-off
+  (CLAUDE.md §9). `tests/test_citations.py` pins the current behaviour so the change,
+  when made, is visible. Proposed: accept optional whitespace inside the brackets,
+  record the parser version on the run row, and recompute the three EXP-0001 Tier 2
+  rows as a correction entry.
+- **Prevention rule:** Test every parser of model output on stored model output, not
+  on the format the prompt asked for.
+- **Added to preflight:** yes

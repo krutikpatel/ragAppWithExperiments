@@ -68,6 +68,18 @@ def is_refusal(answer: str) -> bool:
     return bool(_REFUSAL.search(answer or ""))
 
 
+# P1-05: the generator must not write links — they are rendered from the doc store's
+# `url` field, never generated, so a generated one can only be stale or invented.
+# "URL-shaped" means a scheme or a www. host; a bare domain in prose ("connect
+# example.com") is a name, not a link, and is deliberately not matched.
+_URL_SHAPED = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+
+
+def find_urls(answer: str) -> list[str]:
+    """Every URL-shaped string in a generated answer. Empty is the requirement."""
+    return _URL_SHAPED.findall(answer or "")
+
+
 def deterministic_metrics(
     *,
     generated_answer: str,
@@ -94,6 +106,8 @@ def deterministic_metrics(
         "refused": float(refused),
         "correct_refusal": float(refused) if not answerable else None,
         "false_refusal": float(refused) if answerable else None,
+        # 1.0 if the raw model output contains a URL-shaped string (P1-05 forbids it).
+        "has_url": float(bool(find_urls(generated_answer))),
     }
 
 
@@ -106,12 +120,14 @@ def refusal_summary(per_question: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
     refusal_rate, n_unanswerable = _rate("correct_refusal")
     false_rate, n_answerable = _rate("false_refusal")
+    urls = [row["has_url"] for row in per_question.values() if row.get("has_url") is not None]
     return {
         "refusal_rate": refusal_rate,
         "refusal_rate_n": n_unanswerable,
         "false_refusal_rate": false_rate,
         "false_refusal_rate_n": n_answerable,
         "refusal_detector": REFUSAL_DETECTOR_VERSION,
+        "answers_with_url": int(sum(urls)),
     }
 
 

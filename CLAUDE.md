@@ -383,6 +383,10 @@ rag/
   hashing.py        canonical-JSON hashing for corpora, splits, configs
   prompts.py        versioned prompt loading by (id, version), content-hashed
   assembly.py       ContextAssembler — retrieved chunks into the generator prompt
+  citations.py      P1-06: [doc:<id>] -> title, URL (doc store) and the exact retrieved
+                    chunk; invented ids are shown and flagged, never hidden
+  ask.py            `rag ask` — one question through the configured pipeline, rendered;
+                    writes nothing to the results store
   corpus/           freeze.py (pinned HF revision -> parquet), normalize.py
                     (norm-vN), loader.py (the ONLY runtime read path),
                     profile.py (`rag corpus profile` — lengths, one-chunk fit,
@@ -418,14 +422,19 @@ rag/
   reranking/        base.py — Reranker interface ONLY; a test fails if an
                     implementation appears without a story
 
-prompts/            versioned YAML, addressed by (id, version). answer.yaml only —
-                    Ragas owns the judge prompts. Never inline a prompt in Python.
-                    Content hashes are pinned in tests/test_prompts.py, so an edit
-                    without a version bump fails the suite.
+prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0)
+                    and baseline_answer.yaml (the Phase 1 control, DEC-042: numbered
+                    steps, English, [doc:<id>] on every claim, NO URLs) — Ragas owns
+                    the judge prompts. Never inline a prompt in Python. Content hashes
+                    are pinned in tests/test_prompts.py, so an edit without a version
+                    bump fails the suite. The runner asserts the generator's prompt_ref
+                    equals the recorded one (MIS-015).
 configs/            experiment configs. exp_NNNN_*.yaml are experiments and are
                     committed BEFORE their run so git_sha is clean. baseline_dense.yaml
                     is the dense control (EXP-0005) that Phase 2 diffs against (P1-09);
-                    exp_0004_bm25_distinct_docs.yaml is the sparse control. smoke_toy*.yaml
+                    baseline_dense_tier2.yaml adds generation + judge (P1-07 run 2,
+                    and `rag ask`'s default); exp_0004_bm25_distinct_docs.yaml is the
+                    sparse control. smoke_toy*.yaml
                     and tier2_smoke.yaml are harness smoke tests, not experiments.
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
@@ -532,7 +541,7 @@ Rules that outlive any particular library:
 
 | Role | Model | Chosen in | Notes |
 |---|---|---|---|
-| Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
+| Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Mostly obeys `[doc:<id>]`, but writes `[doc: id]` with a space 1.5–4% of the time and the parser drops those (MIS-016, fix awaiting sign-off). Answered one typo'd question in Dutch until the prompt said "Answer in English" (DEC-042). |
 | Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030, DEC-034 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Judge calls pin `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Real rate is Cerebras' $0.350/$0.750, not the model-level $0.037/$0.170**: measured **~$0.84 per 100-question Tier 2 run** (DEC-035 corrects DEC-034's $0.48). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
 | Embedding (Ragas `answer_relevance`) | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Embedding (dense retrieval) | `qwen/qwen3-embedding-8b` **pinned to DeepInfra** | DEC-041 | Same model as the Ragas embedder; Krutik chose hosted over the handover's local option. **Provider is part of the index key**: DeepInfra and Nebius return different vectors for the same input. Index: 8,218 × 4096 float32 = 134.6 MB, ~20 min and $0.031 to build (EXP-0005), cached under `indexes/`. Queries cost ~$0.0000004 each and are **not byte-deterministic** — three runs ranged 0.005 on strict recall@5 (OQ-023). `qwen3` prefix: instruct prefix on queries, none on passages. |

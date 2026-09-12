@@ -1270,3 +1270,48 @@ support a distributional claim, and the range is the conservative reading.
   keyed on `(model, provider, prefix_convention)` alongside the existing keys.
 - **Revisit if:** DeepInfra stops serving the model (re-index on another provider
   starts a new family), or Phase 2 makes embedding models the axis under study.
+
+## DEC-042 — The Phase 1 prompt: `baseline_answer@v1`, one prompt, step-list output as a controlled confound
+- **Date:** 2026-09-12
+- **Decided by:** Claude (implementing P1-05; the handover names the format and
+  recommends one prompt over a branching pair)
+- **Status:** Active
+- **Context:** WixQA reference answers are procedural markdown for about a quarter of
+  `dev` (54 of 200 have a numbered list, MIS-002). Step coverage is lexical and
+  order-aware, and answer correctness is judged against the reference. A prompt that
+  returns prose for a "how do I" question is scored as omitting every step, and every
+  later comparison inherits that noise.
+- **Decision:**
+  1. One prompt, `prompts/baseline_answer.yaml` version `v1`, content hash
+     `sha256:a5e9b4d936151a8`, pinned in `tests/test_prompts.py`. Frozen for the
+     phase: any edit is `v2` and invalidates the control.
+  2. **Output format is chosen to match the evaluation reference, not because it
+     was found to be better.** The prompt demands a numbered list (`1. `, `2. `, one
+     action per line, no bullets) for how-to questions, short prose otherwise, and
+     English regardless of the question's language. This is a **controlled
+     confound**: it removes format from the measurement rather than measuring it.
+     Phase 2 may revisit.
+  3. One prompt with an in-prompt condition, not two prompts selected by a
+     classifier — the handover's recommended default; a classifier would be a
+     component with its own error rate.
+  4. `[doc:<id>]` on every step or sentence; **no URLs** — links are rendered from the
+     doc store's `url` field (P1-06). A fixed refusal phrase, "The provided articles
+     do not cover this.", chosen because DEC-014's lexical detector matches it.
+  5. `RunConfig.generator_prompt` defaults to `baseline_answer@v1`. The Phase 0 Tier 2
+     configs now pin `answer@v1` explicitly so they still reproduce their runs.
+- **Before freezing — a format check, not tuning:** the first draft, tried on one
+  procedural `dev` question through `rag ask`, came back as bullet points with several
+  actions per bullet (step coverage 0.00 on format alone). The format rule was made
+  explicit and re-checked on three procedural questions: all three returned numbered
+  lists. One of them, whose question opens with the typo "Hoe", was answered in
+  **Dutch**; "Answer in English" was added and re-checked. Four generator calls in
+  total, on `dev`, looking only at whether the output *shape* matched the instruction.
+  No metric was compared between drafts.
+- **Evidence:** No measured data on quality. The format facts above are observations
+  from four calls.
+- **Consequences:** Tier 2 runs from here use `baseline_answer@v1`; EXP-0001's Tier 2
+  variant (`answer@v1`) is not comparable to them on generation metrics — the
+  prompt differs. `answers_with_url` is recorded per run and must be 0.
+- **Revisit if:** step coverage stays near zero on questions whose gold documents
+  were retrieved (then the matcher, not the format, is the problem — OQ-007), or a
+  Phase 2 story measures prompt format as an axis.

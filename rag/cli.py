@@ -111,6 +111,35 @@ def run_experiment(
     typer.echo(json.dumps(json.loads(row["metrics_json"]), indent=2, default=str))
 
 
+@app.command("ask")
+def ask(
+    question: str = typer.Argument("", help="The question. Omit when using --question-id."),
+    config_path: str = typer.Option(
+        "configs/baseline_dense_tier2.yaml", "--config", help="Run config to answer with."
+    ),
+    question_id: str = typer.Option(
+        "", "--question-id", help="Answer a split question by id and score its citations against gold."
+    ),
+    split: str = typer.Option("dev", "--split", help="Split for --question-id (never `test` without --open-test)."),
+    open_test: bool = typer.Option(False, "--open-test"),
+    max_chunk_chars: int = typer.Option(0, "--max-chunk-chars", help="Truncate printed chunks (0 = full text)."),
+) -> None:
+    """Answer one question: question → step-formatted answer → title, URL, exact chunk (P1-06).
+
+    Not an experiment: nothing is written to the results store.
+    """
+    from rag.ask import answer_question, format_ask
+
+    if bool(question) == bool(question_id):
+        raise typer.BadParameter("give exactly one of QUESTION or --question-id")
+    if question_id and split == "test" and not open_test:
+        raise typer.BadParameter("the test split needs --open-test")
+    result = answer_question(
+        config_path, question=question or None, question_id=question_id or None, split=split
+    )
+    typer.echo(format_ask(result, max_chunk_chars=max_chunk_chars or None))
+
+
 @app.command("diff")
 def diff(
     run_a: str = typer.Argument(..., help="Baseline run id."),

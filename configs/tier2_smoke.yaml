@@ -19,6 +19,7 @@ retrieval_depth: 100
 top_k: 5
 doc_pooling: max
 generator_model: openai/gpt-5-nano
+generator_prompt: answer@v1   # the Phase 0 prompt; pinned so this config still reproduces its runs
 judge_model: openai/gpt-oss-120b
 judge_temperature: 0.0
 # Exercises answer_relevance too, so all three judged metrics are covered.
