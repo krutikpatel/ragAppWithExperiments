@@ -191,6 +191,9 @@ class OpenRouterEmbedder(Embedder):
 
     # Transient by nature: retry with backoff, and count it. Anything else — auth,
     # bad request, wrong provider — is raised on the first occurrence (MIS-010).
+    # Transport errors are caught as the httpx superclass: the first dense index
+    # build died on an SSL "bad record mac" that a TimeoutException-only clause
+    # let through (MIS-014).
     _RETRY_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
 
     def __init__(self, config: EmbedderConfig) -> None:
@@ -237,7 +240,9 @@ class OpenRouterEmbedder(Embedder):
                 )
                 response.raise_for_status()
                 return self._parse(response.json(), len(batch), attempt)
-            except httpx.TimeoutException as exc:
+            except httpx.TransportError as exc:
+                # Timeouts, connection resets, TLS read errors: the network, not the
+                # request. TransportError is the httpx superclass of all of them.
                 last_error = exc
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code not in self._RETRY_STATUS:

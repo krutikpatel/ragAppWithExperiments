@@ -40,7 +40,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
     spends in the others before recording the change as a win. (MIS-008)
 14. **Loops over network calls get bounded, backed-off retries on transient
     failures — and the retry count is recorded.** Retry only what is transient; a
-    retried auth error is a hidden bug. (MIS-010)
+    retried auth error is a hidden bug. Catch the transport library's transient
+    *superclass* (`httpx.TransportError`), not the one subclass you have seen.
+    (MIS-010, MIS-014)
 15. **Fail at the unit that failed.** A per-question pipeline records a per-question
     failure as `None` with a reason and a run-level count — never as zero, never by
     discarding the questions that succeeded. VOID is for failures of the run itself.
@@ -421,3 +423,24 @@ Derived from the prevention rules below. Run through it and say in chat that you
   third time the same premise class has appeared in a handover, and the rule is
   earning its place.
 - **Added to preflight:** already there (item 1)
+
+## MIS-014 — The retry loop caught timeouts but not transport errors; the first dense index build died on a TLS read error
+- **Date:** 2026-09-12
+- **Severity:** Low — one VOID run (`run_20260912_222345_671e`), ~76 seconds and a
+  few cents of embedding calls lost; no results affected.
+- **What happened:** The first EXP-0005 index build raised
+  `httpx.ReadError: [SSL: SSLV3_ALERT_BAD_RECORD_MAC]` on one of 129 batch calls.
+  The embedder's retry loop caught `httpx.TimeoutException` and retryable HTTP
+  statuses only; a `ReadError` is neither, so it propagated and voided the run. The
+  generator's loop (MIS-010) had the identical gap and had simply not been hit yet.
+- **How it was caught:** The run crashed; the runner recorded it VOID as designed.
+- **Root cause:** Retrying on the one transient class that had been observed
+  (timeouts, MIS-010) rather than on the superclass of transient transport failures.
+  `httpx.TransportError` covers timeouts, connection errors and read/write errors.
+- **Impact:** One VOID row; the index build restarts from scratch (batches already
+  embedded are not persisted until the build completes).
+- **Fix applied:** Both loops now catch `httpx.TransportError`. Retries are still
+  bounded (4 attempts, exponential backoff) and counted in `usage.retries`.
+- **Prevention rule:** Retry on the transport library's transient *superclass*, not on
+  the one subclass you have seen. Auth and bad-request errors stay non-retryable.
+- **Added to preflight:** folded into item 14.

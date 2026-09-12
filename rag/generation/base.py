@@ -134,7 +134,9 @@ class OpenRouterGenerator(Generator):
             try:
                 completion = self._complete_once(prompt)
                 return Completion(**{**completion.__dict__, "attempts": attempt})
-            except httpx.TimeoutException as exc:
+            except httpx.TransportError as exc:
+                # Timeouts, connection resets, TLS read errors: the network, not the
+                # request. TransportError is the httpx superclass of all of them.
                 last_error = exc
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code not in self._RETRY_STATUS:
