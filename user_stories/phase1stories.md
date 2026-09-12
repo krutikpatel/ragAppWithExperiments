@@ -119,7 +119,8 @@ Acceptance criteria — a `rag corpus profile` command emits, and writes into
 > - [x] collapse ratio mean + p90, per run and per slice
 > - [x] unit test: top-5 chunks in 2 docs → 5 distinct docs, ratio 2.5 recorded (`tests/test_distinct_docs.py`)
 > - [x] rationale in DECISIONS.md (DEC-040)
-> - [x] measured on the sparse control: EXP-0004 (see EXPERIMENTS.md)
+> - [x] measured on the sparse control: EXP-0004 — collapse ratio 1.088 mean, 1.20 p90,
+>       max 2.8; exhaustion 0/200; Tier 1 metrics reproduce EXP-0003 exactly
 
 **As the retriever, I must return 5 distinct documents, because document-level gold with 2–3
 required documents cannot be satisfied by chunks that collapse into fewer documents.**

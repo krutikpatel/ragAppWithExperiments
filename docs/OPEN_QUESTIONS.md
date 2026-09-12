@@ -247,7 +247,9 @@ high, the walk exhausts before reaching five documents and the context is short.
 **Decided by:** `pool_exhaustion_rate` and `collapse_ratio__p90` on `dev`, per run
 (EXP-0004 is the first measurement). Exhaustion under 1% keeps 50; above it, raise the
 cap and re-run the control.
-**Status:** queued — EXP-0004.
+**Status:** answered for BM25 by EXP-0004 — exhaustion 0.000, p90 1.20, max 2.80 (14
+chunks). 50 stays. Re-check when the dense control runs; a model that clusters an
+article's chunks could collapse more.
 
 ## OQ-022 — Should the generator see every retrieved chunk of a selected document, or only its best?
 DEC-040 sends one chunk per document. A long article whose answer spans two chunks

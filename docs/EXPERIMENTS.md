@@ -8,7 +8,8 @@ produced one.
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | EXP-0001 | `run_20260911_051054_ef08` | 2026-09-11 | baseline | BM25, fixed-512/0, top-5, Tier 1, dev | **0.405** | 0.505 | 0.384 | 0.332 (n=160) | 0.388 (T2, n=88) | 35 | 0.0000 | SUPERSEDED (EXP-0003, DEC-038) | [→](experiments/EXP-0001.md) |
 | EXP-0002 | `run_20260911_051322_3bcb` | 2026-09-11 | chunking | whole documents (paper's retrieval config) | 0.410 | 0.500 | 0.378 | 0.329 (n=160) | — | 21 | 0.0000 | VALID | [→](experiments/EXP-0002.md) |
-| EXP-0003 | `run_20260912_213248_2471` | 2026-09-12 | control | **sparse control**: BM25, fixed-600/100, top-5, Tier 1, dev (P1-01) | **0.410** | 0.505 | 0.379 | 0.329 (n=160) | — | 31 | 0.0000 | VALID | [→](experiments/EXP-0003.md) |
+| EXP-0003 | `run_20260912_213248_2471` | 2026-09-12 | control | BM25, fixed-600/100, top-5 chunks, Tier 1, dev (P1-01) | **0.410** | 0.505 | 0.379 | 0.329 (n=160) | — | 31 | 0.0000 | SUPERSEDED (EXP-0004, DEC-040) | [→](experiments/EXP-0003.md) |
+| EXP-0004 | `run_20260912_215235_ff2f` | 2026-09-12 | control | **sparse control**: BM25, 600/100, top-5 **distinct docs**, pool 50, Tier 1, dev (P1-07 run 4). Collapse ratio 1.088 mean / 1.20 p90, exhaustion 0 | **0.410** | 0.505 | 0.379 | 0.329 (n=160) | — | 34 | 0.0000 | VALID | [→](experiments/EXP-0004.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -32,6 +33,9 @@ Column notes:
   Tier 2 variant and citation-precision figure were not re-run (DEC-038 says why).
 - **Axis `control`** marks a row that later experiments diff against; it is not a
   technique.
+- **EXP-0003 is SUPERSEDED by EXP-0004** (DEC-040): same ranking, same numbers, but
+  `top_k` now counts distinct documents and the collapse ratio is recorded. One
+  sparse control row, not two.
 
 <!-- corpus-profile:c852878d74a8 start -->
 ## Corpus profile — characterization, not an experiment (profile-v1)
