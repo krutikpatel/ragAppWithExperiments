@@ -8,17 +8,19 @@ numbers that then get blamed on the architecture. So `embed_texts` takes
 table does not know is an error unless the config names its convention explicitly.
 Silence is the failure mode this module is designed to make impossible.
 
-Two backends: `sentence_transformers` (local, the Phase 1 control — re-indexing
-6,221 articles takes minutes and needs no network) and `openrouter` (hosted; what
-Ragas `answer_relevance` uses via DEC-027). Both apply the same prefix table.
+Two backends: `openrouter` (hosted, pinned to one provider — the Phase 1 control
+uses `qwen/qwen3-embedding-8b` on DeepInfra, DEC-041) and `sentence_transformers`
+(local, pinned to an HF revision; built for the handover's local option and kept
+for Phase 2). Both apply the same prefix table.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings"
@@ -114,6 +116,12 @@ class EmbedderConfig:
     device: str | None = None
     # sentence-transformers only. The model's own limit applies if None.
     max_seq_length: int | None = None
+    # openrouter only. One provider, no fallbacks: two providers serving the same
+    # model return different vectors (measured 2026-09-12, DEC-041), so a fallback
+    # mid-index would mix two embedding spaces. Part of the index key.
+    provider: str = ""
+    max_attempts: int = 4
+    backoff_s: float = 2.0
 
 
 class Embedder(ABC):
@@ -149,21 +157,64 @@ class Embedder(ABC):
     def model_id(self) -> str:
         return self.config.model
 
+    @property
+    def pinned_identity(self) -> str:
+        """What fixes the vectors beyond the model id: an HF revision for a local
+        model, a provider for a hosted one. Part of the dense index key."""
+        return self.config.revision
+
     def provenance(self) -> dict[str, Any]:
         return {
             "backend": self.name,
             "model_id": self.config.model,
             "revision": self.config.revision,
+            "pinned_identity": self.pinned_identity,
             "prefix_convention": self.prefix.name,
             "query_prefix": self.prefix.query,
             "passage_prefix": self.prefix.passage,
         }
 
 
+@dataclass
+class EmbedUsage:
+    """What the hosted backend spent, summed over every call this embedder made."""
+
+    calls: int = 0
+    retries: int = 0
+    prompt_tokens: int = 0
+    cost_usd: float = 0.0
+    providers_seen: list[str] = field(default_factory=list)
+
+
 class OpenRouterEmbedder(Embedder):
     name = "openrouter"
 
+    # Transient by nature: retry with backoff, and count it. Anything else — auth,
+    # bad request, wrong provider — is raised on the first occurrence (MIS-010).
+    _RETRY_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+
+    def __init__(self, config: EmbedderConfig) -> None:
+        super().__init__(config)
+        if not config.provider:
+            raise ValueError(
+                f"hosted embedding model {config.model!r} needs a `provider` pin. Providers "
+                "serving one model return different vectors; an unpinned index is not "
+                "reproducible (DEC-041)."
+            )
+        self.usage = EmbedUsage()
+
+    @property
+    def pinned_identity(self) -> str:
+        return f"provider:{self.config.provider}"
+
     def _embed(self, texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), self.config.batch_size):
+            batch = texts[start : start + self.config.batch_size]
+            vectors.extend(self._embed_batch(batch))
+        return vectors
+
+    def _embed_batch(self, batch: list[str]) -> list[list[float]]:
         import httpx
 
         api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -171,23 +222,65 @@ class OpenRouterEmbedder(Embedder):
             raise RuntimeError(
                 "OPENROUTER_API_KEY is not set. It lives in .env at the repo root."
             )
-        vectors: list[list[float]] = []
-        for start in range(0, len(texts), self.config.batch_size):
-            batch = texts[start : start + self.config.batch_size]
-            response = httpx.post(
-                OPENROUTER_EMBEDDINGS_URL,
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={"model": self.config.model, "input": batch},
-                timeout=self.config.timeout_s,
-            )
-            response.raise_for_status()
-            data = sorted(response.json()["data"], key=lambda d: d["index"])
-            if len(data) != len(batch):
-                raise RuntimeError(
-                    f"embeddings API returned {len(data)} vectors for {len(batch)} inputs"
+        last_error: Exception | None = None
+        for attempt in range(1, self.config.max_attempts + 1):
+            try:
+                response = httpx.post(
+                    OPENROUTER_EMBEDDINGS_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": self.config.model,
+                        "input": batch,
+                        "provider": {"order": [self.config.provider], "allow_fallbacks": False},
+                    },
+                    timeout=self.config.timeout_s,
                 )
-            vectors.extend(d["embedding"] for d in data)
-        return vectors
+                response.raise_for_status()
+                return self._parse(response.json(), len(batch), attempt)
+            except httpx.TimeoutException as exc:
+                last_error = exc
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code not in self._RETRY_STATUS:
+                    raise
+                last_error = exc
+            self.usage.retries += 1
+            if attempt < self.config.max_attempts:
+                time.sleep(self.config.backoff_s * (2 ** (attempt - 1)))
+        raise RuntimeError(
+            f"{self.config.model}: {self.config.max_attempts} attempts failed; "
+            f"last error {type(last_error).__name__}: {last_error}"
+        ) from last_error
+
+    def _parse(self, payload: dict[str, Any], expected: int, attempt: int) -> list[list[float]]:
+        # Assert the response holds what was asked for, at the point of the call
+        # (MIS-006): the right count, from the pinned provider.
+        data = sorted(payload.get("data", []), key=lambda d: d["index"])
+        if len(data) != expected:
+            raise RuntimeError(f"embeddings API returned {len(data)} vectors for {expected} inputs")
+        served_by = payload.get("provider")
+        if served_by and served_by != self.config.provider:
+            raise RuntimeError(
+                f"embeddings served by {served_by!r}, not the pinned {self.config.provider!r}"
+            )
+        self.usage.calls += 1
+        usage = payload.get("usage", {})
+        self.usage.prompt_tokens += int(usage.get("prompt_tokens", 0))
+        self.usage.cost_usd += float(usage.get("cost", 0.0))
+        if served_by and served_by not in self.usage.providers_seen:
+            self.usage.providers_seen.append(served_by)
+        return [d["embedding"] for d in data]
+
+    def provenance(self) -> dict[str, Any]:
+        meta = super().provenance()
+        meta["provider"] = self.config.provider
+        meta["usage"] = {
+            "calls": self.usage.calls,
+            "retries": self.usage.retries,
+            "prompt_tokens": self.usage.prompt_tokens,
+            "cost_usd": round(self.usage.cost_usd, 6),
+            "providers_seen": list(self.usage.providers_seen),
+        }
+        return meta
 
 
 class SentenceTransformersEmbedder(Embedder):

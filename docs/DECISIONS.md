@@ -1231,3 +1231,42 @@ support a distributional claim, and the range is the conservative reading.
 - **Revisit if:** the measured p90 collapse ratio makes 50 too small (exhaustion rate
   above a few percent on `dev`), or OQ-022 shows one-chunk-per-document costs
   answer quality.
+
+## DEC-041 — Dense-retrieval embedding model: `qwen/qwen3-embedding-8b`, hosted, pinned to DeepInfra
+- **Date:** 2026-09-12
+- **Decided by:** Krutik (model; asked for "hosted, cheap but good" over the handover's
+  local option). Claude chose the provider pin between the two equal-price
+  providers and says so here.
+- **Status:** Active
+- **Context:** P1-04 asks for one embedding model for the dense control, suggesting a
+  local bge-base / e5-base class model. Measured before asking: **36.7% of the 600/100
+  chunks exceed 512 tokens** (p95 748, max 1,336), and both suggested classes cap at
+  512 — the truncation DEC-027 rejected for the Ragas embedder. Local options that
+  clear it (bge-m3, Qwen3-Embedding-0.6B) need torch (~2 GB) on a 16 GB machine.
+- **Options put to Krutik** (live OpenRouter prices, 2026-09-12; index = 3.22M tokens):
+  `qwen/qwen3-embedding-8b` $0.032/index, 32k ctx; `baai/bge-m3` $0.032, 8k;
+  `openai/text-embedding-3-small` $0.064, 8k; `voyageai/voyage-4-lite` $0.064, 32k,
+  prefix handling unknown. Local options were offered first and declined.
+- **Decision:** `qwen/qwen3-embedding-8b` via OpenRouter, **provider pinned to
+  DeepInfra with fallbacks disabled**, `qwen3` prefix convention (instruct prefix on
+  queries, none on passages, per the model card). One model now serves both dense
+  retrieval and Ragas `answer_relevance` (DEC-027).
+- **Why the pin, and why it is part of the index key:** probed both $0.01 providers
+  with identical input. Both honour `provider.order` + `allow_fallbacks: false` and
+  name themselves in the response — and **return different vectors** (first
+  component 0.02954 on DeepInfra vs 0.02967 on Nebius). A fallback mid-build would
+  mix two embedding spaces in one index. The embedder refuses an unpinned hosted
+  model, asserts the responding provider, and the index key includes
+  `provider:DeepInfra`. DeepInfra over Nebius: same price, same context; DeepInfra
+  also serves bge-m3 and is the model-card price provider. No measured basis for
+  preferring one — a coin with a recorded side.
+- **Evidence:** Measured — chunk token distribution, provider probe, prices. **No
+  retrieval quality data**; the only external claim in play (Qwen3-Embedding-8B led
+  MTEB multilingual at release) is labelled external and untested.
+- **Consequences:** The dense control costs ~$0.03 to index and fractions of a cent
+  per query; Tier 1 dense runs are no longer $0 and the runner records the exact
+  provider-reported query cost. The `sentence_transformers` backend stays as built,
+  undeclared in `pyproject` until a story needs it. Comparability of dense runs is
+  keyed on `(model, provider, prefix_convention)` alongside the existing keys.
+- **Revisit if:** DeepInfra stops serving the model (re-index on another provider
+  starts a new family), or Phase 2 makes embedding models the axis under study.

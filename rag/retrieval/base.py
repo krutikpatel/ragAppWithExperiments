@@ -92,6 +92,11 @@ class Retriever(ABC):
         there is nothing beyond the chunk index itself (BM25 is rebuilt in-process)."""
         return {}
 
+    def query_cost_usd(self) -> float:
+        """Money spent answering queries so far, excluding any index build. Zero for
+        anything in-process; a hosted embedder reports what the provider charged."""
+        return 0.0
+
     def retrieve(
         self,
         question_id: str,

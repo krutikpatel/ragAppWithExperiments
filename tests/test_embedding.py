@@ -87,6 +87,23 @@ def test_local_backend_requires_a_pinned_revision():
         SentenceTransformersEmbedder(EmbedderConfig(model="intfloat/e5-base-v2"))
 
 
+def test_hosted_backend_requires_a_provider_pin_and_checks_the_response():
+    from rag.embedding.base import OpenRouterEmbedder
+
+    with pytest.raises(ValueError, match="provider"):
+        OpenRouterEmbedder(EmbedderConfig(model="qwen/qwen3-embedding-8b"))
+    embedder = OpenRouterEmbedder(EmbedderConfig(model="qwen/qwen3-embedding-8b", provider="DeepInfra"))
+    assert embedder.pinned_identity == "provider:DeepInfra"
+    good = {"data": [{"index": 0, "embedding": [1.0]}], "provider": "DeepInfra",
+            "usage": {"prompt_tokens": 7, "cost": 7e-8}}
+    assert embedder._parse(good, 1, 1) == [[1.0]]
+    assert embedder.usage.calls == 1 and embedder.usage.prompt_tokens == 7
+    with pytest.raises(RuntimeError, match="not the pinned"):
+        embedder._parse({**good, "provider": "Nebius"}, 1, 1)
+    with pytest.raises(RuntimeError, match="1 vectors for 2"):
+        embedder._parse(good, 2, 1)
+
+
 def test_resolve_prefix_convention_explicit_wins():
     assert resolve_prefix_convention("intfloat/e5-base-v2", "none").name == "none"
 

@@ -304,6 +304,8 @@ def _execute(
         retrieval_latency_ms[row["question_id"]] = int((time.perf_counter() - started) * 1000)
         results.append(result)
     results_by_question = {result.question_id: result for result in results}
+    # Re-record after the queries so a hosted embedder's usage covers the whole run.
+    store.update_run(run_id, retriever_meta=json.dumps(retriever.provenance(), default=str))
 
     qrels = qrels_from_split(frame)
     run_dict = run_from_results(results)
@@ -372,16 +374,22 @@ def _execute(
     if config.eval_tier is EvalTier.TIER_2:
         aggregate["generation_retries_questions"] = retried
     aggregate["p50_latency_ms"] = latencies[len(latencies) // 2] if latencies else None
+    # Tier 1 makes no LLM calls, but a hosted embedder charges for query vectors;
+    # that is exact (provider-reported) and the one-time index build is recorded
+    # separately in retriever_meta rather than folded into a per-query figure.
+    query_cost = retriever.query_cost_usd()
     if config.eval_tier is EvalTier.TIER_1:
-        aggregate["cost_per_query_usd"] = 0.0
+        aggregate["cost_per_query_usd"] = round(query_cost / len(rows), 6) if rows else 0.0
+        aggregate["cost_per_query_source"] = (
+            "exact: Tier 1 makes no LLM calls" if query_cost == 0
+            else "exact: provider-reported query embedding cost; index build cost in retriever_meta"
+        )
     elif "total_usd" in cost_estimate and rows:
-        aggregate["cost_per_query_usd"] = round(cost_estimate["total_usd"] / len(rows), 5)
+        aggregate["cost_per_query_usd"] = round((cost_estimate["total_usd"] + query_cost) / len(rows), 5)
+        aggregate["cost_per_query_source"] = "estimate: pre-run cost estimate / questions, plus exact query embedding cost"
     else:
         aggregate["cost_per_query_usd"] = None
-    aggregate["cost_per_query_source"] = (
-        "exact: Tier 1 makes no LLM calls" if config.eval_tier is EvalTier.TIER_1
-        else "estimate: pre-run cost estimate / questions"
-    )
+        aggregate["cost_per_query_source"] = "estimate: pre-run cost estimate / questions"
 
     slice_report = aggregate_by_slice(per_question, slices, percentiles={"collapse_ratio": (90,)})
     aggregate["slice_meta"] = slices.meta

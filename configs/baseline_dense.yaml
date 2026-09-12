@@ -1,0 +1,24 @@
+# The dense control (P1-07 run 1, P1-09). Every Phase 2 technique is a diff against
+# this file. Differs from configs/exp_0004_bm25_distinct_docs.yaml on exactly one
+# axis: the retriever. Recorded as EXP-0005.
+#
+# Embedding model and provider pin: DEC-041. Chunking: DEC-038. Document-level
+# top_k and candidate pool: DEC-040.
+name: EXP-0005 dense control — qwen3-embedding-8b (DeepInfra), fixed-600/100, top-5 distinct docs, pool 50, Tier 1, dev
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

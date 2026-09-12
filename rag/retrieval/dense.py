@@ -2,7 +2,8 @@
 
 The index is a numpy matrix, one row per chunk, in sorted `chunk_id` order. It is
 built once per **provenance tuple** — `(corpus_hash, normalization_version,
-chunker_id, model_id, revision, prefix_convention)` — and cached under `indexes/`
+chunker_id, model_id, pinned_identity, prefix_convention)` — where the pinned identity
+is an HF revision for a local model or the provider for a hosted one — and cached under `indexes/`
 by a key derived from nothing but that tuple. Anything that changes a vector is in
 the tuple; anything that does not (device, batch size) is recorded in the index's
 metadata but does not change the key. Build time and size are logged and land on
@@ -55,9 +56,10 @@ class DenseRetriever(Retriever):
         chunk_to_doc: dict[str, str],
         chunk_text: dict[str, str],
         *,
-        embedding_backend: str = "sentence_transformers",
+        embedding_backend: str = "openrouter",
         embedding_model: str = "",
         embedding_revision: str = "",
+        embedding_provider: str = "",
         prefix_convention: str | None = None,
         batch_size: int = 64,
         device: str | None = None,
@@ -77,6 +79,7 @@ class DenseRetriever(Retriever):
             EmbedderConfig(
                 model=embedding_model,
                 revision=embedding_revision,
+                provider=embedding_provider,
                 prefix_convention=prefix_convention,
                 batch_size=batch_size,
                 device=device,
@@ -89,11 +92,21 @@ class DenseRetriever(Retriever):
             normalization_version=self.index.normalization_version,
             chunker_id=self.index.chunker_id,
             model_id=self.embedder.model_id,
-            revision=self.embedder.config.revision,
+            revision=self.embedder.pinned_identity,
             prefix_convention=self.embedder.prefix.name,
         )
         self.index_dir = Path(index_dir) if index_dir else INDEXES_DIR / self.key
         self.vectors, self.index_meta = self._load_or_build(chunk_text)
+        # Whatever the embedder had spent once the index existed is the build's;
+        # everything after is queries.
+        self._build_cost_usd = self._usage_cost()
+
+    def _usage_cost(self) -> float:
+        usage = getattr(self.embedder, "usage", None)
+        return float(usage.cost_usd) if usage is not None else 0.0
+
+    def query_cost_usd(self) -> float:
+        return self._usage_cost() - self._build_cost_usd
 
     # --- index -----------------------------------------------------------------
 
@@ -147,7 +160,7 @@ class DenseRetriever(Retriever):
         return {
             "embedding_backend": self.embedder.name,
             "embedding_model": self.embedder.model_id,
-            "embedding_revision": self.embedder.config.revision,
+            "pinned_identity": self.embedder.pinned_identity,
             "prefix_convention": self.embedder.prefix.name,
             "similarity": "cosine",
         }
@@ -167,6 +180,7 @@ class DenseRetriever(Retriever):
             "build_seconds": self.index_meta["build_seconds"],
             "cache_hit": self.index_meta.get("cache_hit", False),
             "embedder": self.index_meta["embedder"],
+            "embedder_now": self.embedder.provenance(),
             "similarity": "cosine",
         }
 
