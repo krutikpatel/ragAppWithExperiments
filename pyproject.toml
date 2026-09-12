@@ -21,6 +21,9 @@ dependencies = [
     # 0.4.x, so this ceiling is ours to hold. See MIS-004.
     "langchain-community<0.4",
     "rank-bm25>=0.2.2",
+    # Corpus profiling only (`rag corpus profile`): BPE token counts with cl100k_base,
+    # the encoding DEC-029 measured with. Never on the retrieval or scoring path.
+    "tiktoken>=0.7",
 ]
 
 [project.optional-dependencies]

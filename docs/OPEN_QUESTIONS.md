@@ -24,7 +24,11 @@ effects.
 ## OQ-003 — Is 512 whitespace tokens the right chunk width for this corpus?
 Chosen to match the handover's baseline, not from anything about Wix articles.
 **Decided by:** chunk-width sweep on `dev`, strict recall@10, mean over 3 seeds.
-**Status:** open.
+**Status:** open. 2026-09-12: the control moved to 600/100 by decision, not by
+measurement (DEC-038); EXP-0003 vs EXP-0001 is one point of a sweep, not the
+sweep. The profile (`EXPERIMENTS.md`, corpus profile) shows 79.0% of articles fit
+in one 600-word chunk, so any width above that changes nothing for four fifths of
+the corpus — which bounds what a sweep can show on single-document questions.
 
 ## OQ-004 — Is the refusal set detectable by keyword rather than by grounding?
 If a model refuses `out-of-scope-platform` questions on the token "Shopify" alone,
@@ -225,6 +229,17 @@ generator answering anyway on 58 of 60 retrieval failures — has no metric at a
 **Decided by:** Krutik's sign-off on the redefinition (CLAUDE.md section 9); then
 recompute on `run_20260911_053316_510b`, whose per-question rows already hold
 everything needed. **Status:** open — blocks any refusal claim in the narrative.
+
+## OQ-020 — Does the procedure-block heuristic agree with the source HTML's ordered lists?
+DEC-039 defines a procedure block on the marker-stripped text: a `:`-terminated header
+sentence followed by two or more imperative sentences. It finds 5,936 blocks in 2,350
+articles. Whether those are the source's `<ol>` lists — and how many `<ol>` lists it
+misses because a step opens with an unlisted verb — is unknown.
+**Decided by:** hand-read a fixed random sample of 30 articles with blocks and 30
+without; count false blocks and missed procedures. Agreement above 90% on both keeps
+`profile-v1`; below it, revise the verb list and bump the version. A re-freeze with
+`html_content` would answer it exactly but starts a new comparison family (DEC-003).
+**Status:** open.
 
 ---
 

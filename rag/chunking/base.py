@@ -63,8 +63,9 @@ class FixedTokenChunker(Chunker):
     The unit is a whitespace-delimited token, not a model tokenizer token. That is
     a deliberate Phase 0 choice: it keeps chunking independent of which embedding
     model is in play, so a model swap cannot silently reshape the index. It also
-    means `chunk_size=512` is roughly 380-400 BPE tokens, not 512. See
-    docs/DECISIONS.md DEC-005.
+    means a chunk is longer in model tokens than its size suggests: 1.27 BPE tokens
+    per word on this corpus, so `chunk_size=600` is ~760 tokens. See
+    docs/DECISIONS.md DEC-005 and DEC-029.
     """
 
     name = "fixed_token"

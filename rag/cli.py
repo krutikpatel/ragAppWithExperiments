@@ -38,6 +38,40 @@ def corpus_verify() -> None:
         raise typer.Exit(code=1)
 
 
+@corpus_app.command("profile")
+def corpus_profile(
+    write_docs: bool = typer.Option(
+        False, "--write-docs", help="Append the characterization block to docs/EXPERIMENTS.md."
+    ),
+    chunk_configs: str = typer.Option(
+        "600/100,600/0,512/0",
+        "--chunk-configs",
+        help="Chunk configs to profile boundaries under, as size/overlap in words.",
+    ),
+) -> None:
+    """Profile the frozen corpus: lengths, one-chunk fit, procedure boundaries (P1-02)."""
+    from rag.corpus.profile import (
+        profile_corpus,
+        profile_summary_lines,
+        render_markdown,
+        write_profile_artifact,
+        write_profile_docs,
+    )
+
+    configs = [tuple(int(x) for x in item.split("/")) for item in chunk_configs.split(",")]
+    profile = profile_corpus(configs)
+    artifact = write_profile_artifact(profile)
+    for line in profile_summary_lines(profile):
+        typer.echo(line)
+    typer.echo(f"artifact    = {artifact}")
+    if write_docs:
+        outcome = write_profile_docs(profile, artifact)
+        typer.echo(f"EXPERIMENTS.md: {outcome}")
+    else:
+        typer.echo("")
+        typer.echo(render_markdown(profile, artifact))
+
+
 @data_app.command("splits")
 def data_splits(
     force: bool = typer.Option(False, "--force", help="Overwrite existing split artifacts."),

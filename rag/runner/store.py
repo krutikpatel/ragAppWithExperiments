@@ -17,9 +17,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from rag.paths import REPO_ROOT
+from rag.paths import RESULTS_DIR
 
-DEFAULT_DB = REPO_ROOT / "results" / "runs.sqlite"
+DEFAULT_DB = RESULTS_DIR / "runs.sqlite"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (

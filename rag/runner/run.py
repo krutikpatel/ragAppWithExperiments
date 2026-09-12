@@ -242,7 +242,7 @@ def _judge_config(config: RunConfig) -> JudgeConfig:
 
 
 def _cost_estimate(config: RunConfig, frame) -> dict:
-    context_words = config.top_k * int(config.chunker_params.get("chunk_size", 512))
+    context_words = config.top_k * int(config.chunker_params.get("chunk_size", 600))
     return estimate_tier2_cost(
         n_questions=len(frame),
         context_words=context_words,

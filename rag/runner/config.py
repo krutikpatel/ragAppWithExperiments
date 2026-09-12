@@ -42,7 +42,10 @@ class RunConfig:
     retriever: str = "bm25"
     retriever_params: dict[str, Any] = field(default_factory=dict)
     chunker: str = "fixed_token"
-    chunker_params: dict[str, Any] = field(default_factory=lambda: {"chunk_size": 512, "overlap": 0})
+    # The reconciled Phase 1 control: 600 whitespace words, 100 overlap (DEC-038).
+    # Experiment configs still spell it out; the default exists so an omission lands
+    # on the control rather than on Phase 0's 512/0.
+    chunker_params: dict[str, Any] = field(default_factory=lambda: {"chunk_size": 600, "overlap": 100})
     # How many chunks are ranked for *scoring*. Metrics are reported at k up to 20
     # documents, and you cannot measure recall@20 having retrieved 5 — the number
     # would silently be recall@5 wearing a different label. Depth is therefore

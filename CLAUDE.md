@@ -384,7 +384,9 @@ rag/
   prompts.py        versioned prompt loading by (id, version), content-hashed
   assembly.py       ContextAssembler — retrieved chunks into the generator prompt
   corpus/           freeze.py (pinned HF revision -> parquet), normalize.py
-                    (norm-vN), loader.py (the ONLY runtime read path)
+                    (norm-vN), loader.py (the ONLY runtime read path),
+                    profile.py (`rag corpus profile` — lengths, one-chunk fit,
+                    procedure-block cuts; a characterization, not an experiment)
   dataset/          adapter.py (DatasetAdapter, QARow), wixqa.py (WixQAAdapter),
                     loader.py (reads frozen splits — NO benchmark import; the
                     runner's only dataset dependency), splits.py (builds them),
@@ -417,6 +419,8 @@ configs/            experiment configs. exp_NNNN_*.yaml are experiments and are
                     committed BEFORE their run so git_sha is clean. smoke_toy*.yaml
                     and tier2_smoke.yaml are harness smoke tests, not experiments.
 results/            runs.sqlite — the results store. GITIGNORED.
+  corpus_profile/   <key>.json written by `rag corpus profile`; the EXPERIMENTS.md
+                    profile block mirrors it
 
 data/
   authored/         hand-written inputs, VERSION CONTROLLED.
@@ -454,6 +458,7 @@ Two notes on where things live:
 | Tests | `pytest` | |
 | IR metrics | `ranx` | never hand-roll recall/nDCG/MRR |
 | Baseline retriever | `rank-bm25` (Okapi) | tokenizer is ours: lowercase `[a-z0-9]+`, nothing else |
+| Corpus profiling | `tiktoken` (`cl100k_base`) | BPE token counts for `rag corpus profile` only; never on the retrieval path |
 | Results store | SQLite | `runs` and `run_questions` tables |
 | LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. Chat at `/chat/completions`, embeddings at `/embeddings` (models listed at `/embeddings/models`, NOT `/models`) |
 | Judged metrics | `ragas==0.4.3` (exact pin) | metric library ONLY. Not its dataset or experiment layer |
@@ -499,6 +504,10 @@ Rules that outlive any particular library:
 - Corpus size, measured: 6,221 articles = 2.96M tokens; 8,694 chunks at 512 words =
   2.86M tokens (mean 329, p95 644, max 1,326). **1.27 tokens per whitespace word.**
   (DEC-029 corrects DEC-005)
+- **The control chunk config is 600 words / 100 overlap** (DEC-038) — 8,218 chunks;
+  79.0% of articles fit in one chunk. The frozen text has **no list markers**:
+  procedures appear as "To do X:\nClick A. Click B." and are counted by the DEC-039
+  heuristic, never by `1.`-style lines (21 articles have one). (MIS-013)
 
 ### Models
 

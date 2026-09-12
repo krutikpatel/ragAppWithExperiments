@@ -53,6 +53,10 @@ If a story appears to need one of these to pass, stop and flag it.
 
 ### P1-01 — Reconcile the chunk config with the Phase 0 baseline
 
+> **Status: IN PROGRESS** (2026-09-12) — DEC-038 chose 600/100 words; `RunConfig`
+> default moved; `configs/exp_0003_bm25_600_100.yaml` committed. Re-run and
+> EXP-0001 supersession pending the run.
+
 **As the project, I need the sparse and dense baselines to differ in exactly one dimension, so
 "does dense beat lexical here?" is an answerable question rather than a confounded one.**
 
@@ -70,6 +74,18 @@ Acceptance criteria:
 ---
 
 ### P1-02 — Corpus profiling before chunking
+
+> **Status: DONE** (2026-09-12) — `rag corpus profile [--write-docs]`; block in
+> `docs/EXPERIMENTS.md`, artifact `results/corpus_profile/c852878d74a8.json`.
+> - [x] length distribution (words and BPE tokens) + histogram
+> - [x] fraction fitting in one 600-word chunk (79.0%)
+> - [x] numbered step lists — literal count is 21 articles (0.3%): the frozen text
+>       has no list markers (MIS-013). Reported alongside a heuristic
+>       procedure-block count, 2,350 articles (37.8%), defined in DEC-039.
+> - [x] mid-procedure boundaries under 600/100: 0 blocks cut (overlap exceeds all but
+>       20 block lengths); 600/0: 160; 512/0: 210. Validation of the heuristic
+>       against source HTML is OQ-020.
+> - [x] breakdown by `article_type`
 
 **As an experimenter, I need to know the shape of the corpus, so chunking results are
 interpretable rather than mysterious.**
@@ -215,7 +231,7 @@ one that matters most — report it first.
 
 ### P1-09 — Diffability exit criterion
 
-**As Phase 2, I need every technique to be expressible as a diff against this control.**
+**In this phase, I need every technique to be expressible as a diff against this control.**
 
 Acceptance criteria:
 - The dense control config is saved as `configs/baseline_dense.yaml` and referenced by id.
@@ -303,3 +319,19 @@ Flag rather than guess:
 - Whether the candidate-pool cap of 50 chunks is right, given the collapse ratio observed in P1-02.
 - Whether the prompt should branch on procedural vs non-procedural questions, or use one
   step-list instruction throughout. One prompt is simpler and is the recommended default.
+
+---
+## 6. Documentation discipline (applies to every story)
+
+- `docs/NARRATIVE.md` — the running story of the project.
+- `docs/EXPERIMENTS.md` — every run and its results. **No predictions.** Run the experiment,
+  then record what happened.
+- `docs/DECISIONS.md` — decisions made, by whom, and why. Includes the test-openings log.
+- `docs/MISTAKES.md` — mistakes not to repeat.
+
+Claude Code should append to these as part of the work, not as an afterthought.
+
+---
+
+## 7. Other instructions
+- work progress status shall be tracked in this file by marking Each story status. Do sub-task level marking if needed. 

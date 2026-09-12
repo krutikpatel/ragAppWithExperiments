@@ -25,3 +25,69 @@ Column notes:
 - Two earlier runs of EXP-0001's config, `run_20260911_051026_e28c` and
   `run_20260911_051033_e88c`, were made on a dirty tree as a determinism check. They
   are identical to the canonical run and are not experiments.
+
+<!-- corpus-profile:c852878d74a8 start -->
+## Corpus profile — characterization, not an experiment (profile-v1)
+
+Written by `rag corpus profile` from `results/corpus_profile/c852878d74a8.json`. Corpus `sha256:74694ad4a96b…`, `norm-v1`, 6,221 articles. Two units, always labelled: **words** are whitespace tokens, the chunker's unit (DEC-005); **tokens** are `cl100k_base` BPE tokens, 1.265 per word on this corpus.
+
+### Article length
+
+| Unit | min | p25 | median | p75 | p90 | p95 | max | mean |
+|---|---|---|---|---|---|---|---|---|
+| words | 4 | 68 | 201 | 538 | 911 | 1,216 | 6,653 | 376.5 |
+| tokens | 6 | 84 | 256 | 678 | 1,156 | 1,528 | 10,624 | 476.3 |
+
+Histogram, in words:
+
+```
+    0–99     2263  36.4% ███████████████
+  100–199     834  13.4% █████
+  200–299     530   8.5% ███
+  300–399     502   8.1% ███
+  400–499     377   6.1% ██
+  500–599     406   6.5% ███
+  600–799     520   8.4% ███
+  800–999     267   4.3% ██
+ 1000–1499    333   5.3% ██
+ 1500–1999    109   1.8% █
+ 2000–2999     64   1.0% 
+ 3000+         16   0.3% 
+```
+
+### Fit in one chunk, and procedure boundaries
+
+A **procedure block** is a heuristic (DEC-039): a line ending in `:` followed by two or more sentences that open with an imperative verb from a fixed list. It exists because the frozen text has no list markers — the source's numbered lists arrive as "To do X:\nClick A. Click B." — so the literal numbered-line count the story asks for is also reported, and is tiny. A block is **cut** when no single chunk contains all of it, header included; with overlap, straddling a stride boundary is not a cut if one of the two overlapping chunks still holds the whole block.
+
+- Articles with a literal numbered line (`1.` / `1)`): **21** (0.3%); with two or more: 5 (0.1%).
+- Articles with at least one procedure block: **2,350** (37.8%); 5,936 blocks in total, median 32 words, p90 55, max 144.
+
+| Chunk config (words) | chunks | articles that fit in one chunk | procedure blocks cut | blocks longer than the overlap (eligible to be cut) | blocks longer than a chunk | articles with a cut block |
+|---|---|---|---|---|---|---|
+| 600/100 | 8,218 | 4,915 (79.0%) | 0 (0.0%) | 20 | 0 | 0 (0.0%) |
+| 600/0 | 8,036 | 4,915 (79.0%) | 160 (2.7%) | 5,936 | 0 | 154 (2.5%) |
+| 512/0 | 8,694 | 4,560 (73.3%) | 210 (3.5%) | 5,936 | 0 | 199 (3.2%) |
+
+A block no longer than the overlap cannot be cut: whichever stride boundary it straddles, one of the two chunks that share the overlap holds all of it. The "eligible" column is therefore the ceiling on the cut count for that config.
+
+### By article type
+
+| Type | n | words median | words p90 | words max | tokens median | literal numbered line | procedure block | blocks | block words median / max |
+|---|---|---|---|---|---|---|---|---|---|
+| article | 4,109 | 409 | 1091 | 6,653 | 515 | 20 (0.5%) | 2,309 (56.2%) | 5,891 | 32 / 144 |
+| feature_request | 2,049 | 56 | 94 | 846 | 71 | 0 (0.0%) | 35 (1.7%) | 39 | 39 / 77 |
+| known_issue | 63 | 30 | 121 | 264 | 37 | 1 (1.6%) | 6 (9.5%) | 6 | 24 / 63 |
+
+| Type | chunk config | chunks | fit in one chunk | blocks cut | articles with a cut block |
+|---|---|---|---|---|---|
+| article | 600/100 | 6,104 | 2,805 (68.3%) | 0 (0.0%) | 0 (0.0%) |
+| article | 600/0 | 5,922 | 2,805 (68.3%) | 160 (2.7%) | 154 (3.8%) |
+| article | 512/0 | 6,580 | 2,450 (59.6%) | 210 (3.6%) | 199 (4.8%) |
+| feature_request | 600/100 | 2,051 | 2,047 (99.9%) | 0 (0.0%) | 0 (0.0%) |
+| feature_request | 600/0 | 2,051 | 2,047 (99.9%) | 0 (0.0%) | 0 (0.0%) |
+| feature_request | 512/0 | 2,051 | 2,047 (99.9%) | 0 (0.0%) | 0 (0.0%) |
+| known_issue | 600/100 | 63 | 63 (100.0%) | 0 (0.0%) | 0 (0.0%) |
+| known_issue | 600/0 | 63 | 63 (100.0%) | 0 (0.0%) | 0 (0.0%) |
+| known_issue | 512/0 | 63 | 63 (100.0%) | 0 (0.0%) | 0 (0.0%) |
+
+<!-- corpus-profile:c852878d74a8 end -->

@@ -386,3 +386,28 @@ Derived from the prevention rules below. Run through it and say in chat that you
   must condition on what the generator was given. Retrieval outcome is an input to
   every generation metric, not a separate axis.
 - **Added to preflight:** yes
+
+## MIS-013 — P1-02's "numbered step lists" do not exist in the frozen text
+- **Date:** 2026-09-12
+- **Severity:** Low — caught before implementation by preflight item 1; no results
+  affected.
+- **What happened:** The Phase 1 handover asks for the count of articles containing
+  numbered step lists and the number of chunk boundaries that land inside one. The
+  WixQA extraction stripped ordered-list markers from `contents`: 21 of 6,221 articles
+  have a `1.`-style line, 5 have two. Procedures are there — 2,350 articles (37.8%)
+  have a "To do X:" header followed by imperative sentences — but not as numbered
+  lists. Implemented literally, the story would have recorded 0.3% and a boundary
+  count near zero, and Phase 2's structure-aware chunker would have had no "before".
+- **How it was caught:** Counting the pattern on the corpus before writing the
+  profiler, as MIS-001 requires. The first article inspected showed the shape.
+- **Root cause:** Same as MIS-001 and MIS-002: a handover premise about the data's
+  format, written without looking at the frozen text.
+- **Impact:** None. Half a day would have gone to a metric that measured extraction.
+- **Fix applied:** The profile reports the literal count *and* a heuristic
+  procedure-block count with a fixed, documented definition (DEC-039). The
+  heuristic's agreement with the source HTML is an open question (OQ-020), not a
+  claim.
+- **Prevention rule:** Already preflight item 1. This entry exists because it is the
+  third time the same premise class has appeared in a handover, and the rule is
+  earning its place.
+- **Added to preflight:** already there (item 1)

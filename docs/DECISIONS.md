@@ -1110,3 +1110,80 @@ support a distributional claim, and the range is the conservative reading.
     point on identical input.
 - **Revisit if:** judge, provider, Ragas version, subsample or generator changes; or
   if a fourth-plus replicate on any config shows a range outside these floors.
+
+## DEC-038 — Reconcile the chunk config at 600 words / 100 overlap for both controls
+- **Date:** 2026-09-12
+- **Decided by:** Joint — the Phase 1 handover (Krutik) names 600/100 as the default
+  and 512/0 as acceptable if there is a reason to prefer it; Claude looked for such a
+  reason, found none, and took the default. Krutik has not been asked separately.
+- **Status:** Active
+- **Context:** P1-01. The Phase 0 sparse baseline EXP-0001 was run on 512-word
+  chunks with no overlap; the Phase 1 dense control is specified at 600/100. Two
+  controls that differ in chunking *and* retrieval method cannot answer "does dense
+  beat lexical here?" — the question Phase 1 exists to set up.
+- **Options considered:**
+  1. Keep 512/0 and run the dense control on it — keeps EXP-0001 as the control
+     unchanged. Rejected only because the handover prefers 600/100 and nothing in the
+     corpus profile argues against it; a Tier 1 BM25 re-run costs seconds and $0.
+  2. Move both controls to 600/100 and re-run BM25 — chosen.
+- **Decision:** Both controls use `fixed_token` with `chunk_size: 600`,
+  `overlap: 100`, in **whitespace words** (DEC-005 stands; 600 words is ~760 BPE
+  tokens at the measured 1.265 tokens/word). BM25 is re-run under it as EXP-0003;
+  EXP-0001 is marked SUPERSEDED, its row and numbers kept. `RunConfig`'s default
+  `chunker_params` moves from 512/0 to 600/100 so an omitted field lands on the
+  control; every experiment config still spells it out.
+- **Evidence:** No measured retrieval data — a judgment call on comparability. The
+  corpus profile (`rag corpus profile`, `results/corpus_profile/c852878d74a8.json`)
+  describes what the two configs do to the corpus, and is a characterization, not a
+  quality claim: 600/100 produces 8,218 chunks and 79.0% of articles fit in one chunk;
+  512/0 produces 8,694 and 73.3%. Under 600/100 no procedure block (DEC-039) is cut,
+  because the 100-word overlap is longer than all but 20 of the 5,936 blocks (max 144
+  words); under 512/0, 210 blocks (3.5%) are cut. Whether any of that moves a
+  retrieval metric is what EXP-0003 versus EXP-0001 will show and is not asserted here.
+- **Consequences:** EXP-0001 and EXP-0002 remain valid measurements of their own
+  configs but are no longer the control. Any Phase 1 or later row compares against
+  EXP-0003 (sparse) or the dense control once it exists. EXP-0001's Tier 2 variant is
+  **not** re-run under this decision: P1-01 asks for the sparse control row, and the
+  Tier 2 re-run belongs to P1-07 run 4 once P1-03's distinct-document retrieval
+  exists, so that it is done once rather than twice.
+- **Revisit if:** the Phase 2 chunk-size sweep (OQ-003) is run — then the control
+  becomes whichever config that sweep's comparison family is built on.
+
+## DEC-039 — Procedure blocks are detected by a fixed heuristic, because the frozen text has no list markers
+- **Date:** 2026-09-12
+- **Decided by:** Claude (implementing P1-02); definition is open to Krutik's revision
+- **Status:** Active
+- **Context:** P1-02 asks for "count and fraction of articles containing numbered
+  step lists" and "chunk boundaries that land mid-procedure". Counted before
+  implementing (preflight item 1): **21 of 6,221** articles contain a line starting
+  `1.`/`1)`, and 5 contain two or more. The source's ordered lists lose their markers
+  at extraction; a procedure in `contents` reads "To remove animation:\nClick the
+  element. Click the Animation icon. Click None." The literal count answers the
+  story's question with a number that describes the extraction, not the articles.
+- **Options considered:**
+  1. Report the literal count only — honest and useless as a "before" number.
+  2. Re-freeze with `html_content` and count `<ol>` — needs a new `corpus_hash`
+     (DEC-003) and starts a new comparison family for a profiling number. Rejected.
+  3. Define a text heuristic, report it alongside the literal count, and validate it
+     later — chosen.
+- **Decision:** A **procedure block** is: a header sentence ending in `:` at the end
+  of a line (the text since the previous sentence terminator or newline), followed by
+  two or more consecutive sentences that each open with a verb from the fixed list
+  `IMPERATIVE_VERBS` in `rag/corpus/profile.py`. The header is part of the block. A
+  block is **cut** under a chunk config when no single chunk contains all of it. The
+  literal numbered-line count is reported beside it. Both are labelled as what they
+  are in `EXPERIMENTS.md`; the profile version string (`profile-v1`) is bumped on any
+  change to the definition, and the old block stays.
+- **Evidence:** Counts above, from the frozen corpus. The heuristic was checked by
+  reading ~15 detected blocks and the first three cut blocks under each config; an
+  earlier version that took the whole *line* as the header dragged preceding prose
+  into blocks (articles have a median of three newlines) and was corrected before
+  any number was recorded. Agreement with the source HTML is **untested** (OQ-020).
+- **Consequences:** `tiktoken` is now a declared dependency (it was already installed
+  transitively) for the BPE-token column, using `cl100k_base` as DEC-029 did. The
+  "mid-procedure boundary" number for Phase 2's structure-aware chunker is the
+  heuristic's, and inherits its error; a Phase 2 comparison must use the same
+  `profile-v1` definition on both sides.
+- **Revisit if:** OQ-020 finds the heuristic disagrees with hand reading on more than
+  a handful of a 30-article sample, or Phase 2 re-freezes with markup for its own
+  reasons.

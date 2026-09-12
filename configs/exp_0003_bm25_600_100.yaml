@@ -1,0 +1,26 @@
+# EXP-0003 — the sparse control, re-run under the reconciled Phase 1 chunk config.
+#
+# P1-01: the Phase 0 baseline (EXP-0001) used 512-word chunks with no overlap; the
+# Phase 1 dense control uses 600 words with 100 overlap (DEC-038). Two controls
+# with different chunking would not be comparable, so BM25 is re-run here and
+# EXP-0001 is marked SUPERSEDED. Differs from exp_0001_baseline.yaml on exactly
+# one axis: chunker_params. "Word" is a whitespace token (DEC-005); 600 words is
+# ~760 BPE tokens (DEC-029).
+#
+# Still top-5 *chunks*, not top-5 distinct documents — that change is P1-03 and
+# gets its own row.
+name: EXP-0003 sparse control — BM25, fixed-600/100, top-5, Tier 1, dev
+split: dev
+eval_tier: tier1
+retriever: bm25
+retriever_params:
+  k1: 1.5
+  b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+top_k: 5
+doc_pooling: max
+seed: 1
