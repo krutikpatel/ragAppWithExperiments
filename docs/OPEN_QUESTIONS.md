@@ -260,6 +260,17 @@ citation recall and step coverage (deterministic) — faithfulness only if the d
 clears its floor (DEC-037). Needs a real judge first (DEC-018).
 **Status:** open.
 
+## OQ-023 — How much do hosted query embeddings move a dense run, and does it matter beyond one question?
+Measured on EXP-0005: three runs of the same config against the cached index gave
+strict recall@5 0.715 / 0.715 / 0.720; only 38–47 of 200 full rankings were identical,
+183–188 top-5 sets were. So DeepInfra's `qwen3-embedding-8b` is not byte-deterministic
+on queries, and a dense run carries a ~0.005 floor on recall metrics that BM25 does not.
+**Decided by:** whether any Phase 2 dense-vs-dense delta lands within 0.005; if one does,
+run three replicates before calling it. Also worth one probe: is the *index* side
+deterministic too (re-embed 200 chunks, compare vectors)? If not, two index builds of the
+same config are two different families.
+**Status:** open — floor recorded; index-side determinism unprobed.
+
 ---
 
 ## External claims to test, not to cite

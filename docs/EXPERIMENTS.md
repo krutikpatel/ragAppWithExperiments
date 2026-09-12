@@ -10,6 +10,7 @@ produced one.
 | EXP-0002 | `run_20260911_051322_3bcb` | 2026-09-11 | chunking | whole documents (paper's retrieval config) | 0.410 | 0.500 | 0.378 | 0.329 (n=160) | — | 21 | 0.0000 | VALID | [→](experiments/EXP-0002.md) |
 | EXP-0003 | `run_20260912_213248_2471` | 2026-09-12 | control | BM25, fixed-600/100, top-5 chunks, Tier 1, dev (P1-01) | **0.410** | 0.505 | 0.379 | 0.329 (n=160) | — | 31 | 0.0000 | SUPERSEDED (EXP-0004, DEC-040) | [→](experiments/EXP-0003.md) |
 | EXP-0004 | `run_20260912_215235_ff2f` | 2026-09-12 | control | **sparse control**: BM25, 600/100, top-5 **distinct docs**, pool 50, Tier 1, dev (P1-07 run 4). Collapse ratio 1.088 mean / 1.20 p90, exhaustion 0 | **0.410** | 0.505 | 0.379 | 0.329 (n=160) | — | 34 | 0.0000 | VALID | [→](experiments/EXP-0004.md) |
+| EXP-0005 | `run_20260912_222538_b1dc` (+2 replicates) | 2026-09-12 | control | **dense control**: `qwen3-embedding-8b` (DeepInfra), 600/100, top-5 distinct docs, pool 50, Tier 1, dev (P1-07 run 1). vs EXP-0004: 70 gained / 9 lost; spread 0.005 over 3 runs | **0.715** | 0.815 | 0.629 | 0.557 (n=160) | — | 665 (replicate; 2441 with retries) | 0.0000004 | VALID | [→](experiments/EXP-0005.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -36,6 +37,13 @@ Column notes:
 - **EXP-0003 is SUPERSEDED by EXP-0004** (DEC-040): same ranking, same numbers, but
   `top_k` now counts distinct documents and the collapse ratio is recorded. One
   sparse control row, not two.
+- **EXP-0005's $/query is the exact provider-reported query-embedding cost** (Tier 1
+  dense runs are no longer free); the one-time index build ($0.031) is in the detail
+  file, not amortised into the column. A VOID index-build attempt
+  (`run_20260912_222345_671e`, MIS-014) precedes it and stays in the store.
+- **Dense spread is not zero.** Hosted query embeddings vary call to call; three runs
+  of EXP-0005 ranged 0.005 on strict recall@5 (OQ-023). Any dense delta at or under
+  one question is within that.
 
 <!-- corpus-profile:c852878d74a8 start -->
 ## Corpus profile — characterization, not an experiment (profile-v1)

@@ -423,7 +423,9 @@ prompts/            versioned YAML, addressed by (id, version). answer.yaml only
                     Content hashes are pinned in tests/test_prompts.py, so an edit
                     without a version bump fails the suite.
 configs/            experiment configs. exp_NNNN_*.yaml are experiments and are
-                    committed BEFORE their run so git_sha is clean. smoke_toy*.yaml
+                    committed BEFORE their run so git_sha is clean. baseline_dense.yaml
+                    is the dense control (EXP-0005) that Phase 2 diffs against (P1-09);
+                    exp_0004_bm25_distinct_docs.yaml is the sparse control. smoke_toy*.yaml
                     and tier2_smoke.yaml are harness smoke tests, not experiments.
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
@@ -470,7 +472,7 @@ Two notes on where things live:
 | Baseline retriever | `rank-bm25` (Okapi) | tokenizer is ours: lowercase `[a-z0-9]+`, nothing else |
 | Corpus profiling | `tiktoken` (`cl100k_base`) | BPE token counts for `rag corpus profile` only; never on the retrieval path |
 | Dense index | `numpy` | brute-force cosine; no ANN, nothing approximate to record |
-| Local embeddings | `sentence-transformers` — _not yet declared_ | the P1-04 backend; added to `pyproject` with the model decision, since torch is ~2 GB |
+| Local embeddings | `sentence-transformers` — backend built, **not declared** | DEC-041 chose hosted; the local backend stays for Phase 2 and gets declared when a story uses it |
 | Results store | SQLite | `runs` and `run_questions` tables |
 | LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. Chat at `/chat/completions`, embeddings at `/embeddings` (models listed at `/embeddings/models`, NOT `/models`) |
 | Judged metrics | `ragas==0.4.3` (exact pin) | metric library ONLY. Not its dataset or experiment layer |
@@ -533,7 +535,7 @@ Rules that outlive any particular library:
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
 | Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030, DEC-034 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Judge calls pin `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Real rate is Cerebras' $0.350/$0.750, not the model-level $0.037/$0.170**: measured **~$0.84 per 100-question Tier 2 run** (DEC-035 corrects DEC-034's $0.48). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
 | Embedding (Ragas `answer_relevance`) | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
-| Embedding (dense retrieval) | _not chosen_ — P1-04 asks for a local sentence-transformers model | — | Decision pending with Krutik. The handover's bge-base / e5-base classes cap at 512 tokens and would truncate 36.7% of the 600/100 chunks; DEC-027 rejected that for the hosted model. The `sentence_transformers` backend and prefix table are built; the config waits on the model id and pinned revision. |
+| Embedding (dense retrieval) | `qwen/qwen3-embedding-8b` **pinned to DeepInfra** | DEC-041 | Same model as the Ragas embedder; Krutik chose hosted over the handover's local option. **Provider is part of the index key**: DeepInfra and Nebius return different vectors for the same input. Index: 8,218 × 4096 float32 = 134.6 MB, ~20 min and $0.031 to build (EXP-0005), cached under `indexes/`. Queries cost ~$0.0000004 each and are **not byte-deterministic** — three runs ranged 0.005 on strict recall@5 (OQ-023). `qwen3` prefix: instruct prefix on queries, none on passages. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
 An empty row is the honest state, not an omission to paper over. The benchmark's gold

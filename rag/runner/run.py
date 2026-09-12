@@ -379,7 +379,8 @@ def _execute(
     # separately in retriever_meta rather than folded into a per-query figure.
     query_cost = retriever.query_cost_usd()
     if config.eval_tier is EvalTier.TIER_1:
-        aggregate["cost_per_query_usd"] = round(query_cost / len(rows), 6) if rows else 0.0
+        # 8 places: a query embedding costs ~$0.0000004 and would round to zero at 6.
+        aggregate["cost_per_query_usd"] = round(query_cost / len(rows), 8) if rows else 0.0
         aggregate["cost_per_query_source"] = (
             "exact: Tier 1 makes no LLM calls" if query_cost == 0
             else "exact: provider-reported query embedding cost; index build cost in retriever_meta"

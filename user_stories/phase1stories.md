@@ -143,18 +143,21 @@ Acceptance criteria:
 
 ### P1-04 — Embedding and indexing
 
-> **Status: BLOCKED on model choice** (2026-09-12) — everything not depending on the
-> model is built and tested (`tests/test_embedding.py`); the model id + pinned
-> revision is Krutik's call (CLAUDE.md §10). **Flag:** bge-base / e5-base cap at 512
-> tokens and 36.7% of the 600/100 chunks exceed that (preflight item 19).
+> **Status: DONE** (2026-09-12) — model chosen by Krutik: **hosted**
+> `qwen/qwen3-embedding-8b` pinned to DeepInfra (DEC-041), departing from the story's
+> "local sentence-transformers" criterion because bge-base / e5-base cap at 512 tokens
+> and 36.7% of the 600/100 chunks exceed that (preflight item 19). The local backend is
+> built and tested but undeclared. Index built in EXP-0005: 1,213 s, 134.6 MB, $0.031.
 > - [x] `Embedder.embed_texts(texts, input_type="query"|"passage")`; unknown family refused
 > - [x] test asserts the prefix is applied per family (e5, bge-en, nomic, qwen3, none)
 > - [x] MISTAKES.md seeded (preflight item 18)
 > - [x] index key = (corpus_hash, normalization_version, chunker_id, model_id, revision,
 >       prefix_convention); test asserts it depends on nothing else; recorded on the run row
 > - [x] build time and size logged in `indexes/<key>/index.meta.json` and `runs.retriever_meta`
-> - [ ] model chosen and revision pinned (DEC pending); `sentence-transformers` declared
-> - [ ] real index built; build time and size recorded from a run
+> - [x] model chosen and pinned — provider pin instead of HF revision for a hosted model
+>       (DEC-041; providers return different vectors, measured)
+> - [x] real index built; build time and size recorded on the run row (EXP-0005)
+> - [~] `sentence-transformers` NOT declared — hosted chosen; local backend kept for Phase 2
 
 **As the baseline, I need one embedding model, indexed reproducibly.**
 
@@ -210,6 +213,11 @@ Acceptance criteria:
 ---
 
 ### P1-07 — Baseline runs
+
+> **Status: 2 of 4 runs done** (2026-09-12) — run 1 dense Tier 1 = EXP-0005
+> (`run_20260912_222538_b1dc`, strict R@5 0.715); run 4 sparse Tier 1 = EXP-0004
+> (`run_20260912_215235_ff2f`, 0.410). Runs 2 (dense Tier 2) and 3 (unanswerable)
+> wait on P1-05 (the frozen prompt) and P1-06. `test` untouched.
 
 **As the project, I need the control runs recorded.**
 
