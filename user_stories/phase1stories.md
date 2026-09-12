@@ -53,9 +53,13 @@ If a story appears to need one of these to pass, stop and flag it.
 
 ### P1-01 — Reconcile the chunk config with the Phase 0 baseline
 
-> **Status: IN PROGRESS** (2026-09-12) — DEC-038 chose 600/100 words; `RunConfig`
-> default moved; `configs/exp_0003_bm25_600_100.yaml` committed. Re-run and
-> EXP-0001 supersession pending the run.
+> **Status: DONE** (2026-09-12)
+> - [x] chunk config chosen and recorded: 600 words / 100 overlap (DEC-038)
+> - [x] sparse baseline re-run: EXP-0003, `run_20260912_213248_2471`, strict R@5 0.410
+>       vs EXP-0001's 0.405 (6 gained, 5 lost, 189 unchanged)
+> - [x] EXP-0001 row kept and marked SUPERSEDED in `EXPERIMENTS.md` and its detail file
+> - [x] `RunConfig` default `chunker_params` is now 600/100
+> - [ ] "differ only in retrieval method" holds once the dense control exists (P1-04/07)
 
 **As the project, I need the sparse and dense baselines to differ in exactly one dimension, so
 "does dense beat lexical here?" is an answerable question rather than a confounded one.**
