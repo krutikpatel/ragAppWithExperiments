@@ -393,8 +393,12 @@ rag/
                     unanswerable.py (the authored refusal set)
   chunking/         base.py (Chunker, Chunk, FixedTokenChunker),
                     index_map.py (ChunkIndex — persists chunk_id -> doc_id)
-  retrieval/        base.py (Retriever, RetrievalResult), pooling.py (doc_pooling),
-                    bm25.py (the baseline; rank-bm25 Okapi), toy.py (smoke tests only)
+  retrieval/        base.py (Retriever, RetrievalResult — ranking for scoring plus a
+                    DocSelection context of top_k DISTINCT documents, P1-03),
+                    pooling.py (doc_pooling; select_distinct_docs + collapse ratio),
+                    bm25.py (the sparse control; rank-bm25 Okapi), dense.py (cosine
+                    over a numpy index cached under indexes/<key>/, key = provenance
+                    tuple, P1-04), toy.py (smoke tests only)
   eval/             qrels.py (binary document-level qrels + alignment check),
                     retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
                     generation_metrics.py (citations, refusal — no LLM calls),
@@ -407,7 +411,10 @@ rag/
                     diff.py (rag diff), registry.py (retrievers by name),
                     subsample.py (fixed Tier 2 subsample), cost.py (pre-run estimate),
                     test_openings.py (appends each test-split opening to DECISIONS.md)
-  embedding/        base.py — Embedder interface + OpenRouter embedder (Phase 1 seam)
+  embedding/        base.py — Embedder interface with explicit input_type (query |
+                    passage) and a per-family prefix table that REFUSES unknown
+                    models; backends: sentence_transformers (local, pinned revision)
+                    and openrouter
   reranking/        base.py — Reranker interface ONLY; a test fails if an
                     implementation appears without a story
 
@@ -418,6 +425,9 @@ prompts/            versioned YAML, addressed by (id, version). answer.yaml only
 configs/            experiment configs. exp_NNNN_*.yaml are experiments and are
                     committed BEFORE their run so git_sha is clean. smoke_toy*.yaml
                     and tier2_smoke.yaml are harness smoke tests, not experiments.
+indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
+                    GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
+                    chunker_id, model_id, revision, prefix_convention)
 results/            runs.sqlite — the results store. GITIGNORED.
   corpus_profile/   <key>.json written by `rag corpus profile`; the EXPERIMENTS.md
                     profile block mirrors it
@@ -459,6 +469,8 @@ Two notes on where things live:
 | IR metrics | `ranx` | never hand-roll recall/nDCG/MRR |
 | Baseline retriever | `rank-bm25` (Okapi) | tokenizer is ours: lowercase `[a-z0-9]+`, nothing else |
 | Corpus profiling | `tiktoken` (`cl100k_base`) | BPE token counts for `rag corpus profile` only; never on the retrieval path |
+| Dense index | `numpy` | brute-force cosine; no ANN, nothing approximate to record |
+| Local embeddings | `sentence-transformers` — _not yet declared_ | the P1-04 backend; added to `pyproject` with the model decision, since torch is ~2 GB |
 | Results store | SQLite | `runs` and `run_questions` tables |
 | LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. Chat at `/chat/completions`, embeddings at `/embeddings` (models listed at `/embeddings/models`, NOT `/models`) |
 | Judged metrics | `ragas==0.4.3` (exact pin) | metric library ONLY. Not its dataset or experiment layer |
@@ -505,7 +517,12 @@ Rules that outlive any particular library:
   2.86M tokens (mean 329, p95 644, max 1,326). **1.27 tokens per whitespace word.**
   (DEC-029 corrects DEC-005)
 - **The control chunk config is 600 words / 100 overlap** (DEC-038) — 8,218 chunks;
-  79.0% of articles fit in one chunk. The frozen text has **no list markers**:
+  79.0% of articles fit in one chunk. **36.7% of those chunks exceed 512 tokens**
+  (p95 748, max 1,336): a 512-context embedding model truncates a third of the
+  index silently (preflight item 19).
+- **`top_k` is distinct documents, not chunks** (DEC-040). The walk scans at most
+  `candidate_pool` (50) ranked chunks; one chunk per document reaches the generator;
+  the collapse ratio and exhaustion are recorded per question. The frozen text has **no list markers**:
   procedures appear as "To do X:\nClick A. Click B." and are counted by the DEC-039
   heuristic, never by `1.`-style lines (21 articles have one). (MIS-013)
 
@@ -515,7 +532,8 @@ Rules that outlive any particular library:
 |---|---|---|---|
 | Generator | `openai/gpt-5-nano` | DEC-017 | Held constant across configs. ~$0.06 per Tier 2 dev run. Watch that it obeys the `[doc:<id>]` citation format. |
 | Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030, DEC-034 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Judge calls pin `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Real rate is Cerebras' $0.350/$0.750, not the model-level $0.037/$0.170**: measured **~$0.84 per 100-question Tier 2 run** (DEC-035 corrects DEC-034's $0.48). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
-| Embedding | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
+| Embedding (Ragas `answer_relevance`) | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
+| Embedding (dense retrieval) | _not chosen_ — P1-04 asks for a local sentence-transformers model | — | Decision pending with Krutik. The handover's bge-base / e5-base classes cap at 512 tokens and would truncate 36.7% of the 600/100 chunks; DEC-027 rejected that for the hosted model. The `sentence_transformers` backend and prefix table are built; the config waits on the model id and pinned revision. |
 | Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
 
 An empty row is the honest state, not an omission to paper over. The benchmark's gold

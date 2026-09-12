@@ -49,9 +49,15 @@ class RunConfig:
     # How many chunks are ranked for *scoring*. Metrics are reported at k up to 20
     # documents, and you cannot measure recall@20 having retrieved 5 — the number
     # would silently be recall@5 wearing a different label. Depth is therefore
-    # separate from `top_k`, which is how many chunks reach the generator's context.
+    # separate from `top_k`, which is how many **distinct documents** reach the
+    # generator's context (P1-03, DEC-040). It was "chunks" before EXP-0004; five
+    # chunks of one long article are one document, and gold is document-level.
     retrieval_depth: int = 100
     top_k: int = 5
+    # How far down the ranked chunk list the document walk may go to find `top_k`
+    # distinct documents. Stopping here without reaching top_k is recorded per
+    # question as exhaustion, not hidden.
+    candidate_pool: int = 50
     doc_pooling: str = DEFAULT_POOLING
 
     # Tier 2 only. Empty by default: model choice is Krutik's call, not a default
@@ -92,10 +98,15 @@ class RunConfig:
             raise ValueError(f"unknown doc_pooling {self.doc_pooling!r}; known: {POOLING_RULES}")
         if self.top_k < 1:
             raise ValueError("top_k must be at least 1")
-        if self.retrieval_depth < self.top_k:
+        if self.candidate_pool < self.top_k:
             raise ValueError(
-                f"retrieval_depth ({self.retrieval_depth}) must be at least top_k "
-                f"({self.top_k}): the context cannot hold chunks that were never ranked"
+                f"candidate_pool ({self.candidate_pool}) must be at least top_k "
+                f"({self.top_k}): fewer chunks than documents cannot yield top_k documents"
+            )
+        if self.retrieval_depth < self.candidate_pool:
+            raise ValueError(
+                f"retrieval_depth ({self.retrieval_depth}) must be at least candidate_pool "
+                f"({self.candidate_pool}): the walk cannot scan chunks that were never ranked"
             )
         if self.eval_tier.uses_llm and not self.harness_smoke_test:
             missing = [

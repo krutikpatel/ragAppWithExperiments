@@ -1,0 +1,23 @@
+# EXP-0004 — the sparse control with document-level top_k (P1-03, DEC-040).
+#
+# P1-07 run 4: "Sparse (BM25), 5 distinct docs, Tier 1, dev". Same retrieval as
+# EXP-0003 — the ranking and its scoring do not change — so the Tier 1 metrics are
+# expected to reproduce EXP-0003 exactly; what this run adds is the measured
+# chunk→document collapse ratio and pool-exhaustion rate, and a context that a Tier 2
+# run would build from five distinct articles rather than five chunks.
+name: EXP-0004 sparse control — BM25, fixed-600/100, top-5 distinct docs, pool 50, Tier 1, dev
+split: dev
+eval_tier: tier1
+retriever: bm25
+retriever_params:
+  k1: 1.5
+  b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

@@ -1187,3 +1187,47 @@ support a distributional claim, and the range is the conservative reading.
 - **Revisit if:** OQ-020 finds the heuristic disagrees with hand reading on more than
   a handful of a 30-article sample, or Phase 2 re-freezes with markup for its own
   reasons.
+
+## DEC-040 — `top_k` counts distinct documents, found by walking a capped candidate pool
+- **Date:** 2026-09-12
+- **Decided by:** Claude (implementing P1-03; the story specifies the mechanism, the
+  three details below are mine)
+- **Status:** Active
+- **Context:** Gold is document-level and 40 of 200 `dev` questions need two or three
+  distinct articles. The generator's context was the first `top_k` **chunks** of the
+  ranking, and adjacent chunks of one long article collapse into one document, so a
+  five-chunk context could hold two articles and structurally fail a three-document
+  question no matter how good the ranking. Phase 2 would then be tuning embeddings
+  against a granularity problem.
+- **Decision:**
+  1. `top_k` is the number of **distinct documents** in the context. The retriever
+     walks its ranked chunk list, keeps the first chunk seen per document, and stops
+     at `top_k` documents or after `candidate_pool` chunks (default **50**; must
+     satisfy `top_k ≤ candidate_pool ≤ retrieval_depth`). Stopping on the pool is
+     recorded per question as `pool_exhausted`, never hidden.
+  2. **One chunk per document reaches the generator** — the document's best-ranked
+     chunk, which under `max` pooling is the chunk that scored it. Keeping every
+     scanned chunk of a selected document would make the context size depend on
+     the collapse ratio and is a different design; it is OQ-022, not this decision.
+  3. **Collapse ratio** = chunks scanned ÷ distinct documents returned, per question;
+     reported as mean and p90 per run and per slice (`collapse_ratio`,
+     `collapse_ratio__p90`). `gold_in_context` (every gold document reached the
+     generator; `None` where there is no gold) is recorded per question because it
+     is the input-side fact OQ-019's refusal metrics need. Neither is a retrieval
+     quality metric.
+  4. Scoring is unchanged: retrieval metrics are still computed over the `max`-pooled
+     document ranking at `retrieval_depth` (DEC-012, DEC-013). The walk governs
+     what the generator sees, not what `ranx` scores. Tier 1 numbers of a config
+     therefore do not move when this lands; the Tier 2 context does.
+- **Evidence:** No measured data on the ratio yet — EXP-0004 measures it. The
+  structural argument is arithmetic: k chunks from fewer than k documents cannot
+  satisfy a k-document gold set.
+- **Consequences:** `candidate_pool` is a new `RunConfig` field, so every config's
+  `config_hash` changes; comparability is unaffected (it is keyed on corpus, split,
+  normalization, pooling and judge, not on config hash). `run_questions` gains
+  `context_chunk_ids`; `runs` gains `retriever_meta`. Existing rows keep NULL.
+  EXP-0003's Tier 1 metrics are reproduced exactly by EXP-0004; the rows differ in
+  what a Tier 2 run of each would feed the generator.
+- **Revisit if:** the measured p90 collapse ratio makes 50 too small (exhaustion rate
+  above a few percent on `dev`), or OQ-022 shows one-chunk-per-document costs
+  answer quality.

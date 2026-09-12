@@ -12,6 +12,8 @@ DOCS_DIR = REPO_ROOT / "docs"
 PROMPTS_DIR = REPO_ROOT / "prompts"
 CONFIGS_DIR = REPO_ROOT / "configs"
 RESULTS_DIR = REPO_ROOT / "results"
+# Dense vector indexes, keyed by provenance tuple (P1-04). Gitignored, rebuildable.
+INDEXES_DIR = REPO_ROOT / "indexes"
 
 CORPUS_PARQUET = FROZEN_DIR / "corpus.parquet"
 CORPUS_META = FROZEN_DIR / "corpus.meta.json"

@@ -216,6 +216,20 @@ def _run(
     return row
 
 
+def _selection_summary(per_question: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Run-level collapse ratio (mean, p90) and pool exhaustion rate (P1-03)."""
+    ratios = sorted(
+        row["collapse_ratio"] for row in per_question.values() if row.get("collapse_ratio") is not None
+    )
+    exhausted = [row["pool_exhausted"] for row in per_question.values() if "pool_exhausted" in row]
+    summary: dict[str, Any] = {
+        "collapse_ratio_mean": (sum(ratios) / len(ratios)) if ratios else None,
+        "collapse_ratio_p90": ratios[int(0.9 * (len(ratios) - 1))] if ratios else None,
+        "pool_exhaustion_rate": (sum(exhausted) / len(exhausted)) if exhausted else None,
+    }
+    return summary
+
+
 def _split_hash(split: str) -> str:
     from rag.dataset.loader import describe_split
 
@@ -268,8 +282,10 @@ def _execute(
         chunk_to_doc=index.chunk_to_doc,
         chunk_text=chunk_text,
         doc_pooling=config.doc_pooling,
+        index=index,
         **config.retriever_params,
     )
+    store.update_run(run_id, retriever_meta=json.dumps(retriever.provenance(), default=str))
 
     import time
 
@@ -278,7 +294,13 @@ def _execute(
     retrieval_latency_ms: dict[str, int] = {}
     for row in rows:
         started = time.perf_counter()
-        result = retriever.retrieve(row["question_id"], row["question"], top_k=config.retrieval_depth)
+        result = retriever.retrieve(
+            row["question_id"],
+            row["question"],
+            top_k=config.retrieval_depth,
+            k_docs=config.top_k,
+            candidate_pool=config.candidate_pool,
+        )
         retrieval_latency_ms[row["question_id"]] = int((time.perf_counter() - started) * 1000)
         results.append(result)
     results_by_question = {result.question_id: result for result in results}
@@ -288,6 +310,24 @@ def _execute(
 
     per_question: dict[str, dict[str, Any]] = {row["question_id"]: {} for row in rows}
     aggregate: dict[str, Any] = {}
+
+    # P1-03 — the context is top_k distinct documents. How many chunks the walk
+    # scanned per document found is the collapse ratio; stopping on the pool cap
+    # without reaching top_k is exhaustion. `gold_in_context` is whether every gold
+    # document reached the generator — the input-side fact OQ-019's refusal metrics
+    # need — and is None where there is no gold (the unanswerable split).
+    for row in rows:
+        selection = results_by_question[row["question_id"]].context
+        gold = set(row["gold_doc_ids"])
+        per_question[row["question_id"]].update(
+            {
+                "collapse_ratio": selection.collapse_ratio,
+                "pool_exhausted": float(selection.exhausted),
+                "context_docs": float(len(selection.doc_ids)),
+                "gold_in_context": (float(gold <= set(selection.doc_ids)) if gold else None),
+            }
+        )
+    aggregate.update(_selection_summary(per_question))
 
     # Tier 1 — retrieval only. Questions with no gold document are not scorable
     # here and are excluded from qrels (DEC-009); the unanswerable split therefore
@@ -343,7 +383,7 @@ def _execute(
         else "estimate: pre-run cost estimate / questions"
     )
 
-    slice_report = aggregate_by_slice(per_question, slices)
+    slice_report = aggregate_by_slice(per_question, slices, percentiles={"collapse_ratio": (90,)})
     aggregate["slice_meta"] = slices.meta
 
     store.add_questions(
@@ -353,6 +393,9 @@ def _execute(
                 "question_id": row["question_id"],
                 "retrieved_doc_ids": json.dumps(results_by_question[row["question_id"]].doc_ids),
                 "retrieved_chunk_ids": json.dumps(results_by_question[row["question_id"]].chunk_ids),
+                "context_chunk_ids": json.dumps(
+                    [cid for cid, _ in results_by_question[row["question_id"]].context.chunks]
+                ),
                 "scores": json.dumps([c.score for c in results_by_question[row["question_id"]].chunks]),
                 "gold_doc_ids": json.dumps(list(row["gold_doc_ids"])),
                 "metrics_json": json.dumps(per_question[row["question_id"]]),
@@ -400,10 +443,10 @@ def _tier2(
     generated: dict[str, Any] = {}
     for row in rows:
         question_id = row["question_id"]
-        # Scoring saw `retrieval_depth` chunks; the generator sees `top_k` of them.
-        context = assembler.assemble(
-            results_by_question[question_id].chunks[: config.top_k], chunk_text
-        )
+        # Scoring saw `retrieval_depth` chunks; the generator sees one chunk per
+        # selected document — `top_k` distinct documents (P1-03), not top_k chunks.
+        context_chunks = results_by_question[question_id].context_chunks
+        context = assembler.assemble(context_chunks, chunk_text)
         answer = generator.generate(row["question"], context.text)
 
         per_question[question_id].update(
@@ -416,7 +459,7 @@ def _tier2(
         )
         # Ragas scores against the retrieved contexts as a list, not one blob:
         # faithfulness decomposes claims and attributes them to individual contexts.
-        contexts = [chunk_text[c.chunk_id] for c in results_by_question[question_id].chunks[: config.top_k]]
+        contexts = [chunk_text[c.chunk_id] for c in context_chunks]
         scores = judge.score(
             question=row["question"],
             answer=answer.text,

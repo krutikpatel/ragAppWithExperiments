@@ -14,6 +14,7 @@ why it may not be left implicit. See tests/test_pooling.py.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 
 DEFAULT_POOLING = "max"
 
@@ -60,3 +61,79 @@ def pool_chunks_to_docs(
     pooled = [(doc_id, pool(values)) for doc_id, values in scores.items()]
     pooled.sort(key=lambda item: (-item[1], best_rank[item[0]]))
     return pooled
+
+
+# --- P1-03: k distinct documents, not k chunks -------------------------------
+
+
+@dataclass(frozen=True)
+class DocSelection:
+    """The generator's context, chosen at document granularity.
+
+    `chunks` holds one (chunk_id, score) per selected document — the document's
+    best-ranked chunk, which under `max` pooling is the chunk that gave the document
+    its score. `chunks_scanned` is how far down the ranked chunk list the walk went
+    to find them; divided by the documents found it is the **collapse ratio**, the
+    first-class measure of how many chunks fold into one article on this corpus.
+    """
+
+    chunks: list[tuple[str, float]]
+    doc_ids: list[str]
+    chunks_scanned: int
+    candidate_pool: int
+    k: int
+
+    @property
+    def exhausted(self) -> bool:
+        """Fewer than `k` distinct documents were found within the candidate pool."""
+        return len(self.doc_ids) < self.k
+
+    @property
+    def collapse_ratio(self) -> float | None:
+        """chunks scanned ÷ distinct documents returned. None if nothing was found."""
+        if not self.doc_ids:
+            return None
+        return self.chunks_scanned / len(self.doc_ids)
+
+
+def select_distinct_docs(
+    ranked_chunks: Sequence[tuple[str, float]],
+    chunk_to_doc: dict[str, str],
+    *,
+    k: int,
+    candidate_pool: int,
+) -> DocSelection:
+    """Walk the ranked chunk list until `k` distinct documents are collected.
+
+    Gold is document-level and multi-document questions need two or three *distinct*
+    articles, so a context of five chunks that fold into two articles cannot satisfy
+    them regardless of how good the ranking is. The walk stops at `k` documents or
+    after `candidate_pool` chunks, whichever comes first; stopping on the pool is
+    recorded as exhaustion rather than silently returning fewer documents.
+
+    The first chunk seen for a document is kept as its representative. Under `max`
+    pooling that is the chunk that scored the document; the walk does not re-pool,
+    so the document order here matches `pool_chunks_to_docs(rule="max")` over the
+    same prefix of the ranking.
+    """
+    if k < 1:
+        raise ValueError("k must be at least 1")
+    if candidate_pool < k:
+        raise ValueError(f"candidate_pool ({candidate_pool}) must be at least k ({k})")
+    chosen: list[tuple[str, float]] = []
+    doc_ids: list[str] = []
+    seen: set[str] = set()
+    scanned = 0
+    for chunk_id, score in ranked_chunks[:candidate_pool]:
+        scanned += 1
+        doc_id = chunk_to_doc[chunk_id]
+        if doc_id in seen:
+            continue
+        seen.add(doc_id)
+        chosen.append((chunk_id, score))
+        doc_ids.append(doc_id)
+        if len(doc_ids) == k:
+            break
+    return DocSelection(
+        chunks=chosen, doc_ids=doc_ids, chunks_scanned=scanned, candidate_pool=candidate_pool, k=k
+    )

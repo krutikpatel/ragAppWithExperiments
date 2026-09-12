@@ -51,6 +51,16 @@ Derived from the prevention rules below. Run through it and say in chat that you
 17. **The current judge is a plumbing placeholder (DEC-018).** Faithfulness, answer
    relevance and answer correctness have no trustworthy values until a real judge is
    chosen. Do not put them in EXPERIMENTS.md or NARRATIVE.md.
+18. **e5/bge-style embedding models require query/passage prefixes. Omitting them
+    produces no error, just worse numbers that get misattributed to architecture.**
+    `Embedder.embed_texts` takes `input_type`; a model whose family the prefix table
+    does not know is refused unless `prefix_convention` is set explicitly. Seeded by
+    P1-04 before any dense run; not yet a recorded mistake, and the point is that it
+    never becomes one.
+19. **A 512-token embedding context truncates 36.7% of the 600/100 chunks** (p95 748
+    tokens, max 1,336). Check a candidate model's `max_seq_length` against the chunk
+    token distribution before indexing with it; truncation is silent and lands in the
+    index, not the metrics. (DEC-027 for the hosted model; measured again for P1-04.)
 
 ---
 

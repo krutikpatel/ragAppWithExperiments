@@ -241,6 +241,23 @@ without; count false blocks and missed procedures. Agreement above 90% on both k
 `html_content` would answer it exactly but starts a new comparison family (DEC-003).
 **Status:** open.
 
+## OQ-021 — Is a candidate pool of 50 chunks enough to find 5 distinct documents?
+DEC-040 caps the document walk at 50 chunks. If the collapse ratio on this corpus is
+high, the walk exhausts before reaching five documents and the context is short.
+**Decided by:** `pool_exhaustion_rate` and `collapse_ratio__p90` on `dev`, per run
+(EXP-0004 is the first measurement). Exhaustion under 1% keeps 50; above it, raise the
+cap and re-run the control.
+**Status:** queued — EXP-0004.
+
+## OQ-022 — Should the generator see every retrieved chunk of a selected document, or only its best?
+DEC-040 sends one chunk per document. A long article whose answer spans two chunks
+loses one of them. The alternative keeps all scanned chunks of the selected documents,
+which makes context length depend on the collapse ratio.
+**Decided by:** Tier 2 on the fixed subsample, both variants, same retrieval; judged by
+citation recall and step coverage (deterministic) — faithfulness only if the delta
+clears its floor (DEC-037). Needs a real judge first (DEC-018).
+**Status:** open.
+
 ---
 
 ## External claims to test, not to cite

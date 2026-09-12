@@ -111,6 +111,16 @@ Acceptance criteria — a `rag corpus profile` command emits, and writes into
 
 ### P1-03 — Retrieve k distinct documents, not k chunks
 
+> **Status: DONE** (2026-09-12) — DEC-040; `rag/retrieval/pooling.py::select_distinct_docs`,
+> `RunConfig.candidate_pool` (50), per-question `collapse_ratio` / `pool_exhausted` /
+> `gold_in_context`, run-level mean + p90, per-slice `collapse_ratio__p90`.
+> - [x] `top_k` is document-level; walk stops at k docs or the pool cap
+> - [x] pool cap configurable; exhaustion recorded per question
+> - [x] collapse ratio mean + p90, per run and per slice
+> - [x] unit test: top-5 chunks in 2 docs → 5 distinct docs, ratio 2.5 recorded (`tests/test_distinct_docs.py`)
+> - [x] rationale in DECISIONS.md (DEC-040)
+> - [x] measured on the sparse control: EXP-0004 (see EXPERIMENTS.md)
+
 **As the retriever, I must return 5 distinct documents, because document-level gold with 2–3
 required documents cannot be satisfied by chunks that collapse into fewer documents.**
 
@@ -131,6 +141,19 @@ Acceptance criteria:
 ---
 
 ### P1-04 — Embedding and indexing
+
+> **Status: BLOCKED on model choice** (2026-09-12) — everything not depending on the
+> model is built and tested (`tests/test_embedding.py`); the model id + pinned
+> revision is Krutik's call (CLAUDE.md §10). **Flag:** bge-base / e5-base cap at 512
+> tokens and 36.7% of the 600/100 chunks exceed that (preflight item 19).
+> - [x] `Embedder.embed_texts(texts, input_type="query"|"passage")`; unknown family refused
+> - [x] test asserts the prefix is applied per family (e5, bge-en, nomic, qwen3, none)
+> - [x] MISTAKES.md seeded (preflight item 18)
+> - [x] index key = (corpus_hash, normalization_version, chunker_id, model_id, revision,
+>       prefix_convention); test asserts it depends on nothing else; recorded on the run row
+> - [x] build time and size logged in `indexes/<key>/index.meta.json` and `runs.retriever_meta`
+> - [ ] model chosen and revision pinned (DEC pending); `sentence-transformers` declared
+> - [ ] real index built; build time and size recorded from a run
 
 **As the baseline, I need one embedding model, indexed reproducibly.**
 

@@ -26,6 +26,7 @@ def _ensure_builtins() -> None:
         return
     _BUILTINS_LOADED = True
     import rag.retrieval.bm25  # noqa: F401
+    import rag.retrieval.dense  # noqa: F401
     import rag.retrieval.toy  # noqa: F401
 
 

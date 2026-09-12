@@ -82,6 +82,7 @@ def aggregate_by_slice(
     slices: SliceSet,
     *,
     min_n: int = 1,
+    percentiles: dict[str, tuple[int, ...]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Mean each metric within each slice, carrying the count it was computed over.
 
@@ -89,7 +90,11 @@ def aggregate_by_slice(
     answer with no steps) are excluded from that metric's mean rather than counted
     as zero, and the surviving count travels with the number. A mean over three
     questions is not a finding, and `n` is what lets a reader see that.
+
+    `percentiles` asks for `<metric>__p<N>` alongside the mean for metrics whose
+    tail matters (P1-03 reports the collapse ratio at p90).
     """
+    percentiles = percentiles or {}
     report: dict[str, dict[str, Any]] = {}
     for slice_name, question_ids in slices.members.items():
         rows = [per_question[qid] for qid in question_ids if qid in per_question]
@@ -103,5 +108,8 @@ def aggregate_by_slice(
             metrics[metric] = sum(values) / len(values)
             if len(values) != len(rows):
                 metrics[f"{metric}__n"] = len(values)
+            for p in percentiles.get(metric, ()):
+                ordered = sorted(values)
+                metrics[f"{metric}__p{p}"] = ordered[int(p / 100 * (len(ordered) - 1))]
         report[slice_name] = metrics
     return report

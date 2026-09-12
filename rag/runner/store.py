@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS runs (
     n_questions           INTEGER,
     metrics_json          TEXT,
     slices_json           TEXT,
-    notes                 TEXT
+    notes                 TEXT,
+    retriever_meta        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS run_questions (
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS run_questions (
     question_id        TEXT NOT NULL,
     retrieved_doc_ids  TEXT,
     retrieved_chunk_ids TEXT,
+    context_chunk_ids  TEXT,
     scores             TEXT,
     gold_doc_ids       TEXT,
     metrics_json       TEXT,
@@ -141,6 +143,17 @@ class ResultsStore:
         placeholders = ", ".join("?" for _ in row)
         self.conn.execute(
             f"INSERT INTO runs ({columns}) VALUES ({placeholders})", list(row.values())
+        )
+        self.conn.commit()
+
+    def update_run(self, run_id: str, **fields: Any) -> None:
+        """Set columns on a RUNNING row — provenance that is known only once a
+        component has been built (P1-04 records the index the retriever used)."""
+        if not fields:
+            return
+        assignments = ", ".join(f"{name} = ?" for name in fields)
+        self.conn.execute(
+            f"UPDATE runs SET {assignments} WHERE run_id = ?", [*fields.values(), run_id]
         )
         self.conn.commit()
 
