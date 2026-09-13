@@ -18,7 +18,11 @@ from rag.prompts import load_prompt
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-_CITATION = re.compile(r"\[doc:([0-9a-f]{8,64})\]")
+# Recorded on every run. v1 matched `[doc:<id>]` exactly and dropped `[doc: <id>]`
+# — 4 to 13 citations per 100 answers in the Phase 0 Tier 2 runs (MIS-016). v2
+# tolerates whitespace inside the brackets and a capitalised "Doc" (DEC-043).
+CITATION_PARSER_VERSION = "citation-v2"
+_CITATION = re.compile(r"\[\s*doc\s*:\s*([0-9a-f]{8,64})\s*\]", re.IGNORECASE)
 
 
 @dataclass(frozen=True)

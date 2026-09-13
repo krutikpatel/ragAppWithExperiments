@@ -53,7 +53,16 @@ def test_citation_precision_needs_no_llm_and_matches_the_rendered_ids():
     assert (scores.precision, scores.recall, scores.n_cited) == (0.5, 1.0, 2)
 
 
-def test_spaced_citation_is_not_parsed_today():
-    """MIS-016: `[doc: id]` (with a space) is dropped by the current parser. Pinned
-    so a parser change is a visible decision, not a silent metric shift."""
-    assert extract_citations(f"[doc: {'a' * 64}]") == []
+def test_spaced_and_capitalised_citations_are_parsed():
+    """MIS-016 / DEC-043: `[doc: id]` with a space was dropped by citation-v1 — 4 to 13
+    citations per 100 answers. citation-v2 accepts whitespace and case."""
+    from rag.generation.base import CITATION_PARSER_VERSION
+
+    assert CITATION_PARSER_VERSION == "citation-v2"
+    a = "a" * 64
+    assert extract_citations(f"[doc: {a}]") == [a]
+    assert extract_citations(f"[ doc:{a} ]") == [a]
+    assert extract_citations(f"[Doc: {a}]") == [a]
+    assert extract_citations(f"[doc:{a}] and again [doc: {a}]") == [a]
+    # Not a citation: wrong keyword, or a non-hex id.
+    assert extract_citations("[document: abcdef12] [doc: xyz]") == []

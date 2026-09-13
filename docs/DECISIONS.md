@@ -1090,6 +1090,10 @@ Encoded in `rag/eval/noise_floor.py` with their provenance, and applied by
 | false_refusal_rate | 0.010 |
 | step_coverage | 0.064 |
 
+> **CORRECTED by DEC-043 on 2026-09-12** — the two citation floors were measured with
+> the v1 parser. Under `citation-v2` on the same runs: precision **0.001**, recall
+> **0.018**. `noise_floor.py` carries the v2 values.
+
 **A judged or generated delta at or below its floor is written as "no measurable
 difference".** Not "a slight improvement", not "directionally positive". The range
 is used rather than a standard-deviation multiple because three samples cannot
@@ -1315,3 +1319,37 @@ support a distributional claim, and the range is the conservative reading.
 - **Revisit if:** step coverage stays near zero on questions whose gold documents
   were retrieved (then the matcher, not the format, is the problem — OQ-007), or a
   Phase 2 story measures prompt format as an axis.
+
+## DEC-043 — Citation parser `citation-v2`: accept whitespace inside `[doc: <id>]`; recompute the affected rows
+- **Date:** 2026-09-12
+- **Decided by:** Krutik (on MIS-016; recomputation and floor update by Claude)
+- **Status:** Active — **corrects EXP-0001's Tier 2 citation figures and DEC-037's
+  citation floors**
+- **Context:** MIS-016: the v1 regex `\[doc:([0-9a-f]{8,64})\]` dropped citations the
+  model wrote as `[doc: <id>]`. Counted on the three EXP-0001 Tier 2 runs: 4, 12 and
+  13 citations per 100 answers never reached the metric.
+- **Decision:** `_CITATION` becomes `\[\s*doc\s*:\s*([0-9a-f]{8,64})\s*\]`,
+  case-insensitive. `CITATION_PARSER_VERSION = "citation-v2"` is recorded in every
+  Tier 2 run's metrics. The three affected rows are recomputed from their stored
+  answers and recorded as corrections; the originals stay.
+- **Recomputed (v1 reproduces the stored values exactly; v2 is the correction):**
+
+  | Run | precision v1 → v2 (n) | recall v1 → v2 | cited nothing | questions changed |
+  |---|---|---|---|---|
+  | `run_20260911_053316_510b` | 0.3883 → **0.3826** (88) | 0.3950 → 0.3950 | 12 → 12 | 1 |
+  | `run_20260911_055914_a8b3` | 0.3815 → **0.3832** (93 → 95) | 0.3933 → **0.4133** | 7 → 5 | 4 |
+  | `run_20260911_061624_3792` | 0.3841 → **0.3831** (87) | 0.3983 → 0.3983 | 13 → 13 | 1 |
+
+  Precision *fell* on two runs: the recovered citations there were to non-gold
+  articles. Recall rose only on the run where two previously uncited answers gained
+  a correct citation. Six questions changed across 300 answers.
+- **Noise floors (DEC-037), re-measured under v2 on the same three runs:** citation
+  precision range 0.0067 → **0.0006**; citation recall range 0.0050 → **0.0183**.
+  `rag/eval/noise_floor.py` now carries the v2 values. The recall floor is larger
+  because the four recovered citations were not spread evenly across runs.
+- **Evidence:** Measured, from stored answers; no new calls.
+- **Consequences:** Every later Tier 2 row is on v2. The EXP-0001 index cell
+  (0.388) is a v1 number and is annotated, not rewritten. Any citation delta against
+  EXP-0001 must use the v2 figures above.
+- **Revisit if:** the model produces a third citation shape the parser misses —
+  preflight item 21 says count it on stored output first.

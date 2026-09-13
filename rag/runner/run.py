@@ -23,7 +23,7 @@ from rag.eval.judge import CRITERIA, JudgeConfig, RagasJudge, judge_provenance
 from rag.eval.qrels import qrels_from_split, run_from_results
 from rag.eval.retrieval_metrics import evaluate_retrieval
 from rag.eval.slices import aggregate_by_slice, build_slices
-from rag.generation.base import GeneratorConfig, OpenRouterGenerator
+from rag.generation.base import CITATION_PARSER_VERSION, GeneratorConfig, OpenRouterGenerator
 from rag.hashing import short_id
 from rag.runner.config import EvalTier, RunConfig
 from rag.runner.cost import estimate_tier2_cost, format_estimate
@@ -354,6 +354,7 @@ def _execute(
         aggregate["judge_failures"] = len(judge_failures)
         aggregate["judge_failure_detail"] = judge_failures
         aggregate.update(refusal_summary(per_question))
+        aggregate["citation_parser"] = CITATION_PARSER_VERSION
         for criterion in CRITERIA:
             values = [
                 row[criterion] for row in per_question.values() if row.get(criterion) is not None

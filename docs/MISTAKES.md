@@ -471,6 +471,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Added to preflight:** yes
 
 ## MIS-016 — The citation parser drops `[doc: id]` (with a space); 1.5–4% of citations in the Phase 0 Tier 2 runs were lost
+> **CORRECTED by DEC-043 on 2026-09-12** — fix applied (`citation-v2`), the three rows
+> recomputed, floors re-measured. The "Fix applied: None" below describes the state
+> before Krutik's sign-off.
 - **Date:** 2026-09-12
 - **Severity:** Low-to-medium — affects citation precision/recall on every Tier 2 run
   by a few citations per hundred answers; no VOID.

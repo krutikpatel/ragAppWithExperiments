@@ -41,8 +41,11 @@ JUDGED_NOISE_FLOOR: dict[str, float] = {
 # the three runs). Their floors are small — except step coverage, whose floor is
 # half its own value and which therefore cannot currently detect anything.
 GENERATION_NOISE_FLOOR: dict[str, float] = {
-    "citation_precision": 0.007,
-    "citation_recall": 0.005,
+    # Citation floors re-measured under citation-v2 on the same three runs (DEC-043):
+    # v1 gave 0.007 / 0.005. Recall's floor grew because the recovered `[doc: id]`
+    # citations landed on one run's "cited nothing" answers.
+    "citation_precision": 0.001,
+    "citation_recall": 0.018,
     "false_refusal_rate": 0.010,
     "step_coverage": 0.064,
 }
