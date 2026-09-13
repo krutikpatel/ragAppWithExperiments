@@ -308,3 +308,29 @@ def test_diff_applies_noise_floor_to_judged_aggregates(store):
     report = diff_runs("run_a", "run_b", store=store)
     assert report["aggregate_deltas"]["faithfulness"]["verdict"] == "finding"  # 0.02 > 0.014
     assert report["aggregate_deltas"]["strict_recall@5"]["verdict"] == "within noise"  # delta 0
+
+
+def test_p1_09_diff_smoke_against_the_dense_control():
+    """P1-09: `rag diff <k=10 run> <baseline_dense run>` lists a sensible flip list.
+
+    Under DEC-040 top_k governs the context, not the scored ranking, so the flips are
+    on `gold_in_context` (every gain is a gold document at ranks 6-10) and there are
+    none on strict_recall@5. Skips when the two runs are not in the local store.
+    """
+    from rag.runner.store import DEFAULT_DB, ResultsStore
+
+    base, k10 = "run_20260912_222538_b1dc", "run_20260913_222423_db8c"
+    if not DEFAULT_DB.exists():
+        pytest.skip("no results store on this machine")
+    with ResultsStore() as store:
+        if not (store.get_run(base) and store.get_run(k10)):
+            pytest.skip("P1-09 runs not present in this store")
+    strict = diff_runs(base, k10, metric="strict_recall@5")
+    assert strict["comparability"]["comparable"]
+    assert (strict["n_gained"], strict["n_lost"]) == (0, 0)
+    ctx = diff_runs(base, k10, metric="gold_in_context")
+    assert ctx["comparability"]["comparable"]
+    assert ctx["n_gained"] == 27 and ctx["n_lost"] == 0
+    for item in ctx["gained"]:
+        newly = [d for d in item["gold_doc_ids"] if (item["ranks_a"].get(d) or 999) > 5]
+        assert newly and all(6 <= item["ranks_b"][d] <= 10 for d in newly)

@@ -305,6 +305,14 @@ one that matters most — report it first.
 
 ### P1-09 — Diffability exit criterion
 
+> **Status: DONE** (2026-09-13)
+> - [x] `configs/baseline_dense.yaml` is the dense control (EXP-0005) and is referenced by id
+> - [x] `rag diff` runs against it and lists flips with gold docs and retrieved ranks
+> - [x] smoke test: `smoke_p1_09_dense_k10.yaml` (only `top_k` 5→10), run
+>       `run_20260913_222423_db8c`; `rag diff` → 0 flips on `strict_recall@5` (scored ranking
+>       is independent of `top_k`, DEC-040) and 27 gained / 0 lost on `gold_in_context`, each
+>       a gold article at ranks 6–10. Pinned by `test_p1_09_diff_smoke_against_the_dense_control`.
+
 **In this phase, I need every technique to be expressible as a diff against this control.**
 
 Acceptance criteria:
@@ -317,6 +325,14 @@ Acceptance criteria:
 ---
 
 ### P1-10 — Hypotheses log
+
+> **Status: DONE, with the timing stated** (2026-09-13) — `docs/HYPOTHESES.md`.
+> - [x] file exists with the entry format (date, hypothesis, run, resolution)
+> - [~] the four seed entries were NOT written before the runs — the runs had already
+>       happened. They quote the Phase 1 handover's own pre-run expectations (Krutik's
+>       document), resolved against EXP-0004–0007: H-001 wrong on margin, H-002 confirmed,
+>       H-003 wrong, H-004 wrong overall. No Claude prediction is recorded anywhere.
+> - [x] predictions never appear in `EXPERIMENTS.md`
 
 **As the hiring narrative, I want a record of what I expected versus what happened.**
 
@@ -382,6 +398,11 @@ Acceptance criteria:
 ---
 
 ## 4. Phase 1 definition of done
+
+> **Status (2026-09-13):** 1–4, 6, 7, 9 done; 5 done; 8 done except the judged
+> *values* (placeholder judge, DEC-018 — needs a real judge, a model decision); 10 done
+> with the timing caveat; 11 done with the "identical" criterion amended (DEC-046).
+> Open on Krutik: choose a real judge; review the 45 refusal labels; OQ-019.
 
 1. Chunk config reconciled; sparse baseline re-run under it.
 2. Corpus profile recorded, including mid-procedure boundary count.

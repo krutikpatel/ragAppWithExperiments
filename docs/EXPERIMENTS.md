@@ -55,6 +55,12 @@ Column notes:
   detector missed curly apostrophes). Runs from here record `refusal-lexical-v2`.
 - **EXP-0006 was replicated twice** (`run_20260913_202416_9156`, `run_20260913_205058_dc03`)
   for P1-11; the MDD table below is their spread. They are not separate rows.
+- **P1-09 diffability smoke test**: `run_20260913_222423_db8c` is
+  `configs/baseline_dense.yaml` with only `top_k` 5 → 10 (`smoke_p1_09_dense_k10.yaml`).
+  `rag diff` against EXP-0005: 0 flips on `strict_recall@5` (the scored ranking does not
+  depend on `top_k`, DEC-040) and **27 gained / 0 lost on `gold_in_context`**, each a gold
+  article at ranks 6–10 — i.e. strict recall@10 (0.850) seen from the context side.
+  Collapse ratio 1.106 → 1.126. A harness check, not an experiment; no row.
 - **Dense spread is not zero.** Hosted query embeddings vary call to call; three runs
   of EXP-0005 ranged 0.005 on strict recall@5 (OQ-023). Any dense delta at or under
   one question is within that.

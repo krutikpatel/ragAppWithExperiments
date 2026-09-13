@@ -44,6 +44,7 @@ until the corresponding documentation is written.
 | `docs/MISTAKES.md` | Every error made, and the rule that prevents recurrence | Immediately on discovery |
 | `docs/FAILURES.md` | Taxonomy of queries the system answers badly | After each evaluation run review |
 | `docs/OPEN_QUESTIONS.md` | Unanswered questions and untested hypotheses | Whenever one surfaces |
+| `docs/HYPOTHESES.md` | Expectations written before a run, resolved after (P1-10). Never in EXPERIMENTS.md | Before the run it names; resolution after |
 
 Writing style: not too much technical jargons, easy to understand for someone who is new to RAG and AI. But RAG technique names and popular jargon is ok to use and encouraged. If project and dataset specific terms used, create separate glossary.md to reference them. 
 
@@ -430,7 +431,8 @@ prompts/            versioned YAML, addressed by (id, version). answer.yaml (Pha
                     are pinned in tests/test_prompts.py, so an edit without a version
                     bump fails the suite. The runner asserts the generator's prompt_ref
                     equals the recorded one (MIS-015).
-configs/            experiment configs. exp_NNNN_*.yaml are experiments and are
+configs/            experiment configs. smoke_p1_09_dense_k10.yaml is the P1-09 diff
+                    smoke (baseline_dense with top_k 10). Otherwise: exp_NNNN_*.yaml are experiments and are
                     committed BEFORE their run so git_sha is clean. baseline_dense.yaml
                     is the dense control (EXP-0005) that Phase 2 diffs against (P1-09);
                     baseline_dense_tier2.yaml adds generation + judge (P1-07 run 2,
