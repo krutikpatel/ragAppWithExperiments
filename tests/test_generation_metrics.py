@@ -158,3 +158,11 @@ def test_generator_does_not_retry_non_transient_errors(monkeypatch):
     monkeypatch.setattr(gen, "_complete_once", unauthorized)
     with pytest.raises(httpx.HTTPStatusError):
         gen._complete("p")
+
+
+def test_no_gold_gives_no_recall_rather_than_zero():
+    """Unanswerable questions have nothing to recall (DEC-044, MIS-002)."""
+    scores = citation_scores(["dA"], [])
+    assert scores.recall is None
+    assert scores.precision == 0.0  # it cited something, and nothing was right
+    assert citation_scores([], []).recall is None

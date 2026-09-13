@@ -1353,3 +1353,30 @@ support a distributional claim, and the range is the conservative reading.
   EXP-0001 must use the v2 figures above.
 - **Revisit if:** the model produces a third citation shape the parser misses —
   preflight item 21 says count it on stored output first.
+
+## DEC-044 — On the unanswerable split, the judge is skipped and citation recall is not applicable
+- **Date:** 2026-09-12
+- **Decided by:** Claude (preflight item 6, before P1-07 run 3)
+- **Status:** Active
+- **Context:** The 45 unanswerable questions have no gold document and an empty
+  reference answer (DEC-007). Ragas answer correctness scores against the reference;
+  with an empty one it either errors per question (MIS-011 would record 45 failures)
+  or returns a number that means nothing. Citation recall divides by the number of
+  gold documents; with none, the code returned 0.0 — a zero that would read as "the
+  system cited nothing right" on a split where there is nothing to cite.
+- **Decision:** When a question's reference is empty, the runner records every judged
+  criterion as `None` and counts it in `judge_skipped_no_reference`; no judge call is
+  made. `citation_scores` returns `recall=None` when there is no gold (precision is
+  still computed: citing anything on an unanswerable question is a wrong citation).
+  Neither change touches a `dev` number — every `dev` question has gold and a
+  reference.
+- **What run 3 measures:** `refusal_rate` (fraction refused, lexical detector,
+  DEC-014 / OQ-008) and its complement, the **false-answer rate**; plus how many
+  false answers carried a citation. Retrieval metrics do not exist on this split
+  (DEC-009).
+- **Evidence:** No measured data; the not-applicable cases were designed before the
+  run, as MIS-002 requires.
+- **Consequences:** Judge cost on this split is zero. A future judged metric for
+  refusal quality would need its own decision.
+- **Revisit if:** a reference-free judged criterion (e.g. "is this a refusal?") is
+  adopted to replace the lexical detector (OQ-008).

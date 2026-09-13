@@ -355,6 +355,9 @@ def _execute(
         aggregate["judge_failure_detail"] = judge_failures
         aggregate.update(refusal_summary(per_question))
         aggregate["citation_parser"] = CITATION_PARSER_VERSION
+        aggregate["judge_skipped_no_reference"] = int(
+            sum(row.get("judge_skipped_no_reference", 0) for row in per_question.values())
+        )
         for criterion in CRITERIA:
             values = [
                 row[criterion] for row in per_question.values() if row.get(criterion) is not None
@@ -477,14 +480,24 @@ def _tier2(
         # Ragas scores against the retrieved contexts as a list, not one blob:
         # faithfulness decomposes claims and attributes them to individual contexts.
         contexts = [chunk_text[c.chunk_id] for c in context_chunks]
-        scores = judge.score(
-            question=row["question"],
-            answer=answer.text,
-            contexts=contexts,
-            reference=row["answer"],
-        )
-        for criterion, score in scores.items():
-            per_question[question_id][criterion] = score.score
+        reference = (row.get("answer") or "").strip()
+        if reference:
+            scores = judge.score(
+                question=row["question"],
+                answer=answer.text,
+                contexts=contexts,
+                reference=reference,
+            )
+            for criterion, score in scores.items():
+                per_question[question_id][criterion] = score.score
+        else:
+            # The unanswerable split has no reference answers (DEC-007). Answer
+            # correctness against an empty reference is not a score, and a refusal's
+            # faithfulness is not what that split measures. Judged criteria are
+            # recorded as not applicable, and the skip is counted (DEC-044).
+            for criterion in CRITERIA:
+                per_question[question_id][criterion] = None
+            per_question[question_id]["judge_skipped_no_reference"] = 1.0
 
         generated[question_id] = {
             "text": answer.text,

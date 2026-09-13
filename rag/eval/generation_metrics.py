@@ -38,7 +38,7 @@ _REFUSAL = re.compile("|".join(_REFUSAL_PATTERNS), re.IGNORECASE)
 @dataclass(frozen=True)
 class CitationScores:
     precision: float | None
-    recall: float
+    recall: float | None
     n_cited: int
     n_gold: int
     cited_nothing: bool
@@ -50,13 +50,14 @@ def citation_scores(cited_doc_ids: list[str], gold_doc_ids: list[str]) -> Citati
     Precision is `None`, not zero, when the answer cites nothing: a system that
     declines to cite has not made a false citation, and scoring it as zero would
     reward citing one lucky document over citing none. `cited_nothing` carries that
-    case so it can be counted separately.
+    case so it can be counted separately. Recall is `None` when there is no gold
+    document (the unanswerable split): nothing to recall is not zero recall (MIS-002).
     """
     cited, gold = set(cited_doc_ids), set(gold_doc_ids)
     hits = len(cited & gold)
     return CitationScores(
         precision=(hits / len(cited)) if cited else None,
-        recall=(hits / len(gold)) if gold else 0.0,
+        recall=(hits / len(gold)) if gold else None,
         n_cited=len(cited),
         n_gold=len(gold),
         cited_nothing=not cited,

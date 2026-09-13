@@ -1,0 +1,30 @@
+# The dense control on the unanswerable split (P1-07 run 3): baseline refusal
+# behaviour. 45 authored questions with no gold document and no reference answer
+# (DEC-007), scored in full. Retrieval metrics do not exist here (DEC-009); the
+# judge is skipped for lack of a reference (DEC-044). What this run measures is the
+# false-answer rate: how often the naive system answers when nothing supports it.
+# The baseline has no refusal mechanism, so this is the "before" number for Phase 2
+# citation enforcement.
+name: EXP-0007 dense control on unanswerable — qwen3-embedding-8b, 600/100, top-5 distinct docs, baseline_answer@v1, Tier 2
+split: unanswerable
+eval_tier: tier2
+full_eval: true
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+judge_model: openai/gpt-oss-120b
+judge_embedding_model: qwen/qwen3-embedding-8b
