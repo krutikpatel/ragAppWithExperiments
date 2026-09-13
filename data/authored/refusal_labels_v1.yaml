@@ -1,0 +1,408 @@
+description: Hand labels for the 45 answers of run_20260913_060733_6a9b (EXP-0007, unanswerable split).
+  refused=true means a human reading the whole answer judged it to decline the question. Labelled by Claude
+  on 2026-09-13 from the stored answers; NOT reviewed by Krutik. Used by tests/test_generation_metrics.py
+  to hold the refusal detector to these labels (DEC-045).
+run_id: run_20260913_060733_6a9b
+labelled_by: Claude (2026-09-13); unreviewed
+rows:
+- question_id: 045103924613c165
+  question: Where do I change the checkout currency in Squarespace?
+  refused: true
+  answer: The provided articles do not cover this.
+- question_id: 10c20ca3eafd0272
+  question: How much does it cost?
+  refused: true
+  answer: The provided articles do not specify a general cost. Pricing information is not covered. If
+    you’re asking about specific features (e.g., recurring plans, setup fees, shipping, or product pricing),
+    please refer to the related articles for details on what is and isn’t supported. [doc:b9aca13619d798cdfe6579b443cd8d5f727a2c168bf546847cd34688235e5b1d]
+    [doc:4db4c003cdbae66974a1e68dfe2e7027c6a5b45fc24a58e38ed9cfe632a568a1] [doc:aa69eadc9efdebb4bf0fe26b3f19a6c93e4136f080c398b33380ccf89a73e49e]
+    [doc:7640fb3c3c9734a19494d100511d6a9d9c1c540bc86ed6f59d45501a96166cd7] [doc:b219e4427ccc214b75584b59eaeafbc1512c6a5ace32696f9a5dae4ebd1ae2c0]
+- question_id: 12f7901463dcdc12
+  question: How do I set up abandoned cart emails in Shopify?
+  refused: true
+  answer: The provided articles cover Wix Stores abandoned cart emails, not Shopify. To proceed correctly,
+    I would need Wix-specific guidance for setting up abandoned cart emails in Wix, or confirmation that
+    you want general guidance based on Wix’s articles.
+- question_id: 18e7e8d3544ed685
+  question: How do I get it approved?
+  refused: false
+  answer: '1. To approve requests to join your program, go to Online Programs in your site''s dashboard.
+    [doc:d8922b9fdbebbcc5e5041ba1ecf3296cc858e43dd2bef6c26ee875211a6894a0]
+
+    2. Click the relevant program. [doc:d8922b9fdbebbcc5e5041ba1ecf3296cc858e43dd2bef6c26ee875211a6894a0]
+
+    3. Click Manage next to Participants. [doc:d8922b9fdbebbcc5e5041ba1ecf3296cc858e43dd2bef6c26ee875211a6894a0]
+
+    4. Click the Pending tab. [doc:d8922b9fdbebbcc5e5041ba1ecf3296cc858e43dd2bef6c26ee875211a6894a0]
+
+    5. Click Approve next to the member(s) you want to approve. [doc:d8922b9fdbebbcc5e5041ba1ecf3296cc858e43dd2bef6c26ee875211a6894a0]
+
+
+    If you’re using the Wix App to manage, use these steps:
+
+
+    1. Go to your site in the Wix app. [doc:23e747336cfe9184d8f39340b7cd88de72e39e940274ae0f12811bb9b9ff17c0]
+
+    2. Tap Manage at the bottom. [doc:23e747336cfe9184d8f39340b7cd88de72e39e940274ae0f12811bb9b9ff17c0]
+
+    3. Tap Online Programs. [doc:23e747336cfe9184d8f39340b7cd88de72e39e940274ae0f12811bb9b9ff17c0]
+
+    4. Tap the program you want to manage. [doc:23e747336cfe9184d8f39340b7cd88de72e39e940274ae0f12811bb9b9ff17c0]
+
+    5. Tap Request to Join at the top. [doc:23e747336cfe9184d8f39340b7cd88de72e39e940274ae0f12811bb9b9ff17c0]
+
+    6. Tap Approve next to the member you want to approve. [doc:23e747336cfe9184d8f39340b7cd88de72e39e940274ae0f12811bb9b9ff17c0]
+
+    7. When ready, tap Done. [doc:23e747336cfe9184d8f39340b7cd88de72e39e940274ae0f12811bb9b9ff17c0]
+
+
+    Note: If your program has a price, new participants are automatically approved once they make the
+    payment. [doc:d8922b9fdbebbcc5e5041ba1ecf3296cc858e43dd2bef6c26ee875211a6894a0]'
+- question_id: 24cd87e4b4fe0b1a
+  question: How did the Wix SEO tools change in the 2025 updates?
+  refused: true
+  answer: 'The provided articles do not cover this. Missing: specific details about 2025 updates to Wix
+    SEO tools and what changed.'
+- question_id: 2a549292858cdd75
+  question: What changed in the Wix Owner mobile app in its 2025 releases?
+  refused: true
+  answer: "The provided articles do not cover this. \n\nMissing: information specifically detailing changes\
+    \ to the Wix Owner mobile app in 2025 releases."
+- question_id: 2a75e82f917f6efe
+  question: Which website templates did Wix add in 2025?
+  refused: true
+  answer: The provided articles do not cover this. To answer, we would need information from Wix’s 2025
+    template additions or a page listing new templates released in 2025.
+- question_id: 2e2851a391ada9ba
+  question: How do I connect a custom domain to my Shopify store?
+  refused: true
+  answer: The provided articles do not cover connecting a custom domain to a Shopify store. They only
+    describe connecting domains to Wix sites and Link in Bio pages. To proceed, I would need an article
+    specifically about Shopify domain connections.
+- question_id: 2f1894c8906923e8
+  question: What is the Wix Partner Program tier structure in 2026?
+  refused: true
+  answer: 'The provided articles describe four Wix Partner Program levels (Pioneer, Creator, Icon, Legend)
+    with specific point thresholds and benefits, but they do not provide a full 2026 tier structure beyond
+    those levels or confirm any changes for 2026. [doc:1fe696b5e1e3690997437d25be7d4860a2de2793d292433dcbffbcdd16e4ea72]
+    [doc:ae4ab56b9050c190e0db8539322bef7844dfb3fb4a70dcce667884766f5fa2b9] [doc:66a0ce8c5b220cf75908781e4aaeff24e38ffc4ea33269e99fc69913205375ff]
+
+
+    - Pioneer: 0-900 pts, benefits include 10GB Storage, Priority Support, Custom Branding, etc. [doc:1fe696b5e1e3690997437d25be7d4860a2de2793d292433dcbffbcdd16e4ea72]
+
+    - Creator: 1000 pts, same listed benefits. [doc:1fe696b5e1e3690997437d25be7d4860a2de2793d292433dcbffbcdd16e4ea72]
+
+    - Icon: 2000 pts, same benefits. [doc:1fe696b5e1e3690997437d25be7d4860a2de2793d292433dcbffbcdd16e4ea72]
+
+    - Legend: 5000+ pts, same benefits and additional items like Revenue Share. [doc:1fe696b5e1e3690997437d25be7d4860a2de2793d292433dcbffbcdd16e4ea72]
+
+
+    If you’re asking for 2026-specific details beyond these levels, the articles do not provide that information.
+    [doc:ae4ab56b9050c190e0db8539322bef7844dfb3fb4a70dcce667884766f5fa2b9]'
+- question_id: 314098d1ab278963
+  question: How do I set up local pickup for orders in Shopify?
+  refused: true
+  answer: "The provided articles do not cover this. \n\nTo help you, I would need to know whether you\
+    \ are asking about Wix Stores (set up local pickup in Wix) or Shopify, since the articles provided\
+    \ only discuss Wix eCommerce features and do not include Shopify instructions."
+- question_id: 3706646ea17675fa
+  question: Why is it not showing up?
+  refused: false
+  answer: "There could be several reasons based on the available articles. If you’re referring to a member\
+    \ not appearing on a Members page, see these possibilities: a member was approved but hasn’t logged\
+    \ in yet, or they haven’t joined the community, or they haven’t logged in since an invited or approved\
+    \ status. The Members page only shows members who have signed in and joined the community. [doc:9f6801e893bcdda74aed0404ed0ed0fa27b8ad98a69a1f6ca21a4485caa9f6f1908]\
+    \ [doc:0d876e87d28db33641edb9f64ee418593fcd96649ecdd8feda3d2837ad5ea6ce] \n\nIf you’re seeing missing\
+    \ images or content, it might be a local browser or network issue (clear cache, try incognito/private\
+    \ mode, or try another supported browser). [doc:aaeac809b69520cb72635db0fcec66c4382ee2f6f37d8527f67fd5517eb54728]\
+    \ \n\nIf you meant something else not appearing, please specify what isn’t showing up."
+- question_id: 3be39291af321cc3
+  question: How do I connect Google Analytics to my Shopify store?
+  refused: true
+  answer: Connecting Google Analytics to a Wix site is covered in the provided articles, but there is
+    no Wix Help Center article here about connecting Google Analytics specifically to a Shopify store.
+    The articles discuss Wix Stores and Wix Pricing Plans, not Shopify. The provided articles do not cover
+    this.
+- question_id: 3df8a35d5e1f2574
+  question: Can I change the settings?
+  refused: false
+  answer: You can change some settings, depending on the feature you’re using. For cookie banners, you
+    can allow visitors to update their cookie preferences with a Cookie Settings Widget. For other features,
+    see specific customization options described in the related articles. [doc:5efd8a3828ec7c5d18ce1d0fe0f1a7e49b237e3dffa92c5e42a89199a5a19efc]
+- question_id: 400b1b8732719d04
+  question: How do I create a CMS collection in Webflow?
+  refused: true
+  answer: Creating a CMS collection in Webflow is not covered by the Wix Help Center articles provided.
+    The articles describe how to create CMS collections in Wix, not Webflow. If you’d like, I can help
+    explain Wix’s process for creating CMS collections, or you can share more details about what you need
+    and I’ll reference the Wix articles accordingly.
+- question_id: 4b125a1ffe1e6ac0
+  question: How do I add a booking calendar to a Webflow page?
+  refused: true
+  answer: The provided articles do not cover adding a Wix Booking calendar specifically to a Webflow page.
+    To proceed, I would need guidance about Wix Bookings integration steps for external (non-Wix) websites
+    like Webflow.
+- question_id: 53b0fccf617f10c2
+  question: Why was my account charged?
+  refused: false
+  answer: 'Your charge is most likely from a renewal of one of your Wix subscriptions or an app/service
+    you’re using. You can check your current subscriptions in the Premium Subscriptions section of your
+    Wix account and view invoices for payments on the Billing History page. [doc:b548d310006dff958a440cb69eaa2f7a9c99e0fd0e9ae48df23c7362633dde1e]
+
+
+    If you’re seeing a double charge, it could be an authorization (pending charge) that hasn’t yet been
+    replaced by the actual payment, or it could be a previous failed payment that was retried along with
+    a current payment. Check the invoice numbers to see which service each payment is for. If it’s still
+    unclear, contact support with a screenshot of your bank statement showing the last 4 digits of your
+    card. [doc:d22b8cf6e599e0b87d177e1f66a122ce604d5b9b7ace1e7a54649f684f322ae1]
+
+
+    If you were charged for a domain purchase with a free domain voucher, it could be for additional years,
+    or for private domain registration. Review your domain voucher details for clarity. [doc:ed9785db78000e68c77769a53a66455fe93645aa6f1327adf0f02d8c068fa0c0]
+
+
+    To identify unknown charges, use the charge locator tool with the invoice number, last 4 digits of
+    the card, and card expiry date, or check the charge inside Billing History in your Wix account. [doc:ca71d6147b445ab43e7febb190b76627e019b47f18566203fbb4d7c3dd504b4a]'
+- question_id: 60e5ba53bf056765
+  question: Which countries did Wix Payments expand to in 2025?
+  refused: true
+  answer: Wix Payments expansion details for 2025 are not covered in the provided articles. The articles
+    list where Wix Payments is available and general information about supported countries, but they do
+    not specify any 2025 expansion dates or new countries added in 2025. If you want, I can point you
+    to the articles that describe current availability and supported countries. [doc:9bf18dc24fbe1699beea4ea50fe1ac0ccdfe811623662cd87c6dd78ac9100d78]
+    [doc:7b3b67a669a4daf2280f554bd662af255452daf2b17924646427996f1ac00954]
+- question_id: 623dfeaa96168481
+  question: How long does it take?
+  refused: true
+  answer: The provided articles do not cover this.
+- question_id: 63d050ef3e8d79ec
+  question: Which Velo APIs were introduced after December 2024?
+  refused: true
+  answer: The provided articles do not cover which Velo APIs were introduced after December 2024. To answer,
+    we would need a source listing API introductions by date after December 2024.
+- question_id: 64646265a9396fb9
+  question: How do I add a members-only area to a Webflow site?
+  refused: true
+  answer: The provided articles cover Wix’s Members Area features and how to set up member-only pages.
+    They do not cover adding a members-only area to a Webflow site. The Wix help articles cannot be used
+    to answer Webflow-specific steps. If you want, I can summarize how Wix handles Members Area steps,
+    but I can’t provide Webflow guidance from these sources.
+- question_id: 6589fae0440bd1f7
+  question: How do I make it look better?
+  refused: false
+  answer: 'To make it look better, follow the guidance in the Wix Help Center articles about improving
+    visuals and design quality.
+
+
+    1. Add eye-catching images that enhance your message and are high-quality. [doc:7e0ba3c0a6fc08c5c800800dfff21dba311401bf0a0b88c29cffc2dcb546820a]
+
+    2. Use images strategically and avoid overloading your page with too many images. [doc:7e0ba3c0a6fc08c5c800800dfff21dba311401bf0a0b88c29cffc2dcb546820a]
+
+    3. If you want a frosted glass look on boxes, apply the glass effect to add depth. [doc:9a1d44526c4eef379128ec0759e556a829fccd2d4763c9a2d1818335d31d26c1]
+
+    4. Adjust image settings for better quality: rotate/or flip, adjust brightness, contrast, and color
+    to improve appearance. [doc:e705293545888d6bfd1942b07a940165bffc8c4b3cc30e02de4eeecf24a060f9]
+
+    5. Use image optimization features to quickly improve image quality (AI Tools, Optimize image). [doc:e705293545888d6bfd1942b07a940165bffc8c4b3cc30e02de4eeecf24a060f9]
+
+    6. If you’re working with a gallery in ADI, you can change the layout to better showcase images. [doc:dab8546a05cddbc2a4375843d9b25386ef8cc1265fb1e78a94d5425992a62750]
+
+    7. Add titles and descriptions to gallery items to provide context and improve presentation. [doc:dab8546a05cddbc2a4375843d9b25386ef8cc1265fb1e78a94d5425992a62750]
+
+
+    Note: The above steps reference the article IDs that cover image quality, glass effects, and gallery
+    improvements. If you want more specific guidance, tell me what element you’re adjusting (images, boxes,
+    gallery, etc.).'
+- question_id: 660557c3fe67f9a3
+  question: Which Wix Bookings features shipped after December 2024?
+  refused: false
+  answer: 'Wix Bookings features shipped after December 2024 include the ability to customize the settings
+    of individual services (including early/late bookings and cancelling or rescheduling) independently
+    for each service. [doc:f1d067dd4273be2efa5ff0d2794c7f6c878232dec8a9560f9de898d75d710d63]
+
+
+    You can also enable multi-service bookings, allowing clients to book multiple services in a single
+    appointment, with the calendar automatically calculating availability for the entire appointment.
+    [doc:7fc450319519e8b38ebf7ea477106862fded269afe07d9bcd0f1c93a19c708b6]
+
+
+    Additionally, you can manage multi-service appointments by turning on the multi-service appointment
+    toggle in Bookings settings. [doc:7fc450319519e8b38ebf7ea477106862fded269afe07d9bcd0f1c93a19c708b6]'
+- question_id: 679f481ee50caa0b
+  question: Is there a limit?
+  refused: true
+  answer: The provided articles do not cover whether there is a general limit for all Wix features. Please
+    specify which Wix feature you’re asking about (for example, email, pages, forms, events, or member
+    logins) so I can identify the relevant limit information from the Help Center.
+- question_id: 6cdb51f4b140c53a
+  question: How do I change the site favicon in Squarespace?
+  refused: true
+  answer: The provided articles do not cover this.
+- question_id: 6f1d32ecf84f2b41
+  question: What were the Wix service outages reported in 2025?
+  refused: true
+  answer: The provided articles do not cover this.
+- question_id: 6f85d0d54ed36d40
+  question: What changed in Wix Payments pricing during 2026?
+  refused: true
+  answer: 'The provided articles do not cover this. Missing: any 2026 Wix Payments pricing changes or
+    announcements.'
+- question_id: 924a7b082af11be7
+  question: How do I enable the blog on a Squarespace site?
+  refused: true
+  answer: The provided articles do not cover this.
+- question_id: 9464d0f449152983
+  question: How do I transfer my Squarespace subscription to another account?
+  refused: true
+  answer: The provided articles do not cover transferring a Squarespace subscription. They only discuss
+    transferring Wix premium sites and related Wix services. To proceed, we would need Wix-specific guidance,
+    but it won't apply to Squarespace.
+- question_id: 951eb9bb46af85c8
+  question: What shipping-rule changes did Wix Stores announce in 2025?
+  refused: false
+  answer: Wix Stores announced changes to shipping rules related to a new version of shipping settings.
+    Specifically, there is mention of a new version where you may see a Create Region button instead of
+    Add Region, and guidance on setting up shipping using the new settings. They also describe deactivating
+    or deleting shipping rules, and steps to manage regions and rules (including free shipping, flat rate,
+    and other options) in the new workflow. [doc:aabc80229ea1ea1e6a68517578794845ad72f3b41783b40e5dd421703e09179b]
+- question_id: a2ff5a2f197c27d4
+  question: Why isn't my site working?
+  refused: false
+  answer: "If your site isn’t working, use the steps below to troubleshoot. [doc:4e a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c]\
+    \ [doc:77c054b29c894610643f474b8ddf92ab5d587006d3e23d13d38da92df7944d8e] [doc:7948198295c48d42124c8411929f21ae4054cd6d4638098c601fe9a76e611a83]\
+    \ \n\n1. Make sure you’re entering the correct domain name or site URL in your browser. [doc:a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c]\
+    \ \n2. Check that your site is published in your editor and that the domain is connected. [doc:a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c]\
+    \ \n3. Verify your domain hasn’t expired and that your plan is active. [doc:a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c]\
+    \ \n4. Confirm your domain is assigned to your site on the Domains page. [doc:a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c]\
+    \ \n5. Check that your DNS settings are correct and that up to 48 hours have passed for propagation.\
+    \ [doc:a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c] \n6. Ensure you’re using\
+    \ a supported, up-to-date browser. [doc:a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c]\
+    \ \n7. If you’re using a public computer, consider whether access to Wix servers may be restricted.\
+    \ [doc:a4e961a185fa6ceaa1bce7766f2ae55a7b1a1e337493f07fa6cf68a10834bb1c] \n8. If the problem persists,\
+    \ use the Wix Technical Assistant to solve live site issues. [doc:77c054b29c894610643f474b8ddf92ab5d587006d3e23d13d38da92df7944d8e]"
+- question_id: a50a5685781d904e
+  question: How do I install an app from the Shopify App Store?
+  refused: true
+  answer: Installing an app from the Shopify App Store is not covered by the provided Wix Help Center
+    articles. The articles discuss migrating from Shopify to Wix Stores using Cart2Cart, adding apps from
+    Wix’s App Market, Ecwid integration, and Wix Studio custom apps, but they do not describe installing
+    apps from the Shopify App Store. If you can share a Wix article that covers Shopify App Store installations,
+    I can use that.
+- question_id: a6739bcb8b8f28c7
+  question: Where do I click?
+  refused: false
+  answer: 'If you’re asking where to click to perform a task in Wix, use the relevant article steps for
+    your scenario. Here are the applicable steps from the Help Center articles:
+
+
+    1. Open the relevant page in your Editor and look for the element you want to interact with. [doc:86b96b9f88efe6e11aa0e28e5cbe92ea7ccddb9dab49f884f353bd12dc55aad3]
+
+    2. Right-click the element to see if there is any overlap, then choose Arrange and Bring to Front.
+    [doc:86b96b9f88efe6e11aa0e28e5cbe92ea7ccddb9dab49f884f353bd12dc55aad3]
+
+    3. If needed, click the footer in the Editor to check the Settings icon and the Freeze Footer toggle.
+    [doc:86b96b9f88efe6e11aa0e28e5cbe92ea7ccddb9dab49f884f353bd12dc55aad3]
+
+    4. If you’re using a button or link in ADI, click the page section that contains the button to edit
+    it, then click Edit. [doc:b18eade4c60f65d316dff48351a7a4de2c0756923572c02dd1c9e3e267ce4ee5]
+
+    5. For an image that opens in a pop-up, click the image and then click the Settings icon. [doc:d4a179e9053ddbcc33639be24945c073686dc0fc94799c6d8c6195ff29ea1bc0]
+
+    6. In Editor X, click an element to choose its trigger (Click or Hover) when setting up an interaction.
+    [doc:5d8976c92194dd163e7ee063cb16175b2d6597f5f22fda8906eadd3620633586]
+
+    7. To access Button Clicks analytics, go to All Reports in your site’s dashboard, then scroll to the
+    Behavior section and select Button Clicks or Button Clicks over time. [doc:8b5ffeb7173378d1f17789372522862d13e9bea0e34fd7b9f7b2b71c82580154]
+
+
+    If you tell me exactly which task you want to perform (e.g., editing a button, fixing overlapping
+    elements, setting an image to open in a pop-up, etc.), I can give you the precise steps from the appropriate
+    article.'
+- question_id: ad48579290626391
+  question: Where are the SEO settings in Webflow?
+  refused: true
+  answer: The provided articles do not cover this. The missing information is where Webflow-specific SEO
+    settings are located and how to access them. If you can share a Wix Help Center article about Webflow
+    equivalents, I can map steps exactly.
+- question_id: b1b4efbe188c6d50
+  question: Which plan is best for me?
+  refused: true
+  answer: The provided articles do not include guidance on choosing the best plan for a specific use case.
+    If you can share details about your goals (e.g., whether you need one-time access, recurring memberships,
+    or a free option, and what content or services you want to include), I can help interpret what the
+    articles suggest.
+- question_id: b1cad140105b5708
+  question: Is that included?
+  refused: true
+  answer: There is no article that states anything is included by default for this question. The provided
+    articles do not cover this. The missing information would be what specific item or plan you are asking
+    about and where the inclusion would apply.
+- question_id: b2a473af44a84753
+  question: Which AI tools were added to the Wix dashboard in 2025?
+  refused: true
+  answer: The provided articles do not cover this. I would need a Wix Help Center article that specifies
+    which AI tools were added to the Wix dashboard in 2025.
+- question_id: bdd57b10933583f5
+  question: Can I undo it?
+  refused: false
+  answer: '1. Yes. You can undo actions you have made in the Wix Editor using the Undo feature. [doc:93b0b3e9143597ad88074cb36a60e73fc02d9d5e7ebe707b1537847cda6f2cb1]
+
+    2. To undo a change, click the Undo icon at the top of your Editor, or press Ctrl + Z on your keyboard.
+    [doc:93b0b3e9143597ad88074cb36a60e73fc02d9d5e7ebe707b1537847cda6f2cb1]
+
+    3. If you’re asking about undoing in other Wix tools, such as the Email Marketing Editor or other
+    sections, you can also use Undo there as applicable. [doc:72ae1f46ebf3c3d72642f30583dce207c49b0baf3c66ad4eef0554861db7412f]
+
+
+    '
+- question_id: c5a427ab3acabdd1
+  question: How do I restore a deleted page in Squarespace?
+  refused: true
+  answer: 'The provided articles do not cover this. Then, in one sentence, say what is missing: They do
+    not include instructions for restoring a deleted page in Squarespace.'
+- question_id: c6426fbe1db895c0
+  question: What is the Wix Premium plan lineup as of January 2026?
+  refused: true
+  answer: The provided articles do not cover this. To answer, we would need an up-to-date list of Wix
+    Premium plan names and features as of January 2026.
+- question_id: cb6c1bfe15416d01
+  question: Which Wix apps were deprecated during 2025?
+  refused: true
+  answer: "The provided articles do not cover this. \n\nMissing information: I would need a Wix Help Center\
+    \ article or official list detailing apps deprecated in 2025."
+- question_id: cd7557ade0211317
+  question: What happened to my page?
+  refused: false
+  answer: Your page URL was changed and is treated as a new page, so the old page will no longer work.
+    This can affect existing links and SEO rankings, unless you set up a redirect from the old URL to
+    the new one. [doc:996d2db54b9d4901acc7f80519122f529fc3fe7c86c3c8dc7ad8e01b8db9ce3b] [doc:b315accbc4fd6067dc839cdb6dd605e9a865831a1e70f82db84dc98976d04fff]
+- question_id: d17bd7fdd9ff5c1e
+  question: How do I fix it?
+  refused: false
+  answer: 'If your question is about a specific issue with Wix Editor buttons, you can try the steps below
+    in order.
+
+
+    1. Click the Link icon on the button to see that it is set up correctly. [doc:25808db617f27dfe197442af1276645fdbb35ef66b705dc69ad3949e32d06b3f]
+
+    2. Make sure no other element overlaps on the button. [doc:25808db617f27dfe197442af1276645fdbb35ef66b705dc69ad3949e32d06b3f]
+
+    3. Try disabling the freeze setting on your header and footer. [doc:25808db617f27dfe197442af1276645fdbb35ef66b705dc69ad3949e32d06b3f]'
+- question_id: d5a420e6b0c54968
+  question: How do I export the HTML and CSS of my Webflow site?
+  refused: true
+  answer: The provided articles do not cover this. Then, in one sentence, say what is missing. The articles
+    here only discuss exporting from Figma to Wix Studio, importing/exporting Wix Portfolio items, downloading
+    Wix pages, accessing CSS, and blog exports—not exporting HTML/CSS from a Webflow site. To answer,
+    we would need an article specifically about exporting HTML and CSS from Webflow.
+- question_id: dea7ead617bc8b5c
+  question: What is in the Wix Editor release notes for March 2025?
+  refused: true
+  answer: The provided articles do not cover this. The March 2025 Wix Editor release notes are not included
+    in the provided Help Center articles. I would need a link or copy of the March 2025 release notes
+    to answer.
+- question_id: fc16d4e1da892cde
+  question: Which Wix Studio features were released in 2025?
+  refused: true
+  answer: The provided articles do not cover this. To answer accurately, we would need a source listing
+    Wix Studio feature releases by year (2025).

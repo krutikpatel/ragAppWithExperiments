@@ -445,7 +445,8 @@ results/            runs.sqlite — the results store. GITIGNORED.
 
 data/
   authored/         hand-written inputs, VERSION CONTROLLED.
-                    unanswerable_seed.yaml lives here.
+                    unanswerable_seed.yaml lives here; refusal_labels_v1.yaml holds 45
+                    hand-labelled answers the refusal detector is tested against (DEC-045)
   frozen/           materialized corpus and splits + *.meta.json. GITIGNORED,
                     rebuilt by `rag corpus freeze` and `rag data splits`,
                     tracked by hash rather than by content.
@@ -508,6 +509,11 @@ Rules that outlive any particular library:
   OpenRouter one model is served by many providers with a ~37x speed spread and
   non-identical outputs. Provider identity is part of the judge and is a comparability
   key. (DEC-032)
+- **Test every parser of model output on stored model output.** The citation parser
+  dropped `[doc: id]` (MIS-016); the refusal detector matched `don't` while the model
+  wrote `don’t` and hid 13–18 refusals per Phase 0 run (DEC-045). A refusal is a
+  phrase in the answer's first 300 characters with no numbered steps anywhere — a
+  caveat after a procedure is a hedged answer, not a refusal.
 - **A provider pin is a purchasing decision.** Per-provider prices vary ~12x for the
   same model and live behind `/models/<id>/endpoints`, not the model listing. Cost a
   pin before committing it, and put it to Krutik. (MIS-008, DEC-034)

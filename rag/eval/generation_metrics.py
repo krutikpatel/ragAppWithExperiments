@@ -17,11 +17,21 @@ from typing import Any
 
 from rag.eval.steps import step_coverage
 
-REFUSAL_DETECTOR_VERSION = "refusal-lexical-v1"
+REFUSAL_DETECTOR_VERSION = "refusal-lexical-v2"
 
 # Phrases a grounded system uses when it declines. Lexical on purpose: refusal rate
 # has to be computable in Tier 1 cost terms and be auditable line by line. It is a
-# proxy, and a weak one for creative refusals — tracked as OQ-008.
+# proxy — tracked as OQ-008 — and v2 (DEC-045) is what OQ-008's first count showed
+# was needed:
+#   - apostrophes are normalised first: the model writes "don’t", v1 matched "don't";
+#   - the phrase list covers the paraphrases seen ("is not covered by the …",
+#     "they do not cover …", "I would need …");
+#   - a match counts only in the OPENING of the answer (first `REFUSAL_WINDOW`
+#     characters) and only if the answer has no numbered steps. A caveat after a
+#     procedure ("… but the articles do not give a timeline") is a hedged answer,
+#     not a refusal. Measured on 45 hand-labelled unanswerable answers: refusals put
+#     the phrase at character 0–259 with zero steps; hedged answers put it at
+#     617–2,127 after three or more steps.
 _REFUSAL_PATTERNS = [
     r"\bi (?:do not|don't) (?:have|know)\b",
     r"\b(?:cannot|can't|unable to) (?:answer|help|find|determine|verify)\b",
@@ -31,8 +41,25 @@ _REFUSAL_PATTERNS = [
     r"\bthe (?:provided )?(?:context|articles?) (?:does|do) not (?:contain|mention|cover)\b",
     r"\bcould you (?:please )?(?:clarify|specify|provide more)\b",
     r"\bout of scope\b",
+    # --- added in v2 ---
+    r"\b(?:is|are|was|were) not (?:covered|addressed|described|mentioned|specified|documented|included|listed|provided) (?:by|in) (?:the |these |those |any )?(?:provided |available |given |retrieved )?(?:wix )?(?:help center )?(?:context|articles?|documentation|knowledge base|sources?|materials?|set)\b",
+    r"\b(?:the |these |those )?(?:provided |available |given |retrieved |listed )?(?:articles?|context|documentation|sources?|they) (?:here |provided |above |you provided )?(?:do|does|don't|doesn't) not (?:contain|mention|cover|describe|specify|include|address|provide|explain|state|list|give)\b",
+    r"\b(?:the |these |those )?(?:provided |available |given |retrieved )?(?:articles?|context|sources?) (?:you provided )?(?:don't|doesn't) (?:contain|mention|cover|describe|specify|include|address|provide|explain|state|list|give)\b",
+    r"\b(?:i|we) would need\b",
+    r"\b(?:i'm|i am) not seeing (?:any|an|a|information)\b",
+    r"\b(?:there isn't|there is no|there's no|isn't|is no) (?:a |an |any )?(?:specific |direct |dedicated )?(?:article|information|content|guidance|steps?|instructions?|details?)\b[^.]{0,60}\b(?:in|from|that|about|for|on)\b",
+    r"\bno (?:direct |specific |relevant )?(?:information|article|guidance|content) (?:in|from) the (?:provided |available )?(?:articles?|context)\b",
+    r"\bnot possible to answer\b",
+    r"\bnone of the (?:provided |listed |available |supplied )?(?:wix )?(?:help center )?(?:articles?|documents?|sources?|entries)\b",
+    r"\b(?:i'm|i am) (?:unable|not able) to (?:find|answer|determine|locate)\b",
+    r"\bpricing information is not covered\b",
 ]
 _REFUSAL = re.compile("|".join(_REFUSAL_PATTERNS), re.IGNORECASE)
+_APOSTROPHES = str.maketrans({"\u2019": "'", "\u2018": "'", "\u02bc": "'"})
+_NUMBERED_STEP = re.compile(r"^[ \t]*\d+[.)]\s+\S", re.MULTILINE)
+
+# How far into the answer a refusal phrase may sit and still count as declining.
+REFUSAL_WINDOW = 300
 
 
 @dataclass(frozen=True)
@@ -65,8 +92,12 @@ def citation_scores(cited_doc_ids: list[str], gold_doc_ids: list[str]) -> Citati
 
 
 def is_refusal(answer: str) -> bool:
-    """Whether the answer declines to answer, by lexical pattern."""
-    return bool(_REFUSAL.search(answer or ""))
+    """Whether the answer declines to answer: a refusal phrase in its opening, and no
+    numbered steps anywhere. See `REFUSAL_DETECTOR_VERSION`."""
+    text = (answer or "").translate(_APOSTROPHES)
+    if _NUMBERED_STEP.search(text):
+        return False
+    return bool(_REFUSAL.search(text[:REFUSAL_WINDOW]))
 
 
 # P1-05: the generator must not write links — they are rendered from the doc store's

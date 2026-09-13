@@ -371,6 +371,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Added to preflight:** yes
 
 ## MIS-012 — `false_refusal` penalises the generator for retrieval's failure
+> **CORRECTED by DEC-045 on 2026-09-13** — the "two false refusals" were the two the v1
+> detector could see. Under `refusal-lexical-v2` the same run refused 20 times, 17 of
+> them on retrieval misses. The definitional point is unchanged and larger.
 - **Date:** 2026-09-11
 - **Severity:** Medium — a metric definition that would have misattributed a
   failure across every Tier 2 run. No results affected: caught on the first real

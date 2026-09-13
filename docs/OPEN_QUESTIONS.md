@@ -94,6 +94,11 @@ the detector found 26 — **7 missed (21%)**, all paraphrases ("is not covered b
 provided …", "They do not cover …", "do not specify …"). Recorded false-answer rate 0.422;
 hand-read 0.267. The decision rule stands: extend the phrase list, or replace with a
 reference-free judged criterion, and re-measure on this run's stored answers.
+**2026-09-13 — DEC-045:** `refusal-lexical-v2` agrees with all 45 hand labels
+(`data/authored/refusal_labels_v1.yaml`, labelled by Claude, unreviewed). It also found
+that v1 missed curly apostrophes, which hid 13–18 refusals per Phase 0 run. **Status:**
+answered for this set; open on human agreement beyond 45 answers and on Krutik's
+review of the labels.
 
 ## OQ-009 — Is `strict_recall@1` worth reporting at all?
 It is structurally capped: ~20% of questions need 2-3 documents and can never score

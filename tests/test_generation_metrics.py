@@ -166,3 +166,61 @@ def test_no_gold_gives_no_recall_rather_than_zero():
     assert scores.recall is None
     assert scores.precision == 0.0  # it cited something, and nothing was right
     assert citation_scores([], []).recall is None
+
+
+# --- DEC-045: refusal-lexical-v2 ------------------------------------------------
+
+def test_refusal_detector_version_is_v2():
+    from rag.eval.generation_metrics import REFUSAL_DETECTOR_VERSION
+
+    assert REFUSAL_DETECTOR_VERSION == "refusal-lexical-v2"
+
+
+def test_curly_apostrophes_are_normalised():
+    from rag.eval.generation_metrics import is_refusal
+
+    assert is_refusal("I don’t have enough information in the provided articles to answer.")
+    assert is_refusal("I can’t find any article that covers this.")
+
+
+def test_paraphrased_refusals_are_detected():
+    from rag.eval.generation_metrics import is_refusal
+
+    for text in (
+        "Creating a CMS collection in Webflow is not covered by the Wix Help Center articles provided.",
+        "The provided articles cover Members Area features. They do not cover adding a members-only area to Webflow.",
+        "The provided articles do not specify a general cost. Pricing information is not covered.",
+        "The articles cover abandoned cart emails in Wix, not Shopify. To proceed I would need Wix-specific guidance.",
+        "I'm not seeing any article in the provided set that covers changing the preview picture.",
+        "None of the articles here describe resetting a Gmail password.",
+    ):
+        assert is_refusal(text), text
+
+
+def test_a_caveat_after_a_procedure_is_an_answer_not_a_refusal():
+    from rag.eval.generation_metrics import is_refusal
+
+    hedged = (
+        "To update the og:image for your site:\n\n1. Open your site's settings.\n2. Click Website "
+        "settings.\n3. Upload the image.\n\nThe articles do not provide a general timeline for when "
+        "the change appears on social platforms."
+    )
+    assert not is_refusal(hedged)
+    late = "Here is what to do. " * 20 + "The provided articles do not cover the rest."
+    assert not is_refusal(late)  # phrase outside the opening window
+    assert is_refusal("The provided articles do not cover this. Missing: any 2025 pricing changes.")
+
+
+def test_detector_matches_the_hand_labelled_unanswerable_answers():
+    """45 answers of EXP-0007, labelled by reading each one (data/authored). The
+    detector must agree with every label; a phrase-list change that breaks one is a
+    visible decision, not a silent metric shift."""
+    import yaml
+
+    from rag.eval.generation_metrics import is_refusal
+    from rag.paths import DATA_DIR
+
+    rows = yaml.safe_load((DATA_DIR / "authored" / "refusal_labels_v1.yaml").read_text())["rows"]
+    assert len(rows) == 45
+    disagreements = [r["question"] for r in rows if is_refusal(r["answer"]) != r["refused"]]
+    assert disagreements == [], disagreements

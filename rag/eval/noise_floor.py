@@ -46,7 +46,10 @@ GENERATION_NOISE_FLOOR: dict[str, float] = {
     # citations landed on one run's "cited nothing" answers.
     "citation_precision": 0.001,
     "citation_recall": 0.018,
-    "false_refusal_rate": 0.010,
+    # Re-measured under refusal-lexical-v2 (DEC-045): v1 gave 0.010 because it missed
+    # most refusals (curly apostrophes). Under v2 the three runs are 0.20/0.15/0.21 —
+    # the old prompt's decision to refuse is itself a noisy generator behaviour.
+    "false_refusal_rate": 0.060,
     "step_coverage": 0.064,
 }
 

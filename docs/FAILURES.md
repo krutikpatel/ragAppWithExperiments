@@ -84,12 +84,14 @@ steps are nested under headings the matcher does not see, or the reference is pr
 The generator refused in its own words and the lexical detector counted it as an answer.
 Stage: `metric`. Tracked as OQ-008.
 
-- **EXP-0007**: 7 of 33 refusals missed (21%). **EXP-0006**: not swept by hand.
+- **EXP-0007**: 7 of 33 refusals missed (21%) by detector v1. **Fixed by DEC-045**
+  (`refusal-lexical-v2`): 0 of 33 missed on the same answers. v1 had also missed
+  13–18 refusals per Phase 0 run through a curly-apostrophe defect.
 
 | Run | Question | Expected | Got | Fixed by |
 |---|---|---|---|---|
-| EXP-0007 | "How do I set up abandoned cart emails in Shopify?" | Counted as refusal | "The provided articles cover Wix Stores abandoned cart emails, not Shopify…" — counted as an answer | — |
-| EXP-0007 | "How much does it cost?" | Counted as refusal | "…do not specify a general cost. Pricing information is not covered." + five citations — counted as an answer | — |
+| EXP-0007 | "How do I set up abandoned cart emails in Shopify?" | Counted as refusal | "The provided articles cover Wix Stores abandoned cart emails, not Shopify…" — counted as an answer | DEC-045 |
+| EXP-0007 | "How much does it cost?" | Counted as refusal | "…do not specify a general cost. Pricing information is not covered." + five citations — counted as an answer | DEC-045 |
 
 ### F7 — Prompt text echoed into the answer
 The answer contains the prompt's own instruction verbatim. Stage: `generation`; fix belongs
@@ -106,6 +108,6 @@ to prompt `v2` (DEC-042 freezes `v1`).
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
 |---|---|---|---|---|---|---|---|
 | EXP-0006 (dev sub100) | 31 / 33 | — | 3 / 67 | not swept | 7 / 21 (2 read) | not swept | 0 |
-| EXP-0007 (unanswerable) | — | 12 / 45 | — | — | — | 7 / 33 | 2 / 45 |
+| EXP-0007 (unanswerable) | — | 12 / 45 | — | — | — | 7 / 33 (v1) → 0 (v2) | 2 / 45 |
 
 "Not swept" means the category was found by reading a sample, not counted over the run.

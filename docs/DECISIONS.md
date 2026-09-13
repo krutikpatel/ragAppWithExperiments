@@ -1094,6 +1094,10 @@ Encoded in `rag/eval/noise_floor.py` with their provenance, and applied by
 > the v1 parser. Under `citation-v2` on the same runs: precision **0.001**, recall
 > **0.018**. `noise_floor.py` carries the v2 values.
 
+> **CORRECTED by DEC-045 on 2026-09-13** — `false_refusal_rate`'s floor was measured with
+> the v1 detector, which missed most refusals. Under `refusal-lexical-v2` the three runs
+> are 0.20 / 0.15 / 0.21: floor **0.060**. `noise_floor.py` carries the v2 value.
+
 **A judged or generated delta at or below its floor is written as "no measurable
 difference".** Not "a slight improvement", not "directionally positive". The range
 is used rather than a standard-deviation multiple because three samples cannot
@@ -1380,3 +1384,60 @@ support a distributional claim, and the range is the conservative reading.
   refusal quality would need its own decision.
 - **Revisit if:** a reference-free judged criterion (e.g. "is this a refusal?") is
   adopted to replace the lexical detector (OQ-008).
+
+## DEC-045 — Refusal detector `refusal-lexical-v2`: normalised apostrophes, wider phrase list, opening-window rule; affected rows recomputed
+- **Date:** 2026-09-13
+- **Decided by:** Krutik (on OQ-008's count; design, labels and recomputation by Claude)
+- **Status:** Active — **corrects EXP-0001's Tier 2 refusal figures, EXP-0006, EXP-0007
+  and DEC-037's `false_refusal_rate` floor**
+- **Context:** OQ-008: on EXP-0007's 45 unanswerable answers the v1 detector found 26
+  refusals; reading them found 33. While fixing that, a second defect surfaced: v1's
+  patterns use straight apostrophes (`don't`, `can't`) and the model writes curly ones
+  (`don’t`), so "I don’t have enough information in the provided articles" never
+  matched. And a naive phrase-list extension flagged 15–21 *hedged answers* per Phase 0
+  run — a procedure followed by "but the articles do not give a timeline" — which are
+  not refusals.
+- **Decision — what a refusal is, mechanically:**
+  1. Apostrophes are normalised (`’ ‘ ʼ` → `'`) before matching.
+  2. The phrase list is extended with the paraphrases seen: "is not covered by the …",
+     "they do not cover/describe/specify …", "I would need …", "I'm not seeing any
+     article …", "there isn't information/guidance … in/about", "none of the
+     articles …", "not possible to answer".
+  3. A phrase counts **only within the first 300 characters** of the answer, and
+     **only if the answer contains no numbered steps**. Measured basis: on the 45
+     labelled answers every refusal put its phrase at character 0–259 with zero
+     steps; the hedged Phase 0 answers put it at 617–2,127 after three or more steps.
+  4. `REFUSAL_DETECTOR_VERSION = "refusal-lexical-v2"`, recorded on every Tier 2 run.
+- **Validation:** `data/authored/refusal_labels_v1.yaml` holds the 45 EXP-0007 answers
+  with a label each — **read and labelled by Claude on 2026-09-13, not reviewed by
+  Krutik**. v2 agrees with all 45 (v1: 38). `tests/test_generation_metrics.py` holds
+  the detector to those labels. On the `dev` runs every newly flagged answer was read;
+  all open by declining ("I'm sorry, but I can't find …", "there is no information
+  about …").
+- **Recomputed from stored answers (v1 → v2):**
+
+  | Run | refused | on strict@5 misses | on strict@5 hits |
+  |---|---|---|---|
+  | EXP-0007 (unanswerable, 45) | 26 → **33** (0.578 → **0.733**); false-answer rate 0.422 → **0.267** | — | — |
+  | EXP-0006 (dense, sub100) | 5 → 5 | 2 → 3 of 33 | 3 → 2 of 67 |
+  | EXP-0001 T2 `…510b` | 2 → **20** (0.020 → **0.200**) | 2 → **17** of 60 | 0 → 3 of 40 |
+  | EXP-0001 T2 `…a8b3` | 3 → **15** | 3 → 13 of 60 | 0 → 2 of 40 |
+  | EXP-0001 T2 `…3792` | 3 → **21** | 2 → 17 of 60 | 1 → 4 of 40 |
+
+  EXP-0001's Tier 2 observation "refused twice, answered 58 of 60 misses" was the
+  apostrophe defect: the old prompt refused on **13–17 of 60** misses. MIS-012's point
+  (that `false_refusal` should condition on retrieval) stands and is now visibly
+  larger. EXP-0006's total is unchanged; one hedged answer moved out, one paraphrased
+  refusal moved in.
+- **Noise floor (DEC-037):** `false_refusal_rate` range over the three EXP-0001 runs is
+  0.010 under v1 and **0.060** under v2 (0.20 / 0.15 / 0.21). `noise_floor.py` carries
+  0.060. The old prompt's decision to refuse is itself a noisy generator behaviour.
+- **Evidence:** measured, from stored answers; no new calls. The labelled set is the
+  only ground truth and is one person's reading of 45 answers.
+- **Consequences:** Every refusal figure in `EXPERIMENTS.md` before this date is a v1
+  number; the rows are annotated, not rewritten. OQ-008 is answered for this set and
+  stays open on human agreement beyond it. The window (300) and the no-steps rule are
+  part of the definition; changing either is `v3`.
+- **Revisit if:** Krutik's review of the 45 labels disagrees with any; a later run
+  shows refusals opening with a phrase the list lacks (count first, preflight 21); or a
+  reference-free judged criterion replaces the lexical proxy.
