@@ -131,6 +131,10 @@ dynamic pages, while the gold article, which is about adding pages, is not in th
 hundred. Others have the gold article at rank four to nine behind a topically adjacent
 one. These are descriptions of the baseline, not claims about what fixes them.
 
+*Since Phase 1 the control is EXP-0004 (BM25 at 600/100, five distinct documents,
+strict recall@5 0.410) and EXP-0005 (dense, 0.715); the numbers above are the Phase 0
+baseline they were built from, and section 4 records the steps between.*
+
 ## 4. What was tried, axis by axis
 
 ### Chunking: whole documents versus 512-word chunks (EXP-0002)
@@ -153,17 +157,160 @@ about 0.73 on all 200 ExpertWritten questions. Ours is a labelled strict recall 
 0.41 on a 100+100 dev split. They measure different things on different questions and
 are not placed side by side; the comparison of definitions is in DEC-036.
 
+### Chunking again: 512/0 versus 600/100 (EXP-0003)
+
+Phase 1's dense control was specified at 600 words with a 100-word overlap, and two
+controls that differ in chunking as well as retrieval cannot answer "does dense beat
+lexical?" So I moved both to 600/100 and re-ran BM25 (DEC-038). Before running I
+profiled the corpus: 79% of articles fit in one 600-word chunk, 73% in a 512-word one,
+and the frozen text has no list markers at all — the source's numbered procedures
+arrive as "To do X:\nClick A. Click B." — so "chunk boundaries inside a numbered list"
+had to be measured with a heuristic, and under 600/100 the answer was zero, because a
+100-word overlap is longer than all but 20 of 5,936 procedure blocks (MIS-013,
+DEC-039).
+
+The re-run moved strict recall@5 from 0.405 to 0.410: six questions gained, five lost,
+189 unchanged. Nine of the eleven flipped gold articles were longer than 512 words, so
+they were chunked differently; they moved in both directions. Four fifths of the corpus
+is one chunk under either setting, which bounds what any chunking change can do here
+(EXP-0003).
+
+### Five documents, not five chunks (EXP-0004)
+
+Gold is document-level and forty `dev` questions need two or three articles. A context
+of five chunks can hold two articles. So `top_k` became five *distinct documents*,
+found by walking the ranking with a fifty-chunk cap, and the number of chunks scanned
+per document found — the collapse ratio — became a recorded metric (DEC-040).
+
+Measured on BM25, the ratio was 1.088 on average and 1.20 at the 90th percentile: on 138
+of 200 questions the top five chunks already were five articles, and the deepest walk
+read fourteen chunks. The cap was never reached. The premise that chunk collapse
+"structurally caps" multi-document recall turned out to be small on this corpus,
+because most ranked chunks are whole short articles. Retrieval metrics were identical
+to EXP-0003 by construction, and I checked that rather than assumed it (EXP-0004).
+
+### Dense retrieval versus BM25 (EXP-0005)
+
+One embedding model, `qwen3-embedding-8b`, hosted on OpenRouter and pinned to a single
+provider after a probe showed two providers returning different vectors for the same
+text (DEC-041). Index: 8,218 chunks, 4,096 dimensions, 135 MB, twenty minutes and three
+cents to build, cached under a key made of the corpus hash, normalisation, chunker,
+model, provider and prefix convention. The handover had suggested a local bge-base or
+e5-base model; both cap at 512 tokens and 37% of the chunks are longer than that, so
+that route would have truncated a third of the index silently.
+
+Dense retrieval found all the required articles for **71.5%** of `dev` questions
+against BM25's 41.0% — 70 questions gained, 9 lost, 121 unchanged. The number of
+questions with nothing useful in the top five fell from 99 to 37. Every slice moved,
+single-document questions most (0.469 → 0.806) and multi-document least in absolute
+terms though it doubled (0.175 → 0.350). Of the gold documents dense still missed from
+its top five, 62 of 64 were inside its top hundred; BM25's misses were a third outside
+the top hundred. The nine losses were all short exact-term questions — *PDF Viewer
+App*, *Header Scroll Effects* — where BM25 had the article at rank one to five and
+dense put it at six to thirty-three.
+
+Because the query embeddings come from a hosted service, I ran the configuration twice
+more against the cached index. Only 38–47 of 200 full rankings came back identical,
+but the top-five sets did on 183–188, and strict recall@5 moved by one question. The
+0.305 gain is sixty times that spread (EXP-0005, OQ-023).
+
+### The end-to-end control (EXP-0006, EXP-0007)
+
+With one frozen prompt — numbered steps for how-to questions, English, a citation on
+every claim, no links, a fixed refusal phrase (DEC-042) — the dense control was run
+through generation on the hundred-question subsample and on the 45 unanswerable
+questions.
+
+Citation precision was 0.550 and recall 0.608. Split by what the generator was given,
+the picture is sharper: with every gold article in its context, precision 0.654 and
+recall 0.813; with one missing, 0.323 and 0.192 — and on 30 of those 33 questions it
+answered anyway, from whatever five articles it had. Zero answers contained a URL
+(EXP-0006).
+
+On the unanswerable questions the system refused 33 of 45. It refused every question
+about another platform (Shopify, Squarespace, Webflow) and 13 of 15 about events after
+the corpus snapshot. The twelve false answers are almost all *underspecified*
+questions — "How do I fix it?", "Why was my account charged?" — where the retriever
+returns five plausible articles and the generator treats their presence as the
+answer, with citations. That 12 in 45, and 10 in 15 on the underspecified third, is
+what Phase 2's refusal logic is measured against (EXP-0007).
+
+Then the same Tier 2 configuration was run three times unchanged to measure its noise
+(DEC-046). The judge was quieter than on the Phase 0 configuration at the corpus
+level — faithfulness moved 0.013 between runs of nothing — but the generator's
+citations were not: citation precision came back 0.550, 0.478 and 0.546, so a
+citation-precision difference under 0.08 on this control is noise. Step coverage's
+floor is still a third of its own value. On the multi-document slice, faithfulness
+has a minimum detectable difference of 0.112 at n=26; small slice effects are not
+readable there. The full table is the standing reference every later scorecard
+carries (P1-11).
+
 ## 5. What actually moved the needle
 
-_Pending. Requires VALID experiments._
+One experiment is a technique comparison in this phase; the rest are the control
+being built. Ranked by measured strict recall@5 on `dev` (n=200), against cost and
+latency:
+
+| Change | strict R@5 | Δ vs sparse control | Spread | p95 latency | Cost | Ref |
+|---|---|---|---|---|---|---|
+| Dense retrieval (`qwen3-embedding-8b`) over BM25 | 0.410 → **0.715** | **+0.305** (61 questions) | 0.005 | 34 ms → 665 ms | $0 → $0.0000004/query + $0.03 index | EXP-0005 vs EXP-0004 |
+| Chunking 512/0 → 600/100 (BM25) | 0.405 → 0.410 | +0.005 (1 question) | 0 | — | $0 | EXP-0003 vs EXP-0001 |
+| Whole documents instead of 512-word chunks (BM25) | 0.405 → 0.410 | +0.005 | 0 | — | $0 | EXP-0002 vs EXP-0001 |
+| Five distinct documents instead of five chunks | 0.410 → 0.410 | 0 (identical by construction) | 0 | — | $0 | EXP-0004 vs EXP-0003 |
+
+One thing moved: the retriever. Everything on the chunking axis was within one
+question, and the document-level walk changed what a generator sees on 62 of 200
+questions without changing a retrieval number. No generation technique has been
+compared yet — the Tier 2 rows are the control, not a treatment.
 
 ## 6. What did not work, and what that suggests
 
-_Pending. Requires VALID experiments._
+**Chunk size, twice.** Whole documents (EXP-0002) and 600/100 (EXP-0003) each moved BM25
+by one question against 512/0. The corpus profile explains the flatness before any
+sweep is run: four fifths of the articles fit in a single chunk at any of those
+settings, so the chunker only touches the long fifth, and those articles moved in both
+directions. A Phase 2 chunk-size sweep on this corpus will be a flat line on
+single-document questions unless it changes something other than width; I know that
+now rather than after the sweep (OQ-003).
+
+**The premise that chunks collapse into documents.** The handover expected a naive
+top-five-chunk retriever to be capped by adjacent chunks of one article; the measured
+collapse ratio was 1.09 under BM25 and 1.11 under dense, with no question exhausting
+the pool (EXP-0004, EXP-0005). The document-level walk was the right thing to build —
+it costs nothing and makes the context semantics honest — but it is not where the
+multi-document problem lives. Dense retrieval still finds all the required articles
+for only 14 of 40 multi-document questions; it finds *one* of them for 34. The second
+document is a ranking problem, not a granularity problem.
+
+**"BM25 is a serious opponent on this corpus."** It was not, at the document level:
+dense won every slice by 0.175 to 0.371 and lost nine individual questions. What
+survived of the premise is those nine — short questions carrying one exact product
+term. Whether a hybrid recovers them without losing the seventy is exactly the kind of
+question that gets a run, not a guess (OQ-001's family).
+
+**Two instruments, before any technique.** The citation parser dropped a citation
+shape the model uses (MIS-016) and the refusal detector could not read a curly
+apostrophe (DEC-045). Neither is a technique result, but both cost historical numbers
+their first decimal, and both are recorded as corrections rather than overwritten.
+The lesson is in section 9.
 
 ## 7. Where the system still fails
 
-_Pending P0-07 evaluation runs and `FAILURES.md`._
+Seven categories, each named from a run rather than in advance, with the questions
+that define them, live in `FAILURES.md`. The three that matter most, by count:
+
+- **Answered on a retrieval miss** — 30 of the 33 `dev` questions whose gold article
+  was not retrieved got a confident, cited answer from the wrong articles (EXP-0006).
+  The retriever is the largest source of wrong answers and the generator hides it.
+- **Answered an unanswerable question** — 12 of 45, ten of them underspecified
+  (EXP-0007). The system has no way to say "which one?".
+- **Refused with the answer in context** — 2 of 67 (EXP-0006). Rare, and each was the
+  model wanting a closer wording match than the reference needed.
+
+Two are measurement failures rather than system failures and are tracked as such:
+step coverage of zero on a correct-looking procedure because the reference's steps sit
+under headings the matcher does not see (OQ-007), and the prompt's own instruction
+text echoed into two answers (a `v2` prompt item, DEC-042).
 
 ## 8. Production engineering
 

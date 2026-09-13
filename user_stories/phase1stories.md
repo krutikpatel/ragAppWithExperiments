@@ -263,6 +263,21 @@ Acceptance criteria — four runs recorded in the results store, all on the reco
 
 ### P1-08 — Baseline scorecard
 
+> **Status: DONE, with one rule-bound gap** (2026-09-13) — "Phase 1 scorecard" section
+> in `docs/EXPERIMENTS.md`, six tables, every number from the store, sliced, single vs
+> multi first, dense-vs-sparse section, every judged/generated metric with its MDD.
+> - [x] strict/loose recall@{1,3,5,10}, nDCG@10, MRR (single-gold), collapse mean/p90, exhaustion
+> - [ ] faithfulness / relevance / correctness **values**: computed and in the store, but
+>       the judge is a placeholder (DEC-018, preflight 17) so they are not transcribed;
+>       their MDDs are. Fills in when Krutik chooses a real judge.
+> - [x] citation precision/recall, step coverage + order, false-answer rate (unanswerable),
+>       false-refusal rate (dev, with the MIS-012 caveat and the retrieval-conditioned figure)
+> - [x] p95 latency, cost/query, tokens/query, index build time and size
+> - [x] all sliced (P0-08); dense-vs-sparse by slice, no conclusions beyond the numbers
+> - [x] every judged metric carries its MDD from P1-11
+> - [ ] no sparse Tier 2 row under the reconciled config (~$0.91 to add)
+> - [x] NARRATIVE.md sections 4–7 written from EXPERIMENTS.md
+
 **As the project, I need one scorecard that later phases diff against.**
 
 Acceptance criteria — `docs/EXPERIMENTS.md` gains a Phase 1 scorecard containing, for runs 1–4:

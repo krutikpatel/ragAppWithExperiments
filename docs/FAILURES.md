@@ -23,8 +23,8 @@ The gold article was not retrieved; the generator answered from whatever five ar
 was given, with citations. The most common failure by count. Stage: `retrieval`, made
 invisible by `generation`.
 
-- **EXP-0006** (dense control, Tier 2): **31 of 33** questions with a gold document missing
-  from context were answered, 2 refused.
+- **EXP-0006** (dense control, Tier 2): **30 of 33** questions with a gold document missing
+  from context were answered, 3 refused (detector v2; v1 counted 31 / 2).
 - **EXP-0001 Tier 2** (BM25, Phase 0): 58 of 60.
 
 | Run | Question | Expected | Got | Fixed by |
@@ -37,8 +37,8 @@ No article in the corpus can answer the question; the retriever still returns fi
 ones and the generator treats their presence as the answer. Stage: `generation` (no
 refusal logic). Concentrated in **underspecified** questions.
 
-- **EXP-0007**: 12 of 45 answered (hand count); **10 of 15 underspecified**, 2 of 15
-  post-snapshot, 0 of 15 other-platform. 11 of the 12 cited an article.
+- **EXP-0007**: 12 of 45 answered (hand count = detector v2); **10 of 15 underspecified**,
+  2 of 15 post-snapshot, 0 of 15 other-platform. All 12 cited an article.
 
 | Run | Question | Expected | Got | Fixed by |
 |---|---|---|---|---|
@@ -50,7 +50,8 @@ refusal logic). Concentrated in **underspecified** questions.
 The gold article was retrieved (and sometimes cited); the generator declined because the
 article did not match the question's wording closely enough. Stage: `generation`.
 
-- **EXP-0006**: 3 of 67 questions with all gold in context.
+- **EXP-0006**: 2 of 67 questions with all gold in context (detector v2; the third under v1
+  was a refusal phrase followed by a procedure, now counted as a hedged answer).
 
 | Run | Question | Expected | Got | Fixed by |
 |---|---|---|---|---|
@@ -107,7 +108,7 @@ to prompt `v2` (DEC-042 freezes `v1`).
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
 |---|---|---|---|---|---|---|---|
-| EXP-0006 (dev sub100) | 31 / 33 | — | 3 / 67 | not swept | 7 / 21 (2 read) | not swept | 0 |
+| EXP-0006 (dev sub100) | 30 / 33 | — | 2 / 67 | not swept | 7 / 21 (2 read) | not swept | 0 |
 | EXP-0007 (unanswerable) | — | 12 / 45 | — | — | — | 7 / 33 (v1) → 0 (v2) | 2 / 45 |
 
 "Not swept" means the category was found by reading a sample, not counted over the run.

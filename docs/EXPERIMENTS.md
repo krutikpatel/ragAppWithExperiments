@@ -59,6 +59,118 @@ Column notes:
   of EXP-0005 ranged 0.005 on strict recall@5 (OQ-023). Any dense delta at or under
   one question is within that.
 
+## Phase 1 scorecard — the controls (P1-08)
+
+Every number below mirrors a row in the results store. Runs: **sparse control** EXP-0004 (`run_20260912_215235_ff2f`), **dense control** EXP-0005 (`run_20260912_222538_b1dc`), **dense Tier 2** EXP-0006 (`run_20260913_054522_7d37`), **dense on `unanswerable`** EXP-0007 (`run_20260913_060733_6a9b`). All on corpus `sha256:74694ad4…`, `norm-v1`, chunker `fixed_token-0ad99a2d` (600/100, DEC-038), `top_k` 5 distinct documents with a 50-chunk pool (DEC-040), pooling `max`. Dense: `qwen/qwen3-embedding-8b` on DeepInfra (DEC-041). Generator `gpt-5-nano` with `baseline_answer@v1` (DEC-042), parsers `citation-v2` / `refusal-lexical-v2` (DEC-043/045).
+
+**MDD** columns are the dense control's minimum detectable differences (DEC-046). A delta at or below its MDD is no measurable difference. Sparse (BM25) retrieval has zero spread.
+
+**Judged metrics are absent by rule, not by omission.** Faithfulness, answer correctness and answer relevance were computed for EXP-0006 (and its two replicates) and are in the results store, but the judge is a placeholder (DEC-018, preflight item 17) and its values may not be transcribed here. Their MDDs are: faithfulness 0.014, answer correctness 0.020, answer relevance 0.021 (corpus); per slice in the MDD table below. The scorecard is complete on the day a real judge is chosen — a model decision (CLAUDE.md §10).
+
+There is **no sparse Tier 2 row under the reconciled config**: EXP-0001's Tier 2 variant ran on 512/0 with `answer@v1` and top-5 chunks and is not comparable (DEC-038). A sparse Tier 2 run of `exp_0004_bm25_distinct_docs.yaml` costs ~$0.91 and would fill the column.
+
+### 1. Single-document vs multi-document — the split that matters most
+
+| Metric | single (n=160) sparse | single dense | multi (n=40) sparse | multi dense |
+|---|---|---|---|---|
+| strict recall@1 | 0.212 | **0.375** | 0.000 | **0.000** |
+| strict recall@3 | 0.381 | **0.656** | 0.050 | **0.200** |
+| **strict recall@5** | 0.469 | **0.806** | 0.175 | **0.350** |
+| strict recall@10 | 0.575 | **0.906** | 0.300 | **0.625** |
+| loose recall@1 | 0.212 | **0.375** | 0.225 | **0.425** |
+| loose recall@3 | 0.381 | **0.656** | 0.575 | **0.775** |
+| loose recall@5 | 0.469 | **0.806** | 0.650 | **0.850** |
+| loose recall@10 | 0.575 | **0.906** | 0.700 | **0.925** |
+| nDCG@10 | 0.380 | **0.639** | 0.375 | **0.590** |
+| collapse ratio mean | 1.091 | **1.105** | 1.075 | **1.110** |
+| collapse ratio p90 | 1.200 | **1.200** | 1.400 | **1.400** |
+| pool exhaustion | 0.000 | **0.000** | 0.000 | **0.000** |
+| citation precision (Tier 2, sub100) | — | **0.529** (n=70) | — | **0.608** (n=25) |
+| citation recall | — | **0.676** (n=74) | — | **0.417** (n=26) |
+| step coverage | — | **0.260** (n=22) | — | **0.352** (n=10) |
+
+MRR is over the single-gold subset by definition (DEC-011): sparse 0.329, dense **0.557** (n=160, MDD 0.008).
+
+### 2. Retrieval, every slice (Tier 1, full `dev`, n=200)
+
+Sparse / **dense**. Strict = all gold documents retrieved; loose = any.
+
+| Slice | n | strict@1 | strict@3 | strict@5 | strict@10 | loose@1 | loose@3 | loose@5 | loose@10 | nDCG@10 | collapse mean | collapse p90 | exhaustion |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| all | 200 | 0.170 / **0.300** | 0.315 / **0.565** | 0.410 / **0.715** | 0.520 / **0.850** | 0.215 / **0.385** | 0.420 / **0.680** | 0.505 / **0.815** | 0.600 / **0.910** | 0.379 / **0.629** | 1.088 / **1.106** | 1.20 / 1.40 | 0.00 / 0.00 |
+| gold_docs:single | 160 | 0.212 / **0.375** | 0.381 / **0.656** | 0.469 / **0.806** | 0.575 / **0.906** | 0.212 / **0.375** | 0.381 / **0.656** | 0.469 / **0.806** | 0.575 / **0.906** | 0.380 / **0.639** | 1.091 / **1.105** | 1.20 / 1.20 | 0.00 / 0.00 |
+| gold_docs:multi | 40 | 0.000 / **0.000** | 0.050 / **0.200** | 0.175 / **0.350** | 0.300 / **0.625** | 0.225 / **0.425** | 0.575 / **0.775** | 0.650 / **0.850** | 0.700 / **0.925** | 0.375 / **0.590** | 1.075 / **1.110** | 1.40 / 1.40 | 0.00 / 0.00 |
+| source:expertwritten | 100 | 0.180 / **0.260** | 0.290 / **0.570** | 0.390 / **0.690** | 0.510 / **0.850** | 0.220 / **0.370** | 0.430 / **0.730** | 0.530 / **0.830** | 0.630 / **0.940** | 0.392 / **0.636** | 1.094 / **1.112** | 1.20 / 1.20 | 0.00 / 0.00 |
+| source:simulated | 100 | 0.160 / **0.340** | 0.340 / **0.560** | 0.430 / **0.740** | 0.530 / **0.850** | 0.210 / **0.400** | 0.410 / **0.630** | 0.480 / **0.800** | 0.570 / **0.880** | 0.366 / **0.622** | 1.082 / **1.100** | 1.20 / 1.40 | 0.00 / 0.00 |
+| q_len:short | 74 | 0.257 / **0.432** | 0.392 / **0.635** | 0.473 / **0.797** | 0.568 / **0.878** | 0.284 / **0.500** | 0.446 / **0.730** | 0.541 / **0.865** | 0.608 / **0.919** | 0.423 / **0.697** | 1.081 / **1.103** | 1.20 / 1.20 | 0.00 / 0.00 |
+| q_len:medium | 64 | 0.062 / **0.172** | 0.219 / **0.484** | 0.344 / **0.562** | 0.438 / **0.766** | 0.141 / **0.266** | 0.344 / **0.625** | 0.453 / **0.688** | 0.531 / **0.859** | 0.300 / **0.531** | 1.088 / **1.103** | 1.20 / 1.40 | 0.00 / 0.00 |
+| q_len:long | 62 | 0.177 / **0.274** | 0.323 / **0.565** | 0.403 / **0.774** | 0.548 / **0.903** | 0.210 / **0.371** | 0.468 / **0.677** | 0.516 / **0.887** | 0.661 / **0.952** | 0.408 / **0.649** | 1.097 / **1.113** | 1.20 / 1.20 | 0.00 / 0.00 |
+
+Corpus-level MDDs (dense): strict/loose recall@1 and @5 0.012; @3 and @10 0 (identical across three runs); nDCG@10 0.004; collapse ratio mean 0.003. `article_type` slices are omitted: every gold document in `dev` is `article`.
+
+### 3. Generation (Tier 2, dense control, `dev` sub100 — EXP-0006) and refusal (EXP-0007)
+
+| Metric | Value | n | MDD | Notes |
+|---|---|---|---|---|
+| faithfulness | *in store, not transcribed* | 100 | 0.014 | placeholder judge (DEC-018) |
+| answer correctness | *in store, not transcribed* | 100 | 0.020 | placeholder judge (DEC-018) |
+| answer relevance | *in store, not transcribed* | 100 | 0.021 | placeholder judge (DEC-018) |
+| **citation precision** | **0.550** | 95 | 0.080 | of answers that cited; generator variance dominates this MDD |
+| **citation recall** | **0.608** | 100 | 0.040 | |
+| cited nothing | 0.05 | 100 | 0.023 | |
+| step coverage | 0.289 | 32 | 0.097 | procedural references only; MDD is a third of the value (OQ-007) |
+| step order preserved | 0.906 | 32 | 0.036 | of matched steps |
+| refused on `dev` (`refusal-lexical-v2`) | 0.05 | 100 | 0.031 | |
+| `false_refusal_rate` as defined (MIS-012) | 0.05 | 100 | 0.031 | refused on any answerable question |
+| refused with all gold in context | 2/67 = 0.030 | 67 | — | the honest false-refusal rate (OQ-019, not yet adopted) |
+| **answered with a gold document missing** | **30/33 = 0.909** | 33 | — | the ungrounded-answer rate (OQ-019) |
+| **false-answer rate on `unanswerable`** | **0.267** (12/45) | 45 | — | EXP-0007; 12 of the 12 cited an article |
+| answers with a URL | 0 | 100 | 0 | also 0 / 45 on `unanswerable` |
+| answers formatted as a numbered list | 80 | 100 | — | 32 references are procedural |
+| tokens per query (generator) | 2654 in / 363 out | 100 | — | |
+| p50 / p95 latency, end to end | 4,278 / 11,744 ms | 100 | — | replicates: p95 36,315 and 4,285 ms — judge-side variance |
+| cost per query | $0.0091 | 100 | — | estimate (DEC-035): generator + judge; ~$0.91 per run |
+
+Refusal on `unanswerable` by reason (EXP-0007, v2): other-platform 15/15 refused; post-snapshot 13/15; underspecified 5/15 — **10 of 15 underspecified questions answered, all with citations**.
+
+### 4. Generation by slice (Tier 2, dense control, sub100)
+
+Slice boundaries for question length are the subsample's own terciles (P0-08), so `n` differs from section 2.
+
+| Slice | n | strict@5 | citation precision (n) | citation recall | step coverage (n) | refused (v2) | answered with gold missing |
+|---|---|---|---|---|---|---|---|
+| all | 100 | 0.670 | 0.550 (95) | 0.608 | 0.289 (32) | 0.05 | 30/33 |
+| gold_docs:single | 74 | 0.811 | 0.529 (70) | 0.676 | 0.260 (22) | 0.04 | 13/14 |
+| gold_docs:multi | 26 | 0.269 | 0.608 (25) | 0.417 | 0.352 (10) | 0.08 | 17/19 |
+| source:expertwritten | 57 | 0.667 | 0.526 (54) | 0.626 | 0.289 (32) | 0.05 | 18/19 |
+| source:simulated | 43 | 0.674 | 0.581 (41) | 0.585 | — (—) | 0.05 | 12/14 |
+| q_len:short | 45 | 0.733 | 0.622 (42) | 0.652 | 0.368 (8) | 0.07 | 10/12 |
+| q_len:medium | 24 | 0.458 | 0.479 (24) | 0.465 | 0.207 (7) | 0.00 | 13/13 |
+| q_len:long | 31 | 0.742 | 0.504 (29) | 0.656 | 0.285 (17) | 0.06 | 7/8 |
+
+Per-slice judged MDDs (DEC-046): single 0.042 / 0.028 / 0.005, multi 0.112 / 0.050 / 0.074 (faithfulness / correctness / relevance). All 32 procedural references are expert-written.
+
+### 5. Index, latency and cost
+
+| | Sparse (BM25) | Dense (qwen3-embedding-8b, DeepInfra) |
+|---|---|---|
+| index build | in-process, seconds, $0 | **1213 s**, 129 calls, 7 retries, $0.031 |
+| index size | — | **134.6 MB** (8,218 × 4096 float32), key `f0e720da2aa33751` |
+| Tier 1 p50 / p95 latency | 15 / 34 ms | 325 / 2,441 ms (canonical, 7 retries); 289–298 / 635–665 ms (replicates) |
+| Tier 1 cost per query | $0 exact | $0.0 exact (provider-reported) |
+| Tier 2 cost per query | — | $0.0091 estimate |
+
+### 6. Dense versus sparse — where each wins, by slice
+
+From EXP-0004 and EXP-0005 (`rag diff`: 70 questions gained strict recall@5 under dense, 9 lost, 121 unchanged). Statements of what the numbers show; no conclusions beyond them.
+
+- **Dense wins on every slice at every k.** The smallest strict recall@5 gain is +0.175 on multi-document questions (0.175 → 0.350); the largest is +0.371 on long questions (0.403 → 0.774). All are more than twenty times the dense MDD of 0.012.
+- **Sparse wins on nine individual questions**, all short exact-term matches where BM25 had the article at rank 1–5 and dense placed it at 6–33 (*PDF Viewer App*, *Header Scroll Effects*, *Changing the Payment Date*; three refund-policy questions). No slice aggregates them.
+- **Multi-document is the weakest slice under both**: dense finds one required article for 34 of 40 (loose 0.850) and all of them for 14 (strict 0.350); at k=10, 25 of 40.
+- **Medium-length questions (13–17 words) are the worst length tercile under both** (0.344 → 0.562) and remain so on citation recall and step coverage in Tier 2 (0.465, 0.207). Not explained.
+- **Collapse is small under both** (mean 1.088 vs 1.106; p90 1.20 vs 1.40; no exhaustion): on this corpus five chunks are nearly always five articles, so the document-level walk of DEC-040 rarely changes the context.
+- **Misses are ranking misses under dense, vocabulary misses under sparse**: of the gold documents outside the top 5, **2 of 64** are outside the top 100 under dense against **52 of 135** under sparse (EXP-0004).
+
 ## Minimum detectable differences — standing reference (P1-11, DEC-046)
 
 Measured on three identical runs of the dense control's Tier 2 config
