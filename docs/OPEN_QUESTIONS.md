@@ -89,6 +89,11 @@ the provided articles … they do not specify how …" — a correct refusal —
 `is_refusal` returned False, because the model paraphrased instead of using the
 prompt's fixed phrase. The detector cannot be extended without a metric-definition
 decision; count these when the Tier 2 control runs.
+2026-09-13 (EXP-0007): counted. On the 45 unanswerable answers, read by hand: 33 refusals,
+the detector found 26 — **7 missed (21%)**, all paraphrases ("is not covered by the
+provided …", "They do not cover …", "do not specify …"). Recorded false-answer rate 0.422;
+hand-read 0.267. The decision rule stands: extend the phrase list, or replace with a
+reference-free judged criterion, and re-measure on this run's stored answers.
 
 ## OQ-009 — Is `strict_recall@1` worth reporting at all?
 It is structurally capped: ~20% of questions need 2-3 documents and can never score
@@ -236,6 +241,10 @@ generator answering anyway on 58 of 60 retrieval failures — has no metric at a
 **Decided by:** Krutik's sign-off on the redefinition (CLAUDE.md section 9); then
 recompute on `run_20260911_053316_510b`, whose per-question rows already hold
 everything needed. **Status:** open — blocks any refusal claim in the narrative.
+2026-09-13: `gold_in_context` is now recorded per question (DEC-040), so both proposed
+metrics can be computed from any run since EXP-0004 without re-running. On EXP-0006:
+refused with all gold in context 3 / 67; answered with gold missing **31 / 33**. The
+redefinition still needs Krutik's sign-off.
 
 ## OQ-020 — Does the procedure-block heuristic agree with the source HTML's ordered lists?
 DEC-039 defines a procedure block on the marker-stripped text: a `:`-terminated header

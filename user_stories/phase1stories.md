@@ -233,10 +233,14 @@ Acceptance criteria:
 
 ### P1-07 — Baseline runs
 
-> **Status: 2 of 4 runs done** (2026-09-12) — run 1 dense Tier 1 = EXP-0005
-> (`run_20260912_222538_b1dc`, strict R@5 0.715); run 4 sparse Tier 1 = EXP-0004
-> (`run_20260912_215235_ff2f`, 0.410). Runs 2 (dense Tier 2) and 3 (unanswerable)
-> wait on P1-05 (the frozen prompt) and P1-06. `test` untouched.
+> **Status: DONE** (2026-09-13) — all four runs recorded; `test` untouched (0 openings).
+> - [x] run 1 — dense, 5 distinct docs, Tier 1, dev: **EXP-0005** `run_20260912_222538_b1dc`, strict R@5 0.715 (+2 replicates)
+> - [x] run 2 — dense, Tier 2, dev sub100: **EXP-0006** `run_20260913_054522_7d37`, cit. prec 0.550 / recall 0.608, 0 URLs
+> - [x] run 3 — dense, unanswerable (Tier 2, judge skipped — DEC-044): **EXP-0007** `run_20260913_060733_6a9b`,
+>       false-answer rate 0.422 lexical / 0.267 hand-read
+> - [x] run 4 — BM25, 5 distinct docs, Tier 1, dev: **EXP-0004** `run_20260912_215235_ff2f`, strict R@5 0.410
+> - [x] every row carries the P0-10 provenance tuple; dense rows also carry the index key
+> - [x] `docs/FAILURES.md` started from EXP-0006/0007 (7 categories)
 
 **As the project, I need the control runs recorded.**
 
