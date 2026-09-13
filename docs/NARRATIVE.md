@@ -201,6 +201,29 @@ answered anyway, and no metric noticed. The metric was designed before any retri
 had run, with "answerable" meaning *in the corpus* rather than *in the context*. I
 found it by reading the two examples, not by looking at the aggregate (MIS-012).
 
+> **CORRECTED by DEC-045 on 2026-09-13.** The "2%" and "58 of 60" above were what the
+> refusal detector could see, and it could not see much: its patterns matched `don't`
+> while the model wrote `don’t`. Re-run over the same stored answers with the fixed
+> detector, that run refused **20 of 100** questions, **17 of them on the 60 retrieval
+> misses** — so the generator answered anyway on 43 of 60, not 58. Nothing about the
+> system changed; the instrument did. The point of the paragraph stands, at a smaller
+> size, and the lesson it actually taught is the next one.
+
+**Test every parser of model output on model output.** Twice in Phase 1 a metric was
+wrong because the code that read the model's answers was written against the format
+the prompt *asked for* rather than what the model *produced*. The citation parser
+matched `[doc:id]` exactly and dropped `[doc: id]` with a space — 4 to 13 citations per
+hundred answers (MIS-016, DEC-043). The refusal detector matched straight apostrophes
+and the model used curly ones — 13 to 18 refusals per hundred answers, invisible
+(DEC-045). Both were found by reading answers in full, not by looking at a table, and
+both fixes moved historical numbers: citation precision on the Phase 0 baseline went
+0.388 → 0.383, its refusal rate 0.02 → 0.20, and the run-to-run floor for refusals
+0.010 → 0.060. I recorded those as corrections beside the originals rather than
+overwriting them, because a reader of the earlier rows needs to know which parser
+produced them. The rule now in the preflight list: count what the parser drops on
+stored output before trusting any number it feeds, and version the parser on every
+run so a change in it is visible in the results store.
+
 **Fail at the unit that failed.** A hundred-question judging run was voided by one
 question's structured output overflowing a token budget. Judging one question never
 depends on another; the honest record was "this criterion could not be scored here",
@@ -265,7 +288,12 @@ that gate what the numbers can be trusted to mean:
 - **Whether step coverage measures the answers or the matcher (OQ-007).** The
   lexical matcher misses paraphrases; the proportion of misses is unknown.
 - **Whether refusal metrics should condition on retrieval (OQ-019).** As defined,
-  they do not, and the ungrounded-answer rate has no metric.
+  they do not, and the ungrounded-answer rate has no metric. Since DEC-040 the
+  per-question fact needed (`gold_in_context`) is recorded, so the redefinition is a
+  decision, not a re-run.
+- **Whether the refusal detector agrees with a human beyond 45 answers (OQ-008).**
+  Version 2 agrees with my reading of all 45 unanswerable-split answers (DEC-045); that
+  is one reader and one split.
 - **Whether `feature_request` articles act as distractors (OQ-006).** A third of the
   index is never a right answer for any `dev` question.
 - **Whether the unanswerable set is detectable by keyword rather than grounding
