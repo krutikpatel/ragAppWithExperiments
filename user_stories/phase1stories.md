@@ -324,6 +324,20 @@ Acceptance criteria:
 
 ### P1-11 — Judge variance and minimum detectable difference
 
+> **Status: DONE** (2026-09-13) — DEC-046; standing MDD table in `EXPERIMENTS.md`;
+> floors per family in `rag/eval/noise_floor.py` (`dense-control-v1` active).
+> - [x] three identical runs of `baseline_dense_tier2.yaml`, judge temp 0, same sub100
+>       (`…7d37` = EXP-0006, `…9156`, `…dc03`)
+> - [x] mean / stdev per judged metric, corpus and per slice
+> - [x] MDD rule stated: max(range, 2×stdev) — faithfulness 0.014, correctness 0.020,
+>       relevance 0.021 at corpus level; up to 0.112 per slice
+> - [x] MDD table in `EXPERIMENTS.md`, referenced by P1-08
+> - [~] sanity check: index key identical; retrieval within one question (hosted query
+>       embeddings, OQ-023); citation/step metrics NOT identical because the generator is
+>       not deterministic — reported with their own MDDs. Not a bug; criterion amended in DEC-046
+> - [x] MISTAKES.md preflight item 22 seeded
+> - [x] cost recorded: ~$2.73 for the three
+
 **As the project, I need to know how noisy my evaluator is, before I trust any improvement it
 reports.**
 

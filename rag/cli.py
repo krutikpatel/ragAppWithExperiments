@@ -140,6 +140,12 @@ def ask(
     typer.echo(format_ask(result, max_chunk_chars=max_chunk_chars or None))
 
 
+def _floor_family() -> str:
+    from rag.eval.noise_floor import ACTIVE_FAMILY
+
+    return ACTIVE_FAMILY
+
+
 @app.command("diff")
 def diff(
     run_a: str = typer.Argument(..., help="Baseline run id."),
@@ -153,7 +159,7 @@ def diff(
     typer.echo(report["comparability"]["verdict"])
     judged = {k: v for k, v in report["aggregate_deltas"].items() if v["verdict"] != "no floor measured"}
     if judged:
-        typer.echo("noise-floor verdicts (DEC-037):")
+        typer.echo(f"noise-floor verdicts ({_floor_family()}, DEC-037/046):")
         for k, v in judged.items():
             typer.echo(f"  {k:<22} {v['a']:.4f} -> {v['b']:.4f}  Δ{v['delta']:+.4f}  {v['verdict'].upper()}")
     typer.echo(

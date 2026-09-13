@@ -53,9 +53,54 @@ Column notes:
   hand count of all 45 answers (0.733). **Every refusal figure recorded before
   2026-09-13 is a v1 number**; EXP-0001's Tier 2 refusals were 2 → 20 under v2 (the
   detector missed curly apostrophes). Runs from here record `refusal-lexical-v2`.
+- **EXP-0006 was replicated twice** (`run_20260913_202416_9156`, `run_20260913_205058_dc03`)
+  for P1-11; the MDD table below is their spread. They are not separate rows.
 - **Dense spread is not zero.** Hosted query embeddings vary call to call; three runs
   of EXP-0005 ranged 0.005 on strict recall@5 (OQ-023). Any dense delta at or under
   one question is within that.
+
+## Minimum detectable differences — standing reference (P1-11, DEC-046)
+
+Measured on three identical runs of the dense control's Tier 2 config
+(`configs/baseline_dense_tier2.yaml`) on the fixed 100-question subsample:
+`run_20260913_054522_7d37`, `run_20260913_202416_9156`, `run_20260913_205058_dc03`.
+Rule: **MDD = max(range, 2 × stdev), rounded up to 0.001**. A delta at or below its MDD is
+"no measurable difference". Every judged or generated number in a scorecard carries its MDD.
+Active in `rag/eval/noise_floor.py` as family `dense-control-v1`; the Phase 0 family (DEC-037)
+is kept there for reading older rows. Full tables with the per-run values: DEC-046.
+
+| Metric | MDD (corpus, n=100) | Notes |
+|---|---|---|
+| faithfulness | **0.014** | judged; per-slice up to 0.112 (multi-doc, n=26) |
+| answer_correctness | **0.020** | judged; per-slice up to 0.053 |
+| answer_relevance | **0.021** | judged; per-slice up to 0.074 |
+| citation_precision | **0.080** | generator variance; 0.550 / 0.478 / 0.546 across runs of nothing |
+| citation_recall | **0.040** | |
+| cited_nothing | 0.023 | |
+| step_coverage | **0.097** | value 0.19–0.29: cannot detect anything yet (OQ-007) |
+| step_order_preserved | 0.036 | |
+| refused / false_refusal_rate | **0.031** | `refusal-lexical-v2` |
+| strict_recall@5 | 0.012 | hosted query embeddings (OQ-023); one question |
+| strict_recall@1, loose_recall@5 | 0.012 | |
+| nDCG@10 | 0.004 | |
+| MRR (single-gold) | 0.008 | |
+| collapse_ratio_mean | 0.003 | |
+| strict_recall@3 / @10 / @20 | 0 | identical across the three runs |
+
+Per-slice judged MDDs:
+
+| Slice | n | faithfulness | answer_correctness | answer_relevance |
+|---|---|---|---|---|
+| gold_docs:single | 74 | 0.042 | 0.028 | 0.005 |
+| gold_docs:multi | 26 | 0.112 | 0.050 | 0.074 |
+| source:expertwritten | 57 | 0.039 | 0.030 | 0.021 |
+| source:simulated | 43 | 0.025 | 0.024 | 0.043 |
+| q_len:short | 45 | 0.041 | 0.053 | 0.019 |
+| q_len:medium | 24 | 0.007 | 0.033 | 0.023 |
+| q_len:long | 31 | 0.047 | 0.050 | 0.067 |
+
+The two replicate runs are not experiments and have no index row; they are the noise
+measurement for EXP-0006's configuration. Cost of the three: ~$2.73.
 
 <!-- corpus-profile:c852878d74a8 start -->
 ## Corpus profile — characterization, not an experiment (profile-v1)

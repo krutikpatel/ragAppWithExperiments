@@ -67,6 +67,11 @@ Derived from the prevention rules below. Run through it and say in chat that you
     asserted against it — never copied from the config alone.** (MIS-015)
 21. **Test every parser of model output on stored model output**, not on the format
     the prompt asked for. Count what the parser drops. (MIS-016)
+22. **Never report a judged-metric improvement smaller than its MDD as a win. Report it
+    as "within judge noise".** The MDDs are per configuration family in
+    `rag/eval/noise_floor.py` (DEC-037, DEC-046); a scorecard entry without its MDD is
+    incomplete. Citation precision's MDD on the dense control is 0.08 — the generator,
+    not the judge, is the noisiest instrument there.
 
 ---
 

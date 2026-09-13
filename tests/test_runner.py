@@ -279,15 +279,21 @@ def test_judge_concurrency_is_part_of_config_but_not_of_results():
 
 
 def test_noise_floor_verdicts():
-    """DEC-037: a judged delta inside the measured spread is not a finding."""
-    from rag.eval.noise_floor import JUDGED_NOISE_FLOOR, MEASURED_ON, verdict
+    """DEC-037 / DEC-046: a delta inside the measured spread is not a finding."""
+    from rag.eval.noise_floor import ACTIVE_FAMILY, FLOOR_FAMILIES, MEASURED_ON, NOISE_FLOOR, verdict
 
+    assert ACTIVE_FAMILY == "dense-control-v1"
     assert len(MEASURED_ON["runs"]) == 3
-    assert verdict("faithfulness", 0.02) == "within noise"
+    assert all(len(f["measured_on"]["runs"]) == 3 for f in FLOOR_FAMILIES.values())
+    assert verdict("faithfulness", 0.010) == "within noise"
     assert verdict("faithfulness", -0.05) == "finding"
-    assert verdict("answer_correctness", 0.011) == "within noise"   # equal to floor is not above it
-    assert verdict("strict_recall@5", 0.005) == "no floor measured"  # deterministic: any delta is real
-    assert JUDGED_NOISE_FLOOR["step_coverage"] if "step_coverage" in JUDGED_NOISE_FLOOR else True
+    assert verdict("answer_correctness", NOISE_FLOOR["answer_correctness"]) == "within noise"  # equal is not above
+    # Dense retrieval carries a floor (OQ-023); BM25's would be zero, and latency has none.
+    assert verdict("strict_recall@5", 0.010) == "within noise"
+    assert verdict("strict_recall@5", 0.30) == "finding"
+    assert verdict("p95_latency_ms", 1000) == "no floor measured"
+    # The Phase 0 family is kept, with its own runs, for reading old rows.
+    assert FLOOR_FAMILIES["phase0-bm25-answer-v1"]["floors"]["faithfulness"] == 0.032
 
 
 def test_diff_applies_noise_floor_to_judged_aggregates(store):
@@ -300,5 +306,5 @@ def test_diff_applies_noise_floor_to_judged_aggregates(store):
         )
     store.conn.commit()
     report = diff_runs("run_a", "run_b", store=store)
-    assert report["aggregate_deltas"]["faithfulness"]["verdict"] == "within noise"
-    assert report["aggregate_deltas"]["strict_recall@5"]["verdict"] == "no floor measured"
+    assert report["aggregate_deltas"]["faithfulness"]["verdict"] == "finding"  # 0.02 > 0.014
+    assert report["aggregate_deltas"]["strict_recall@5"]["verdict"] == "within noise"  # delta 0

@@ -1441,3 +1441,112 @@ support a distributional claim, and the range is the conservative reading.
 - **Revisit if:** Krutik's review of the 45 labels disagrees with any; a later run
   shows refusals opening with a phrase the list lacks (count first, preflight 21); or a
   reference-free judged criterion replaces the lexical proxy.
+
+## DEC-046 — Minimum detectable differences for the dense control, measured; floors are per configuration family
+- **Date:** 2026-09-13
+- **Decided by:** Claude (running P1-11 at Krutik's request); the floors are
+  measurements, the rule is a judgment call stated here
+- **Status:** Active — **supersedes DEC-037's floors as the active set**; DEC-037's
+  values stay on record for reading Phase 0 rows
+- **Context:** P1-11. DEC-037 measured the judge's run-to-run noise on the Phase 0
+  config (BM25, `answer@v1`). The Phase 1 control differs in retriever, prompt,
+  context semantics and parsers, and DEC-037 said its floors hold only for the
+  configuration they were measured on. So they were re-measured on the control.
+
+### What was run
+Three identical runs of `configs/baseline_dense_tier2.yaml` (config hash
+`86cd401cbdac80c7`) on the fixed subsample `sub100:b551f7f49c91`, judge at
+temperature 0, provider pinned to Cerebras, index key `f0e720da2aa33751` cached in all
+three: `run_20260913_054522_7d37` (EXP-0006, git `4fd0b43`), `run_20260913_202416_9156`
+and `run_20260913_205058_dc03` (git `a061be6`). The code differences between the two
+SHAs are the refusal detector, the cost estimator and documentation — none touch
+retrieval, generation or judging — and the refusal metric below is recomputed from the
+stored answers with `refusal-lexical-v2` for all three. Zero judge failures, zero
+generation retries. **Cost: ~$0.91 per run, $2.73 for the three**, of which one was
+already EXP-0006.
+
+### The rule
+**MDD = max(range, 2 × sample stdev) over the three runs, rounded up to 0.001.**
+DEC-037 used the range because three samples cannot support a distributional claim;
+P1-11's example rule is 2 × stdev. For n = 3 the two rarely differ by more than
+0.001 and 2 × stdev is usually the larger, so taking the larger keeps DEC-037's
+conservatism and satisfies the story. A delta at or below the MDD is "no measurable
+difference". `rag/eval/noise_floor.py` now carries floors **per configuration family**
+with the runs that produced them; `dense-control-v1` is active and `rag diff` names
+the family in its output.
+
+### Measured — corpus level (n = 100)
+
+| Metric | run 1 | run 2 | run 3 | mean | stdev | range | **MDD** |
+|---|---|---|---|---|---|---|---|
+| faithfulness | 0.883 | 0.896 | 0.893 | 0.891 | 0.007 | 0.013 | **0.014** |
+| answer_correctness | 0.434 | 0.426 | 0.414 | 0.425 | 0.010 | 0.020 | **0.020** |
+| answer_relevance | 0.794 | 0.775 | 0.792 | 0.787 | 0.010 | 0.019 | **0.021** |
+| citation_precision (n=95) | 0.550 | 0.478 | 0.546 | 0.525 | 0.040 | 0.071 | **0.080** |
+| citation_recall | 0.608 | 0.575 | 0.610 | 0.598 | 0.020 | 0.035 | **0.040** |
+| cited_nothing | 0.050 | 0.050 | 0.070 | 0.057 | 0.012 | 0.020 | **0.023** |
+| step_coverage (n=32) | 0.289 | 0.227 | 0.193 | 0.236 | 0.049 | 0.096 | **0.097** |
+| step_order_preserved (n=32) | 0.906 | 0.938 | 0.938 | 0.927 | 0.018 | 0.031 | **0.036** |
+| refused (v2) / false_refusal_rate | 0.050 | 0.080 | 0.070 | 0.067 | 0.015 | 0.030 | **0.031** |
+| has_url | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| strict_recall@5 | 0.670 | 0.660 | 0.670 | 0.667 | 0.006 | 0.010 | **0.012** |
+| strict_recall@1 | 0.300 | 0.310 | 0.310 | 0.307 | 0.006 | 0.010 | **0.012** |
+| strict_recall@3 / @10 / @20 | identical | | | | 0 | 0 | 0 |
+| loose_recall@5 | 0.840 | 0.830 | 0.830 | 0.833 | 0.006 | 0.010 | **0.012** |
+| nDCG@10 | 0.6287 | 0.6318 | 0.6318 | 0.6308 | 0.002 | 0.003 | **0.004** |
+| MRR (single-gold) | 0.5776 | 0.5840 | 0.5840 | 0.5819 | 0.004 | 0.006 | **0.008** |
+| collapse_ratio_mean | 1.102 | 1.100 | 1.102 | 1.101 | 0.001 | 0.002 | **0.003** |
+
+Judged scores are in the results store and are transcribed here only as spreads — the
+judge is still the placeholder (DEC-018). The judged *values* do not go into
+EXPERIMENTS.md; their MDDs do.
+
+### Measured — per slice, judged metrics (MDD)
+
+| Slice | n | faithfulness | answer_correctness | answer_relevance |
+|---|---|---|---|---|
+| all | 100 | 0.014 | 0.020 | 0.021 |
+| gold_docs:single | 74 | 0.042 | 0.028 | 0.005 |
+| **gold_docs:multi** | 26 | **0.112** | 0.050 | 0.074 |
+| source:expertwritten | 57 | 0.039 | 0.030 | 0.021 |
+| source:simulated | 43 | 0.025 | 0.024 | 0.043 |
+| q_len:short | 45 | 0.041 | 0.053 | 0.019 |
+| q_len:medium | 24 | 0.007 | 0.033 | 0.023 |
+| q_len:long | 31 | 0.047 | 0.050 | 0.067 |
+
+### The sanity check, and why "identical" is the wrong criterion here
+P1-11 says the rule-based metrics "must be identical across all three runs; any
+variance there is a bug". Two measured facts make byte-identity impossible without any
+bug: hosted query embeddings differ call to call (OQ-023 — here 93 and 95 of 100
+top-5 document sets identical to run 1, and strict recall@3/@10/@20 identical), and
+the generator is not deterministic at temperature 0 (1 of 100 answers byte-identical
+between runs; DEC-037 found 0 of 100). The check is therefore evaluated as: index key
+identical (yes, all three), retrieval within the OQ-023 floor (yes: one question at
+k=1 and k=5, none at k=3/10/20), and generation-dependent metrics reported with their
+own MDDs rather than asserted equal. **Nothing here is a bug.**
+
+### What the numbers say
+- **The judge is quieter on this config than on Phase 0's** at corpus level:
+  faithfulness MDD 0.014 (DEC-037: 0.032), relevance 0.021 (0.032), correctness 0.020
+  (0.011 — larger). Per question it is as unstable as before: correctness moved by
+  ≥0.25 on 41 of 100 questions between runs of nothing, faithfulness on 31.
+- **The generator's citation behaviour is the noisiest thing measured.** Citation
+  precision was 0.550, 0.478, 0.546 — a 0.071 swing with no change anywhere. Under
+  the Phase 0 prompt it was 0.001. Any citation-precision delta under 0.08 on this
+  control is noise, and citation recall under 0.04.
+- **Step coverage still cannot detect anything**: MDD 0.097 against a value of
+  0.19–0.29 (OQ-007).
+- **Slice MDDs are two to eight times the corpus MDD.** Multi-document faithfulness at
+  n=26 has an MDD of 0.112; nothing short of a large effect is readable on that slice.
+- **The refusal rate on `dev` moved 0.05–0.08** — the same order as the 5 refusals it
+  counts.
+- Latency is not a quality metric and has no floor, but it varied enormously: p95
+  11.7 s / **36.3 s** / 4.3 s. Run 2's judge calls were slow; nothing failed or retried.
+
+- **Evidence:** all measured; runs in the results store.
+- **Consequences:** P1-08's scorecard reports every judged metric with these MDDs. The
+  Phase 0 floors remain valid for reading Phase 0 rows and are kept in the module under
+  their family name. `rag diff` now gives verdicts on dense retrieval deltas too.
+- **Revisit if:** judge, provider, Ragas version, generator, prompt, retriever or
+  subsample changes — three runs, ~$2.75, ~1 hour; or a fourth replicate falls outside
+  these floors.

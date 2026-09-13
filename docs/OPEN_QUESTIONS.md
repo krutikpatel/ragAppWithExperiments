@@ -290,7 +290,10 @@ on queries, and a dense run carries a ~0.005 floor on recall metrics that BM25 d
 run three replicates before calling it. Also worth one probe: is the *index* side
 deterministic too (re-embed 200 chunks, compare vectors)? If not, two index builds of the
 same config are two different families.
-**Status:** open — floor recorded; index-side determinism unprobed.
+**Status:** open — floor recorded; index-side determinism unprobed. 2026-09-13: three
+more runs (P1-11, DEC-046) on the sub100: top-5 sets identical to run 1 on 93 and 95 of
+100; strict recall@5 range 0.01, @3/@10/@20 identical. Consistent with the first
+measurement.
 
 ---
 
