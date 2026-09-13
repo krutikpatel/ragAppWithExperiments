@@ -113,17 +113,22 @@ def estimate_tier2_cost(
     generator_model: str,
     judge_model: str,
     judge_provider_order: tuple[str, ...] = (),
+    n_judged: int | None = None,
 ) -> dict[str, Any]:
     """Estimate token volume and dollar cost of a Tier 2 run."""
     context_scale = context_words / CALIBRATION_CONTEXT_WORDS
 
     gen_in = n_questions * (context_words * WORDS_TO_TOKENS + 200)
     gen_out = n_questions * GENERATED_TOKENS_OUT_PER_QUESTION
-    judge_in = n_questions * JUDGE_TOKENS_IN_PER_QUESTION * context_scale
-    judge_out = n_questions * JUDGE_TOKENS_OUT_PER_QUESTION
+    # Questions without a reference answer are not judged (DEC-044); the
+    # unanswerable split has none, so its judge cost is zero, not 45 questions' worth.
+    n_judged = n_questions if n_judged is None else n_judged
+    judge_in = n_judged * JUDGE_TOKENS_IN_PER_QUESTION * context_scale
+    judge_out = n_judged * JUDGE_TOKENS_OUT_PER_QUESTION
 
     estimate: dict[str, Any] = {
         "n_questions": n_questions,
+        "n_judged": n_judged,
         "generator_tokens_in": int(gen_in),
         "generator_tokens_out": int(gen_out),
         "judge_tokens_in": int(judge_in),

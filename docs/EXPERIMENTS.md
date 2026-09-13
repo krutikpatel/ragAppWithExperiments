@@ -11,6 +11,8 @@ produced one.
 | EXP-0003 | `run_20260912_213248_2471` | 2026-09-12 | control | BM25, fixed-600/100, top-5 chunks, Tier 1, dev (P1-01) | **0.410** | 0.505 | 0.379 | 0.329 (n=160) | — | 31 | 0.0000 | SUPERSEDED (EXP-0004, DEC-040) | [→](experiments/EXP-0003.md) |
 | EXP-0004 | `run_20260912_215235_ff2f` | 2026-09-12 | control | **sparse control**: BM25, 600/100, top-5 **distinct docs**, pool 50, Tier 1, dev (P1-07 run 4). Collapse ratio 1.088 mean / 1.20 p90, exhaustion 0 | **0.410** | 0.505 | 0.379 | 0.329 (n=160) | — | 34 | 0.0000 | VALID | [→](experiments/EXP-0004.md) |
 | EXP-0005 | `run_20260912_222538_b1dc` (+2 replicates) | 2026-09-12 | control | **dense control**: `qwen3-embedding-8b` (DeepInfra), 600/100, top-5 distinct docs, pool 50, Tier 1, dev (P1-07 run 1). vs EXP-0004: 70 gained / 9 lost; spread 0.005 over 3 runs | **0.715** | 0.815 | 0.629 | 0.557 (n=160) | — | 665 (replicate; 2441 with retries) | 0.0000004 | VALID | [→](experiments/EXP-0005.md) |
+| EXP-0006 | `run_20260913_054522_7d37` | 2026-09-13 | control | **dense control, Tier 2**: + `gpt-5-nano`, `baseline_answer@v1`, placeholder judge; dev sub100 (P1-07 run 2). Cit. recall 0.608; step cov 0.289 (n=32); 0 URLs; answered on 31 of 33 retrieval misses | 0.670 (sub100) | 0.840 | 0.629 | — | **0.550** (n=95) | 11744 | 0.0091 (est.) | VALID | [→](experiments/EXP-0006.md) |
+| EXP-0007 | `run_20260913_060733_6a9b` | 2026-09-13 | control | **dense control on `unanswerable`** (45 q, P1-07 run 3): refusal rate 0.578 lexical / 0.733 hand-read; **false-answer rate 0.422 / 0.267**; 10 of 15 underspecified answered with citations; judge skipped (DEC-044) | — | — | — | — | — | 3679 | 0.0091 (est., pre-skip; ≈0.0004 actual) | VALID | [→](experiments/EXP-0007.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -43,6 +45,12 @@ Column notes:
   dense runs are no longer free); the one-time index build ($0.031) is in the detail
   file, not amortised into the column. A VOID index-build attempt
   (`run_20260912_222345_671e`, MIS-014) precedes it and stays in the store.
+- **EXP-0006 and EXP-0007 are not comparable to EXP-0001's Tier 2 variant on any
+  generation metric**: chunker, prompt, context semantics and citation parser all
+  differ. They are the generation baseline Phase 2 diffs against.
+- **EXP-0007 has no retrieval columns** (no gold, DEC-009) and reports the refusal rate
+  twice: the recorded lexical detector and a hand count of all 45 answers, which
+  disagree by 7 questions (OQ-008).
 - **Dense spread is not zero.** Hosted query embeddings vary call to call; three runs
   of EXP-0005 ranged 0.005 on strict recall@5 (OQ-023). Any dense delta at or under
   one question is within that.
