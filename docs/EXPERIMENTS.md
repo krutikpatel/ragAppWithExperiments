@@ -14,6 +14,8 @@ produced one.
 | EXP-0006 | `run_20260913_054522_7d37` | 2026-09-13 | control | **dense control, Tier 2**: + `gpt-5-nano`, `baseline_answer@v1`, placeholder judge; dev sub100 (P1-07 run 2). Cit. recall 0.608; step cov 0.289 (n=32); 0 URLs; answered on 31 of 33 retrieval misses | 0.670 (sub100) | 0.840 | 0.629 | — | **0.550** (n=95) | 11744 | 0.0091 (est.) | VALID | [→](experiments/EXP-0006.md) |
 | EXP-0007 | `run_20260913_060733_6a9b` | 2026-09-13 | control | **dense control on `unanswerable`** (45 q, P1-07 run 3): refusal rate 0.578 (detector v1, recorded) / **0.733** (hand-read = detector v2, DEC-045); **false-answer rate 0.267**; 10 of 15 underspecified answered with citations; judge skipped (DEC-044) | — | — | — | — | — | 3679 | 0.0091 (est., pre-skip; ≈0.0004 actual) | VALID | [→](experiments/EXP-0007.md) |
 | EXP-0008 | `run_20260916_061952_ffc5` | 2026-09-16 | embedding (baseline) | **dense control on `dev_large`** (6,221 synthetic, all single-gold — no multi-doc slice exists); same index as EXP-0005. Not a headline number (preflight 3). strict@1 0.857, strict@20 0.992 | 0.973 | 0.973 | 0.928 | 0.909 (n=6,221) | — | 3490 | 0.0000004 | VALID | [→](experiments/EXP-0008.md) |
+| EXP-0009 | `run_20260916_081043_877a` | 2026-09-16 | embedding | `openai/text-embedding-3-large` (OpenAI), 3072-d, on `dev_large`: +0.0085 vs EXP-0008, p=0.0001 — **all of it on `feature_request` articles** (+0.033; `article` −0.003 n.s.). Index $0.40, 245 s | 0.982 | 0.982 | 0.945 | 0.929 (n=6,221) | — | 717 | 0.0000021 | VALID | [→](experiments/EXP-0009.md) |
+| EXP-0009 | `run_20260916_091357_887a` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (`be04`, 0.720): **Δ −0.005, p=1.0** (15 gained / 16 lost); multi-doc 0.350→0.300 (p=0.72); strict@1 +0.060 (p=0.078), nDCG +0.035 (p=0.071). **Null; not promoted** | 0.715 | 0.840 | 0.665 | 0.622 (n=160) | — | 735 | 0.0000024 | VALID | [→](experiments/EXP-0009.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -65,6 +67,21 @@ Column notes:
 - **Dense spread is not zero.** Hosted query embeddings vary call to call; three runs
   of EXP-0005 ranged 0.005 on strict recall@5 (OQ-023). Any dense delta at or under
   one question is within that.
+
+## Negative results (P2-17)
+
+Standing section, populated as Phase 2 runs. Each entry: what was tried, the measured
+delta, the verdict that makes it null, what it would have cost, the decision taken.
+
+- **EXP-0009 — `openai/text-embedding-3-large` for `qwen3-embedding-8b`.** On `dev`
+  (the only split with multi-document questions) strict recall@5 went 0.720 → 0.715,
+  Δ −0.005, 95% CI [−0.060, +0.050], p = 1.0 (15 gained / 16 lost); multi-document
+  0.350 → 0.300, p = 0.72. On `dev_large` it gained +0.0085 (p = 0.0001), entirely on
+  `feature_request` articles. Cost it would have added: 13x per embedded token ($0.40
+  vs $0.03 per index; $0.0000021 vs $0.0000004 per query). **Decision: control
+  retained; not promoted.** Worth noting for later: top-1 placement and nDCG on
+  single-document questions were better (nDCG single-doc +0.045, p = 0.043), which
+  a reranking or k=1 context might care about and a five-document context does not.
 
 ## Phase 1 scorecard — the controls (P1-08)
 

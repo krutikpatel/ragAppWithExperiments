@@ -151,4 +151,7 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   result: it would mean the synthetic questions favour one model's training
   distribution.
 - **Tested by:** the P2-04 agreement check in `rag promote` for EXP-0009–0011.
-- **Resolution:** pending.
+- **Resolution:** pending — first data point (EXP-0009) **disagrees**: `dev_large`
+  +0.0085 (p = 0.0001), `dev` −0.005 (p = 1.0). The `dev` delta is one question and
+  within noise, so "disagreement" here is a null on `dev` against a small real gain on
+  `dev_large`, not opposite findings. Resolved after EXP-0010 and EXP-0011.

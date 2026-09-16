@@ -649,3 +649,19 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** Before a DEC entry names a split or slice as the decider, the
   entry quotes its row count from the data.
 - **Added to preflight:** yes (item 29)
+
+## MIS-022 — Wrote "every gold document is `article`" into EXP-0008 without looking at the slice table
+- **Date:** 2026-09-16
+- **Severity:** Low — one wrong sentence in an EXP file, corrected within the hour by an
+  appended correction; no number affected.
+- **What happened:** EXP-0008's Results section claimed `dev_large`'s `article_type`
+  slices were the whole split. The run's own `slices_json` has three types (4,109 /
+  2,049 / 63). I had printed only the `gold_docs` and `q_len` slices and generalised.
+- **How it was caught:** `rag compare` for EXP-0009 printed the three slices.
+- **Root cause:** Writing a statement about the slice table from a partial print of it.
+- **Impact:** None on results. It would have hidden the `feature_request` finding of
+  EXP-0009 had it been trusted.
+- **Fix applied:** Correction appended to EXP-0008.md; the original line marked.
+- **Prevention rule:** Print the whole slice table before writing about slices; a claim
+  that a slice is empty or total is checked against `n_questions`, not assumed.
+- **Added to preflight:** covered by item 1 and item 29; no new item.
