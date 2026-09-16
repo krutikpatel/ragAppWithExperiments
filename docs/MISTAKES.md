@@ -97,6 +97,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
     the deciding split for retrieval axes; its multi-document slice has zero rows,
     which `load_split("dev_large")["n_gold_docs"].value_counts()` would have shown in
     one line. Item 1 again, unlearned. (MIS-021)
+30. **Send one real batch through a new embedding endpoint before the index build,
+    and read the error body.** OpenRouter applies some endpoints' context length to
+    a batch's *total* tokens and then drops the pinned provider; the 404 body's
+    `routing_funnel` says so, and our embedder was discarding it. (MIS-023)
 
 ---
 
@@ -665,3 +669,32 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** Print the whole slice table before writing about slices; a claim
   that a slice is empty or total is checked against `n_questions`, not assumed.
 - **Added to preflight:** covered by item 1 and item 29; no new item.
+
+## MIS-023 — bge-m3 index build died on a 404 whose body the embedder threw away
+- **Date:** 2026-09-16
+- **Severity:** Low — one VOID row (`run_20260916_091734_7664`), $0; ~40 minutes.
+- **What happened:** The first 64-chunk batch to `baai/bge-m3` on DeepInfra returned
+  `404 No endpoints found`. The single-input probe an hour earlier had succeeded.
+  Re-sending with the body captured showed OpenRouter's `routing_funnel`: 2 endpoints
+  → "Filter by Context Length" → 1 (DeepInfra dropped) → "Filter by Fallback" → 0
+  (we pin one provider, no fallbacks). The endpoint's 8,192 context is applied to the
+  **batch's total tokens**, so 16 chunks (5–12k tokens) failed or passed depending on
+  their lengths, and 5 or 8 always passed. `text-embedding-3-large` (also 8,192) and
+  `gemini-embedding-2` (8,192; 64 real chunks = 26k tokens) are not filtered this way,
+  so it is endpoint-specific.
+- **How it was caught:** The run's VOID note said only `404 Not Found`; reproducing
+  outside the runner and printing `response.text`.
+- **Root cause:** Two. The embedder raised `HTTPStatusError` without the response
+  body, so the one line that explained the failure was discarded. And I validated the
+  endpoint with one short input instead of one real batch (preflight item 10, in
+  spirit: probe the thing you will actually do).
+- **Impact:** None on results.
+- **Fix applied:** `OpenRouterEmbedder` now raises with the status, batch size and the
+  first 500 characters of the body on any non-retryable status. Both bge-m3 configs
+  use `batch_size: 5` (5 × the longest chunk, 1,336 tokens, stays under 8,192), with
+  the reason in the file. Batch size is in `retriever_params`, so it is in the config
+  hash; it does not change any vector.
+- **Prevention rule:** Before an index build on a new endpoint, send one batch of
+  real chunks at the configured batch size and read the response; raise every
+  non-transient provider error with its body.
+- **Added to preflight:** yes (item 30)

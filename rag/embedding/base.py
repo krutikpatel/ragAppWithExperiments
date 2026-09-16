@@ -246,7 +246,15 @@ class OpenRouterEmbedder(Embedder):
                 last_error = exc
             except httpx.HTTPStatusError as exc:
                 if exc.response.status_code not in self._RETRY_STATUS:
-                    raise
+                    # Not transient: raise with the body, which is where OpenRouter
+                    # explains itself (a 404 "No endpoints found" carries a
+                    # routing_funnel saying which filter dropped the pinned provider —
+                    # MIS-023 was a batch too large for the endpoint's context).
+                    raise RuntimeError(
+                        f"{self.config.model} via {self.config.provider}: HTTP "
+                        f"{exc.response.status_code} on a batch of {len(batch)} inputs: "
+                        f"{exc.response.text[:500]}"
+                    ) from exc
                 last_error = exc
             self.usage.retries += 1
             if attempt < self.config.max_attempts:
