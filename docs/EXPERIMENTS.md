@@ -220,6 +220,19 @@ Per-slice judged MDDs:
 The two replicate runs are not experiments and have no index row; they are the noise
 measurement for EXP-0006's configuration. Cost of the three: ~$2.73.
 
+**How deltas are called from Phase 2 on (P2-01 / P2-02; DEC-047, DEC-048, DEC-049).**
+Retrieval deltas are called by `rag compare <baseline> <candidate> --metric <m>`: a paired
+test over per-question outcomes (contingency, Δ, bootstrap 95% CI, permutation p; seed
+recorded), overall and per slice — never by repeating a deterministic run and averaging.
+Judged and generated deltas are labelled by the tooling against the MDD of the family the
+run's judge/generator/prompt provenance matches, in this form:
+`faithfulness 0.740 (baseline 0.710, Δ+0.030, MDD ±0.014 → significant)`. The labels are
+**significant**, **within judge noise** / **within noise**, or **no MDD measured** (a run
+under a judge no family was measured for — P1-11 is re-run for it first). A delta above
+the MDD but within 1.5 × MDD is marked marginal and gets three replicates before
+anything is promoted. A run whose pipeline called an LLM carries its generation-cache
+hit rate; below 100% on a repeat, `rag compare` warns and the warning is quoted.
+
 <!-- corpus-profile:c852878d74a8 start -->
 ## Corpus profile — characterization, not an experiment (profile-v1)
 

@@ -97,6 +97,11 @@ class Generator(ABC):
     def _complete(self, prompt: str) -> Completion:
         """Return the completion, or raise. Must never return empty content."""
 
+    def complete_raw(self, prompt_text: str) -> Completion:
+        """Complete an already-rendered prompt. For `PipelineLLM` (P2-03), which owns
+        the prompt ids and the cache key; the answer path uses `generate`."""
+        return self._complete(prompt_text)
+
     def generate(self, question: str, context: str) -> GeneratedAnswer:
         prompt = load_prompt(self.config.prompt_id, self.config.prompt_version)
         started = time.perf_counter()

@@ -303,3 +303,16 @@ External claim (Cohen et al., WixQA, arXiv:2505.08643): the paper reports baseli
 retrieval and generation numbers on these datasets. **Not reproduced here.** P0-14
 covers deciding where our metric definitions match theirs before any comparison is
 drawn. Until then, no number of ours may be presented next to a number of theirs.
+
+## OQ-024 — Does the multi-document slice of `dev` (n=40) have the power to detect the deltas Phase 2 cares about?
+DEC-047's paired test on the Phase 1 controls gives the dense advantage on
+multi-document questions as +0.175 with CI [+0.025, +0.325] and p = 0.063 — a gain that
+every other slice reports at p ≤ 0.014 is not significant at 0.05 on this one, because
+40 questions with 11 discordant pairs cannot separate it. The organizing question of
+Phase 2 is the multi-hop gap; this is the slice it lives on.
+**Decided by:** the width of the multi-document CI on `dev_large` (its multi-gold
+count is unknown until measured) versus `dev`. If `dev_large`'s multi-document slice
+gives CIs narrower than ~±0.10 on strict recall@5, retrieval axes are decided there
+and confirmed on `dev` as P2-04 says; if it is also too small, the slice needs more
+questions and that is a split decision, not a tuning one.
+**Status:** open — measure on the first `dev_large` run of Phase 2.

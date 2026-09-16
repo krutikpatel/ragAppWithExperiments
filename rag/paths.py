@@ -12,6 +12,10 @@ DOCS_DIR = REPO_ROOT / "docs"
 PROMPTS_DIR = REPO_ROOT / "prompts"
 CONFIGS_DIR = REPO_ROOT / "configs"
 RESULTS_DIR = REPO_ROOT / "results"
+# In-pipeline LLM completions, keyed by (question, prompt, model, input) — P2-03.
+# Gitignored with the rest of results/; the hit rate on each run row says whether
+# it was warm.
+GENERATION_CACHE = RESULTS_DIR / "generation_cache.sqlite"
 # Dense vector indexes, keyed by provenance tuple (P1-04). Gitignored, rebuildable.
 INDEXES_DIR = REPO_ROOT / "indexes"
 

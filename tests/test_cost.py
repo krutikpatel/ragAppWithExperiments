@@ -8,23 +8,24 @@ from rag.runner import cost
 from rag.runner.cost import estimate_tier2_cost, format_estimate
 
 
+TABLE = cost.PricingTable(
+    pricing_version="test-2026-09-15",
+    chat={
+        "openai/gpt-5-nano": {"_model": {"in": 0.05, "out": 0.40}},
+        "openai/gpt-oss-120b": {
+            "_model": {"in": 0.037, "out": 0.17},
+            "Cerebras": {"in": 0.35, "out": 0.75},
+            "Groq": {"in": 0.15, "out": 0.60},
+        },
+    },
+    embeddings={"qwen/qwen3-embedding-8b": {"_model": {"in": 0.01}, "DeepInfra": {"in": 0.01}}},
+)
+
+
 @pytest.fixture(autouse=True)
 def offline_prices(monkeypatch):
-    """Tests must not hit OpenRouter. Serve fixed prices instead."""
-    monkeypatch.setattr(
-        cost,
-        "fetch_model_prices",
-        lambda ids: {i: {"in": 0.05, "out": 0.40} for i in ids},
-    )
-
-    def provider_price(model_id, order):
-        table = {"Cerebras": {"in": 0.35, "out": 0.75}, "Groq": {"in": 0.15, "out": 0.60}}
-        for p in order:
-            if p in table:
-                return {"provider": p, **table[p]}
-        return {"provider": None, "reason": "none pinned", "available": sorted(table)}
-
-    monkeypatch.setattr(cost, "fetch_provider_price", provider_price)
+    """Tests must not hit OpenRouter and must not depend on the repo's pricing.yaml."""
+    monkeypatch.setattr(cost.PricingTable, "load", classmethod(lambda cls, path=None: TABLE))
 
 
 def _estimate(**overrides):

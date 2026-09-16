@@ -179,6 +179,29 @@ would make us revisit it. A superseded decision keeps its entry and gains a
 
 ---
 
+## Promotion log
+
+P2-05: `configs/promoted.yaml` advances only through `rag promote`, which re-runs the
+comparison under the P2-04 split policy and appends a row here — date, axis, the
+config hashes, the run ids compared, and the p-value or MDD verdict. Rows are written
+by code; the reasoning behind each promotion gets its own DEC entry.
+
+| # | Date | Axis | From → to | Metric | Verdict (runs compared) | Reason |
+|---|---|---|---|---|---|---|
+| 1 | 2026-09-16 | assembly | `7c99bc8e9a88e878` → `028da7f664767700` (cand.yaml) | strict_recall@5 | confirm (dev): a_dev → b_dev, Δ+0.1000, p=0.1226; decide (dev_large): a_dev_large → b_dev_large, Δ+0.2000, p=0.0001 | test win (git `abc1234`) |
+| 1 | 2026-09-16 | assembly | `7c99bc8e9a88e878` → `028da7f664767700` (cand.yaml) | strict_recall@5 | confirm (dev): a_dev → b_dev, Δ+0.1000, p=0.1226; decide (dev_large): a_dev_large → b_dev_large, Δ+0.2000, p=0.0001 | test win (git `abc1234`) |
+
+## Cost approvals log
+
+P2-06: a run estimated above $2 halts before it starts. When approved and re-run with
+`--approve-cost`, the runner appends the estimate, what drove it, and the approval
+reference here. An entry without a matching DEC entry is a process failure.
+
+| # | Date | Config hash | Estimate (driver) | Approval | Run |
+|---|---|---|---|---|---|
+| 1 | 2026-09-16 | `dddcb9951da9357b` | $3.0000 (index_build) | DEC-TEST | run `run_20260916_051725_8767`, git `7c59851` |
+| 1 | 2026-09-16 | `dddcb9951da9357b` | $3.0000 (index_build) | DEC-TEST | run `run_20260916_051736_2dbd`, git `7c59851` |
+
 ## Test-split openings log
 
 P0-12 requires a row here for every opening of `test`, with date, config hash, git
@@ -1550,3 +1573,292 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** judge, provider, Ragas version, generator, prompt, retriever or
   subsample changes — three runs, ~$2.75, ~1 hour; or a fourth replicate falls outside
   these floors.
+
+## DEC-047 — Deterministic metrics are compared with a paired test over per-question outcomes, never by repeat-and-average
+- **Date:** 2026-09-15
+- **Decided by:** Claude, implementing P2-01 from the Phase 2 handover (Krutik's
+  spec); the choice of tests and the seed are Claude's
+- **Status:** Active
+- **Context:** Retrieval metrics are deterministic for BM25 and near-deterministic
+  for hosted dense retrieval (OQ-023). Running the same config three times and
+  averaging measures the embedding provider's jitter, not the technique. What does
+  carry information is the *pairing*: every question was scored under both runs, and
+  the per-question differences are the sample. `run_questions` already stores them.
+- **Options considered:**
+  1. Repeat-and-average with seeds, as for a stochastic system — rejected: the
+     "seeds" change nothing in a deterministic pipeline, and three identical numbers
+     look like precision they are not.
+  2. A parametric paired t-test — rejected: outcomes are 0/1 per question and the
+     multi-document slice has n=40 on `dev`; no distributional assumption is safe.
+  3. **Paired resampling tests on the per-question difference** — chosen. A paired
+     bootstrap (10,000 resamples, percentile) gives a 95% CI *on the difference*, and
+     a sign-flip permutation test gives the p-value under exchangeability. For binary
+     metrics the exact McNemar p on the discordant pairs is reported as a cross-check
+     that needs no resampling.
+- **Decision:** `rag compare <run_a> <run_b> --metric <m>` (`rag/runner/compare.py`)
+  is the verdict on every retrieval-metric comparison in Phase 2. It reports the
+  contingency (both correct / both wrong / A-only / B-only, or B-higher / A-higher /
+  tied for graded metrics), the difference, the CI, the permutation p, and the same
+  per slice (single, multi, article type, source, question length). Seed
+  `20260915` and the resample count are recorded in every report. Zero LLM calls;
+  ~1 s on `dev`, under 20 s on `dev_large` (tested). Questions where the metric is
+  not applicable on either side are excluded and counted, not zeroed (MIS-002).
+  Repeat-and-average is **not used** for deterministic metrics. The OQ-023 floor for
+  hosted dense retrieval (0.012 on n=100) remains a second, independent check: a
+  dense-vs-dense delta must clear both.
+- **Evidence:** Re-running the Phase 1 control comparison through the tool reproduces
+  EXP-0005's flip counts exactly (70 gained / 9 lost on strict recall@5; +0.305,
+  CI [+0.230, +0.380], p = 0.0001). On the multi-document slice (n=40) the same
+  comparison gives +0.175, CI [+0.025, +0.325], **p = 0.063** — the dense advantage
+  on multi-hop questions, which EXP-0005 reported as a 0.175 gain, is not
+  significant at 0.05 on `dev` alone. That is a fact about power on a 40-question
+  slice, not a retraction; it is why P2-04 decides retrieval axes on `dev_large` and
+  confirms on `dev`. Tracked as OQ-024.
+- **Consequences:** Every EXP file from Phase 2 on quotes `rag compare` output (Δ, CI,
+  p) for retrieval deltas. "Gained N / lost M" alone is no longer a result.
+- **Revisit if:** a retriever with genuinely stochastic outcomes appears without a
+  cache (P2-03 forbids it); or the CI and permutation p disagree on direction on any
+  real comparison, which would mean the difference is too small to call either way.
+
+## DEC-048 — Judged deltas are labelled against MDD by the tooling, from the floor family the run's provenance matches
+- **Date:** 2026-09-15
+- **Decided by:** Claude, implementing P2-02; the family-matching rule and the
+  marginal zone are Claude's judgment calls, stated here
+- **Status:** Active — extends DEC-046
+- **Context:** DEC-046 measured MDDs and left the verdict to the reader of `rag
+  diff`. P2-02 requires the label to be the tool's ("significant" / "within judge
+  noise"), every judged metric in `EXPERIMENTS.md` to carry its MDD, replicates
+  only in a defined marginal zone, and a re-measured MDD whenever the judge changes,
+  with old results keeping their old MDD.
+- **Options considered:**
+  1. One active floor table applied to every run — rejected: a run under a changed
+     judge or prompt would silently borrow floors measured on another instrument.
+  2. **Floors per family, matched from the run row** — chosen. A run is placed in a
+     family by exact equality on `judge_model`, `judge_provider_order`,
+     `judge_embedding_model`, `ragas_version`, `metric_prompt_versions`,
+     `generator_model` and `prompt_versions` — P2-02's re-measurement triggers plus
+     the generator, which DEC-046 showed is the noisier instrument on citation
+     metrics. No match → **"no MDD measured"** and no verdict, never a borrowed number.
+     Retriever and subsample are *context* keys: a mismatch is printed as a caveat,
+     because the P2-02 rule keeps P1-11's MDD across the axes unless the judge
+     changes (DEC-046's revisit trigger is recorded, not enforced).
+  3. Retrieval floors keyed on the judge — rejected: they come from hosted query
+     embeddings (OQ-023), so a Tier 1 dense run gets the dense control's retrieval
+     floors and a BM25 run gets none (its spread is exactly zero).
+- **Decision:**
+  - Labels: **significant** when round(|Δ|, 3) > MDD; **within judge noise** (judged
+    criteria) or **within noise** (generated and retrieval metrics) otherwise; **no
+    MDD measured** when no family matches. The delta is compared at the MDD's own
+    precision — DEC-046 states MDDs to three decimals, and a fourth would be false.
+  - Marginal zone: MDD < |Δ| ≤ **1.5 × MDD** is "significant — marginal, resolve
+    with 3 replicates". Replicates are spent there and nowhere else; a delta within
+    noise is left as within noise, a delta above 1.5 × MDD needs none.
+  - The line format for every judged number in `EXPERIMENTS.md`:
+    `faithfulness 0.740 (baseline 0.710, Δ+0.030, MDD ±0.014 → significant)`,
+    produced by `format_judged`, printed by `rag diff` and `rag compare`.
+  - Per-slice judged deltas use DEC-046's per-slice MDDs (multi-document faithfulness
+    0.112 at n=26); slices without a measured floor get "no MDD measured".
+  - Each family carries an `effective_date` and its decision id. A judge, judge
+    prompt or Ragas change adds a **new** family after three identical runs; old rows
+    keep matching the old one.
+- **Evidence:** Sanity check on the two DEC-046 replicates
+  (`run_20260913_054522_7d37` → `run_20260913_202416_9156`): every corpus-level and
+  per-slice delta lands "within judge noise" / "within noise", as it must for the
+  runs the floors were measured on. Judged *values* still do not go into
+  `EXPERIMENTS.md` while the judge is the placeholder (DEC-018); the rule applies the
+  day a real judge is chosen and a family measured for it.
+- **Consequences:** `rag diff` output changed: verdicts name the family and its
+  caveats. `rag/eval/noise_floor.py` is the only place floors live; `verdict()` now
+  returns the P2-02 labels.
+- **Revisit if:** a real judge is chosen (new family required before any judged
+  delta is reported); or the 1.5 × multiple proves either too wide (replicates
+  routinely confirm) or too narrow (a delta just above it later fails to replicate).
+
+## DEC-049 — In-pipeline LLM calls run at temperature 0 through a generation cache, and such runs are marked non-deterministic
+- **Date:** 2026-09-15
+- **Decided by:** Claude, implementing P2-03; the cache key, location and the
+  repeat-flag rule are Claude's
+- **Status:** Active
+- **Context:** Axis 4 (query transformation), the LLM-as-reranker in Axis 5 and Axis
+  8 (agentic retrieval) put an LLM call inside retrieval. Without control, retrieval
+  metrics for those configs are random variables and DEC-047's paired test silently
+  assumes something false.
+- **Options considered:**
+  1. Trust temperature 0 — rejected: DEC-046 measured the generator at temperature 0
+     producing byte-identical answers on 1 of 100 questions.
+  2. Cache in the config (a path or a flag) — rejected: a cold cache changes cost and
+     reproducibility, not the configuration under test, so it must not move
+     `config_hash`.
+  3. **A generation cache owned by the runner, outside the config** — chosen.
+- **Decision:**
+  - `PipelineLLM` (`rag/generation/pipeline_llm.py`) is the only way pipeline code
+    calls a model. Temperature is a constant 0.0, not a parameter. It goes through
+    `GenerationCache` (`rag/generation/cache.py`, SQLite at
+    `results/generation_cache.sqlite`, gitignored) keyed on
+    `(question_id, prompt_id, prompt_version, model_id, input_hash)`, where the input
+    hash covers the rendered prompt and the decoding settings.
+  - A retriever that calls a model exposes it as `pipeline_llm`; the runner records
+    `pipeline_nondeterministic = 1` on the run row and the stats (model, temperature,
+    calls, hits, misses, hit rate, prompts used, cache path) as `pipeline_llm_json`,
+    with the hit rate also in `metrics_json`.
+  - A run of a config that has an earlier VALID run with the same `config_hash`, and
+    a hit rate under 100%, is a **repeat without cache backing**: the row gets
+    `pipeline_cache_flag` and a warning is printed. `rag compare` warns when either
+    run is non-deterministic and under-cached.
+  - The runner hands every retriever the cache; retrievers without an LLM ignore it
+    and are recorded `pipeline_nondeterministic = 0`.
+- **Evidence:** `tests/test_pipeline_cache.py` runs an LLM-in-the-loop smoke config
+  (`configs/smoke_p2_03_llm_rewrite.yaml`, a fake deliberately non-deterministic
+  model rewriting each query) twice on one cache and once on a fresh one: the warm
+  repeat has hit rate 1.0, identical retrieval metrics and identical retrieved
+  document lists on all 200 questions; the fresh-cache repeat has hit rate 0.0 and
+  is flagged. Harness test only; no real model was called.
+- **Consequences:** Every Axis 4/5/8 config must obtain its model through
+  `PipelineLLM`; a direct HTTP call from a retriever is a bug. Model choice for those
+  axes is still Krutik's (`PipelineLLM` refuses an empty model id).
+- **Revisit if:** a technique genuinely needs sampling (temperature > 0) — that would
+  need its own decision and would take the run out of DEC-047's scope entirely; or
+  the cache grows past what SQLite handles comfortably (unlikely under ~100k rows).
+
+## DEC-050 — Split usage policy: which split decides which axis, enforced by the runner
+- **Date:** 2026-09-15
+- **Decided by:** Claude, encoding P2-04 from the Phase 2 handover (Krutik's spec);
+  the enforcement mechanics are Claude's
+- **Status:** Active
+- **Context:** `dev` has 200 questions (40 multi-document); `dev_large` has 6,221
+  synthetic ones whose text was generated from the gold article, so lexical overlap
+  is inflated (preflight item 3). Power and validity pull in opposite directions
+  and the trade-off has to be made once, per axis, not per run.
+- **Decision:**
+  - **Retrieval axes (chunking, embedding, reranking, assembly): decide on
+    `dev_large`, confirm on `dev`.** `rag promote` requires both comparisons; the
+    `dev_large` one must be significant (DEC-047, p < 0.05) and the `dev` one must
+    agree in direction. Disagreement refuses the promotion and is printed as a
+    finding to write up.
+  - **Axis 3 (retrieval method: dense / BM25 / hybrid / alpha) is decided on `dev`
+    ONLY.** The runner refuses `axis: retrieval_method` on `dev_large` unless
+    `--allow-leaky-split` is passed, and a run allowed through is recorded with
+    `leakage_affected = 1` and cannot be used by `rag promote`.
+  - **Judged-metric decisions (Tier 2) are on the `dev` subsample only.** Tier 2 on
+    `dev_large` is refused the same way. Axes 4, 7 and 8 and combinations therefore
+    decide on `dev`.
+  - `test` stays closed (P0-12 guard) until P2-18.
+  - A run's `axis` is a config field (`rag/runner/config.py`, `AXES`), recorded on
+    the row and excluded from `config_hash` like `name`: it labels, it does not
+    change a number.
+- **Evidence:** No measured data; the policy is the handover's, with one measured
+  motivation: OQ-024 shows the multi-document slice of `dev` cannot separate a
+  0.175 gain at p < 0.05.
+- **Consequences:** every Phase 2 config carries `axis:`. A `dev_large` run of the
+  hybrid sweep is impossible by accident.
+- **Revisit if:** `dev_large`'s multi-document slice turns out too small as well
+  (OQ-024), which would need a split decision rather than a policy one.
+
+## DEC-051 — `configs/promoted.yaml` is the current best; it moves only through `rag promote`, which matches runs to configs by tier identity
+- **Date:** 2026-09-15
+- **Decided by:** Claude, implementing P2-05; the tier-identity rule is Claude's
+- **Status:** Active
+- **Context:** "Current best" reconstructed from the results table is a claim; a
+  committed file with a log of every advance is a record. The file starts as a copy
+  of `configs/baseline_dense.yaml` (the dense control, EXP-0005, DEC-041).
+- **Options considered:**
+  1. Match a run to a config by `config_hash` — rejected after it failed on the
+     control itself: DEC-042 changed the default `generator_prompt` after EXP-0005
+     ran, which moved `baseline_dense.yaml`'s hash (`c535f774bff4b067` →
+     `7c99bc8e9a88e878`) without changing a single Tier 1 number. See MIS-019.
+  2. **Match by `identity_hash`** — chosen: for a Tier 1 run, the hash over the
+     fields that can move a Tier 1 number (split, tier, retriever and params,
+     chunker and params, depth, top_k, pool, pooling, seed); for Tier 2, every
+     hashed field. `config_hash` stays the exact identity on the row.
+- **Decision:**
+  - `promoted` is a valid run reference in `rag diff` and `rag compare`: it resolves
+    to the newest VALID run of `promoted.yaml`'s configuration on the other run's
+    split (today: `run_20260912_225005_be04` on `dev`, the third EXP-0005 replicate).
+  - `rag promote <candidate.yaml> --axis A --confirm <a> <b> [--decide <a> <b>]
+    --metric M --reason R` re-runs the comparisons, checks DEC-050's split rule, that
+    the baseline runs are runs of the current pointer and the candidate runs are
+    runs of the candidate file, that neither is leakage-affected, and that the
+    verdict passes — the paired test for retrieval metrics (DEC-047), the MDD label
+    for judged and generated ones (DEC-048). It then rewrites `promoted.yaml` with a
+    dated header and appends to the **Promotion log** table in this file. `--dry-run`
+    checks without changing anything.
+  - Every run with an `axis` records its diff against `promoted.yaml`
+    (`vs_promoted_json`, `promoted_config_hash`) grouped into dimensions (chunking,
+    retrieval, assembly, generation); a non-`combination` run that changes more
+    than one dimension gets a warning. `rag promoted diff <config>` shows the same.
+- **Evidence:** No measured data; process decision. `tests/test_phase2_discipline.py`
+  exercises a promotion that passes, one where `dev_large` and `dev` disagree, and
+  one with swapped runs.
+- **Consequences:** an advance of the pointer without a log row is impossible by
+  construction; a log row without its own DEC entry explaining the reasoning is a
+  process failure to be fixed in the same commit.
+- **Revisit if:** simplicity should win a tie (P2-11 says it does for chunking) —
+  `rag promote` currently demands a positive, significant delta; a "revert to the
+  simplest indistinguishable config" needs a manual DEC entry and a hand-run of the
+  command with the reverse pair, and that is deliberate for now.
+
+## DEC-052 — The cost gate: a dated pricing table, a whole-run estimate, a $2 halt, actuals on every row
+- **Date:** 2026-09-15
+- **Decided by:** Claude, implementing P2-06; the gate value is the handover's, the
+  table format and drift rule are Claude's
+- **Status:** Active — **amends DEC-035** (prices now come from the table, not a live
+  call at run time)
+- **Context:** DEC-035 reads pinned-provider prices from OpenRouter at run time. That
+  is right about *which* price applies and wrong about reproducibility: the same
+  config estimated a week apart can print two numbers with nothing in the artifacts
+  to say why. P2-06 also asks for the dominant cost — embedding the whole corpus for
+  a new index — which the Tier 2 estimator never saw.
+- **Decision:**
+  - **`configs/pricing.yaml`** is the price source: $/Mtok per model per provider,
+    with `pricing_version` (a date) and the source endpoints. `rag pricing refresh`
+    re-fetches every listed model from `/models` and `/models/<id>/endpoints` and
+    stamps the date; the model list is edited by hand when a DEC entry chooses a
+    model, the numbers never are. Today's table (version `2026-09-16`, UTC) agrees
+    with DEC-034/035: judge on Cerebras $0.35/$0.75, generator $0.05/$0.40,
+    embeddings on DeepInfra $0.01. The version is recorded on every run row.
+  - **Estimate before anything is spent**, printed with its breakdown and driver:
+    index build (corpus tokens × embedding price, **zero when the index is cached**
+    — the runner checks the P1-04 index key on disk first), query embeddings,
+    generator, judge (DEC-035's calibration), in-pipeline LLM. An unpriced model is
+    UNAVAILABLE and gates the run; it is never read as free (MIS-005's lesson,
+    applied to money).
+  - **Above $2.00 the runner raises `CostGateError` before `start_run`**: nothing is
+    recorded, nothing is prompted. Re-running with `--approve-cost '<DEC-NNN>'` lets
+    it proceed and appends the estimate, driver and approval to the **Cost approvals
+    log** in this file. `--estimate-only` prints the estimate and totals and stops.
+  - **Actuals on every row**: provider-reported embedding cost (build and queries
+    separately), generator tokens at table price, in-pipeline LLM tokens at table
+    price — all measured; the judge's share is the pre-run estimate, because Ragas
+    surfaces no token usage, and the row says so (`cost_actual_source`).
+  - **Drift**: the median actual/estimate ratio over runs that have both, once there
+    are three; outside 0.75–1.33 the runner warns to recalibrate.
+  - **Running totals** (Phase 2 axis runs, and all runs) print before every run.
+  - **Axis cap**: a new configuration under an axis that already has five recorded
+    experiments (distinct config hashes, VALID, non-smoke) gets a warning, not a
+    refusal — the handover's rule 1 is a scope rule and P2-15 explicitly allows
+    dropping an axis, so a hard stop would be the wrong tool.
+- **Evidence:** the estimate for `baseline_dense.yaml` on `dev` with the cached index
+  is $0.0001 (query embeddings); for `baseline_dense_tier2.yaml` it is $0.9102, of
+  which the judge is $0.8760 — consistent with DEC-035's measured ~$0.84–0.91 per
+  Tier 2 run. No new spend was made to establish this.
+- **Consequences:** `rag/runner/cost.py`'s live fetch functions remain only as the
+  refresh path. A Phase 2 run's cost is traceable to a dated table in git.
+- **Revisit if:** OpenRouter changes a pinned provider's price mid-phase (refresh,
+  bump the version, note it in the EXP file); or the drift warning fires.
+
+## DEC-053 — Every paid experiment run is approved in chat before it starts; the $2 gate is a backstop
+- **Date:** 2026-09-15
+- **Decided by:** Krutik
+- **Status:** Active
+- **Context:** P2-06 gates single runs above $2. Krutik's rule is broader: the budget
+  is flexible, but every experiment that spends money gets a heads-up and an
+  explicit approval first, whatever the estimate.
+- **Decision:** Before any run with a non-zero estimate, Claude posts the config,
+  the split, the `--estimate-only` output and what the run decides, and waits.
+  The $2 gate and its approvals log stay as the mechanical backstop. Runs of the
+  harness smoke tests and `--estimate-only` need no approval (they spend nothing).
+- **Evidence:** No measured data; Krutik's instruction, 2026-09-15.
+- **Consequences:** No phase spending ceiling is set; the running totals printed on
+  every run are the envelope's record.
+- **Revisit if:** Krutik sets a ceiling, or the per-run heads-up becomes a
+  bottleneck on a cheap axis (Axis 3 costs ~$0 and could be batch-approved).

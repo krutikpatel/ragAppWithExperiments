@@ -58,7 +58,19 @@ CREATE TABLE IF NOT EXISTS runs (
     metrics_json          TEXT,
     slices_json           TEXT,
     notes                 TEXT,
-    retriever_meta        TEXT
+    retriever_meta        TEXT,
+    pipeline_nondeterministic INTEGER,
+    pipeline_llm_json     TEXT,
+    axis                  TEXT,
+    leakage_affected      INTEGER,
+    promoted_config_hash  TEXT,
+    vs_promoted_json      TEXT,
+    pricing_version       TEXT,
+    cost_estimate_usd     REAL,
+    cost_estimate_json    TEXT,
+    cost_actual_usd       REAL,
+    cost_actual_json      TEXT,
+    cost_approval         TEXT
 );
 
 CREATE TABLE IF NOT EXISTS run_questions (
@@ -207,6 +219,60 @@ class ResultsStore:
             "SELECT * FROM run_questions WHERE run_id = ?", (run_id,)
         ).fetchall()
         return {row["question_id"]: dict(row) for row in rows}
+
+    def runs_with_config_hash(
+        self, config_hash: str, *, exclude: str | None = None, status: str = "VALID"
+    ) -> list[dict[str, Any]]:
+        """Earlier runs of the identical configuration — what a repeat is a repeat of
+        (P2-03: a repeat whose generation cache did not serve every call is flagged)."""
+        rows = self.conn.execute(
+            "SELECT * FROM runs WHERE config_hash = ? AND status = ? AND run_id != ? "
+            "ORDER BY timestamp",
+            (config_hash, status, exclude or ""),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def axis_experiments(self, axis: str) -> list[str]:
+        """Distinct configurations recorded under an axis (P2-06's cap counts
+        experiments, not runs: replicates and dev/dev_large pairs are one each)."""
+        rows = self.conn.execute(
+            "SELECT DISTINCT config_hash FROM runs WHERE axis = ? AND status = 'VALID' "
+            "AND harness_smoke_test = 0",
+            (axis,),
+        ).fetchall()
+        return [row["config_hash"] for row in rows]
+
+    def cost_rows(self) -> list[dict[str, Any]]:
+        """Every run with a recorded estimate or actual, oldest first."""
+        rows = self.conn.execute(
+            "SELECT run_id, axis, harness_smoke_test, cost_estimate_usd, cost_actual_usd "
+            "FROM runs WHERE cost_estimate_usd IS NOT NULL OR cost_actual_usd IS NOT NULL "
+            "ORDER BY timestamp"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def latest_run_of(self, config: Any, *, split: str | None = None) -> dict[str, Any] | None:
+        """Newest VALID run of a configuration, optionally on one split.
+
+        Matches on `identity_hash` — the identity for the tier that ran — rebuilt from
+        each row's `config_json`, so a Tier 1 run is found even if a Tier-2-only
+        default has since changed (P2-05).
+        """
+        from rag.runner.config import config_from_json
+
+        query = "SELECT * FROM runs WHERE status = 'VALID' AND eval_tier = ? AND retriever = ?"
+        params: list[Any] = [config.eval_tier.value, config.retriever]
+        if split:
+            query += " AND split = ?"
+            params.append(split)
+        for row in self.conn.execute(query + " ORDER BY timestamp DESC", params):
+            try:
+                stored = config_from_json(row["config_json"]).with_(split=config.split)
+            except (TypeError, ValueError):
+                continue
+            if stored.identity_hash == config.identity_hash:
+                return dict(row)
+        return None
 
     def test_openings(self) -> list[dict[str, Any]]:
         """Every run recorded against the held-out split. P0-09 / P0-12."""

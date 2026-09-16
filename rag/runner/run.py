@@ -24,9 +24,21 @@ from rag.eval.qrels import qrels_from_split, run_from_results
 from rag.eval.retrieval_metrics import evaluate_retrieval
 from rag.eval.slices import aggregate_by_slice, build_slices
 from rag.generation.base import CITATION_PARSER_VERSION, GeneratorConfig, OpenRouterGenerator
+from rag.generation.cache import GenerationCache
 from rag.hashing import short_id
 from rag.runner.config import EvalTier, RunConfig
-from rag.runner.cost import estimate_tier2_cost, format_estimate
+from rag.runner.cost import (
+    COST_GATE_USD,
+    CostGateError,
+    PricingTable,
+    actual_run_cost,
+    estimate_index_cost,
+    estimate_run_cost,
+    estimate_tier2_cost,
+    format_estimate,
+    format_run_estimate,
+)
+from rag.runner.promoted import check_split_policy, config_diff, load_promoted
 from rag.runner.registry import build_retriever
 from rag.runner.store import ResultsStore
 from rag.runner.subsample import build_subsample
@@ -104,21 +116,54 @@ def run(
     open_test: bool = False,
     store: ResultsStore | None = None,
     reason: str | None = None,
+    generation_cache: GenerationCache | None = None,
+    allow_leaky_split: bool = False,
+    approve_cost: str = "",
+    pricing: PricingTable | None = None,
+    estimate_only: bool = False,
 ) -> dict[str, Any]:
-    """Execute one experiment and record it. Returns the finished `runs` row."""
+    """Execute one experiment and record it. Returns the finished `runs` row.
+
+    `generation_cache` backs any in-pipeline LLM call (P2-03); the default is the
+    shared cache under results/. It is not part of the config — a cold cache
+    changes cost and reproducibility, never the configuration being tested.
+    `allow_leaky_split` overrides the P2-04 split policy (the run is then marked
+    leakage-affected); `approve_cost` is the recorded approval that lets a run
+    estimated above the $2 gate proceed (P2-06).
+    """
     owns_store = store is None
     store = store or ResultsStore()
+    owns_cache = generation_cache is None
+    generation_cache = generation_cache or GenerationCache()
     try:
-        return _run(config, open_test=open_test, store=store, reason=reason)
+        return _run(
+            config, open_test=open_test, store=store, reason=reason, generation_cache=generation_cache,
+            allow_leaky_split=allow_leaky_split, approve_cost=approve_cost,
+            pricing=pricing or PricingTable.load(), estimate_only=estimate_only,
+        )
     finally:
         if owns_store:
             store.close()
+        if owns_cache:
+            generation_cache.close()
 
 
 def _run(
-    config: RunConfig, *, open_test: bool, store: ResultsStore, reason: str | None
+    config: RunConfig,
+    *,
+    open_test: bool,
+    store: ResultsStore,
+    reason: str | None,
+    generation_cache: GenerationCache,
+    allow_leaky_split: bool,
+    approve_cost: str,
+    pricing: PricingTable,
+    estimate_only: bool = False,
 ) -> dict[str, Any]:
     check_test_split_guard(config, open_test=open_test, store=store, reason=reason)
+    policy = check_split_policy(config, allow_leaky_split=allow_leaky_split)
+    if policy["note"]:
+        warnings.warn(policy["note"], stacklevel=3)
 
     git = git_state()
     if git.dirty:
@@ -144,7 +189,7 @@ def _run(
             full=config.full_eval,
         )
         frame = frame[frame["question_id"].isin(subsample.question_ids)].reset_index(drop=True)
-        cost_estimate = _cost_estimate(config, frame)
+        cost_estimate = _cost_estimate(config, frame, pricing)
         print(format_estimate(cost_estimate))
     else:
         cost_estimate = {}
@@ -158,6 +203,51 @@ def _run(
     judge_meta = (
         judge_provenance(_judge_config(config)) if config.eval_tier is EvalTier.TIER_2 else {}
     )
+
+    # P2-06 — the whole-run estimate, printed with what drives it, gated at $2.
+    # Full-corpus embedding for an uncached index is the dominant cost in this
+    # project, so the index build is estimated before anything is spent.
+    index_estimate = estimate_index_cost(
+        retriever=config.retriever,
+        retriever_params=config.retriever_params,
+        corpus_words=sum(len(text.split()) for text in chunk_text.values()),
+        index_exists=_dense_index_exists(config, index),
+        n_questions=len(frame),
+        pricing=pricing,
+    )
+    run_estimate = estimate_run_cost(tier2=cost_estimate or None, index=index_estimate)
+    run_estimate["index"] = index_estimate
+    print(format_run_estimate(run_estimate, pricing_version=pricing.pricing_version))
+    _print_running_totals(store)
+    if estimate_only:
+        return {"estimate_only": True, "config_hash": config.config_hash, **run_estimate}
+    if run_estimate["over_gate"] and not approve_cost.strip():
+        raise CostGateError(
+            f"estimated ${run_estimate['total_usd']:.4f} is above the ${COST_GATE_USD:.2f} gate"
+            + (f" (or a price is unavailable: {run_estimate['unavailable']})" if run_estimate["unavailable"] else "")
+            + ". The run has not started and nothing was recorded. Get approval, record it in "
+            "docs/DECISIONS.md, and re-run with --approve-cost '<DEC-NNN or reason>' (P2-06)."
+        )
+    if config.axis and not config.harness_smoke_test:
+        n_axis = len(store.axis_experiments(config.axis))
+        if n_axis >= 5 and config.config_hash not in store.axis_experiments(config.axis):
+            warnings.warn(
+                f"axis {config.axis!r} already has {n_axis} recorded experiments; the cap is 5 "
+                "(P2-06 / Phase 2 rule 1). Note further variants in HYPOTHESES.md instead.",
+                stacklevel=3,
+            )
+
+    # P2-05 — every axis experiment is a diff against configs/promoted.yaml; the
+    # diff is recorded so "one dimension" is a fact on the row, not a claim.
+    vs_promoted: dict[str, Any] = {}
+    if config.axis:
+        vs_promoted = config_diff(config, load_promoted())
+        if not vs_promoted["one_dimension"] and config.axis != "combination":
+            warnings.warn(
+                f"config changes {vs_promoted['dimensions']} vs promoted.yaml; a {config.axis!r} "
+                "experiment changes one dimension (P2-05). Only `combination` runs may change several.",
+                stacklevel=3,
+            )
 
     run_id = make_run_id(config)
     store.start_run(
@@ -193,8 +283,23 @@ def _run(
             "metric_prompt_versions": json.dumps(judge_meta.get("metric_prompt_versions", {})),
             "harness_smoke_test": int(config.harness_smoke_test),
             "status": "RUNNING",
+            "axis": config.axis or None,
+            "leakage_affected": int(policy["leakage_affected"]),
+            "promoted_config_hash": vs_promoted.get("promoted_config_hash"),
+            "vs_promoted_json": json.dumps(vs_promoted) if vs_promoted else None,
+            "pricing_version": pricing.pricing_version,
+            "cost_estimate_usd": run_estimate["total_usd"],
+            "cost_estimate_json": json.dumps(run_estimate, default=str),
+            "cost_approval": approve_cost.strip() or None,
         }
     )
+    if approve_cost.strip():
+        from rag.runner.cost_approvals import record_cost_approval
+
+        record_cost_approval(
+            run_id=run_id, config_hash=config.config_hash, estimate_usd=run_estimate["total_usd"],
+            driver=run_estimate["driver"] or "-", approval=approve_cost, git_sha=git.sha,
+        )
 
     if config.split == HELD_OUT_SPLIT:
         from rag.runner.test_openings import record_test_opening
@@ -206,7 +311,8 @@ def _run(
 
     try:
         row = _execute(
-            config, run_id, frame, index, chunk_text, slices, store, reason, cost_estimate
+            config, run_id, frame, index, chunk_text, slices, store, reason, cost_estimate,
+            generation_cache, pricing,
         )
     except Exception as exc:
         # An abandoned run is recorded as VOID rather than left out. Silent gaps in
@@ -255,7 +361,7 @@ def _judge_config(config: RunConfig) -> JudgeConfig:
     )
 
 
-def _cost_estimate(config: RunConfig, frame) -> dict:
+def _cost_estimate(config: RunConfig, frame, pricing: PricingTable) -> dict:
     context_words = config.top_k * int(config.chunker_params.get("chunk_size", 600))
     n_judged = int((frame["answer"].fillna("").str.strip() != "").sum()) if "answer" in frame else len(frame)
     return estimate_tier2_cost(
@@ -265,7 +371,69 @@ def _cost_estimate(config: RunConfig, frame) -> dict:
         generator_model=config.generator_model,
         judge_model=config.judge_model,
         judge_provider_order=tuple(config.judge_provider_order),
+        pricing=pricing,
     )
+
+
+def _dense_index_exists(config: RunConfig, index: ChunkIndex) -> bool:
+    """Whether the dense index this config needs is already on disk — the difference
+    between a ~$0.03 run and a full-corpus embed (P2-06). True for other retrievers."""
+    if config.retriever != "dense":
+        return True
+    from pathlib import Path
+
+    from rag.embedding.base import EmbedderConfig, build_embedder
+    from rag.paths import INDEXES_DIR
+    from rag.retrieval.dense import VECTORS_FILE, index_key
+
+    params = config.retriever_params
+    if params.get("embedder") is not None:
+        return True
+    embedder = build_embedder(
+        params.get("embedding_backend", "openrouter"),
+        EmbedderConfig(
+            model=params.get("embedding_model", ""),
+            revision=params.get("embedding_revision", ""),
+            provider=params.get("embedding_provider", ""),
+            prefix_convention=params.get("prefix_convention"),
+        ),
+    )
+    key = index_key(
+        corpus_hash=index.corpus_hash,
+        normalization_version=index.normalization_version,
+        chunker_id=index.chunker_id,
+        model_id=embedder.model_id,
+        revision=embedder.pinned_identity,
+        prefix_convention=embedder.prefix.name,
+    )
+    index_dir = Path(params["index_dir"]) if params.get("index_dir") else INDEXES_DIR / key
+    return (index_dir / VECTORS_FILE).exists()
+
+
+def _print_running_totals(store: ResultsStore) -> None:
+    """P2-06: spend so far, every run. Actual where recorded, else the estimate."""
+    rows = store.cost_rows()
+    phase2 = [r for r in rows if r["axis"]]
+    def total(items):
+        return sum((r["cost_actual_usd"] if r["cost_actual_usd"] is not None else r["cost_estimate_usd"] or 0.0) for r in items)
+    print(f"    running totals: Phase 2 (axis runs) ${total(phase2):.4f} over {len(phase2)} runs; "
+          f"all recorded runs ${total(rows):.4f} over {len(rows)} runs")
+
+
+def _estimate_drift(store: ResultsStore) -> dict[str, Any] | None:
+    """Actual / estimate over runs that have both. Flagged when the median ratio
+    over three or more runs is outside 0.75–1.33 — the estimator is then
+    systematically wrong, not just noisy, and needs recalibrating (DEC-035)."""
+    ratios = [
+        r["cost_actual_usd"] / r["cost_estimate_usd"]
+        for r in store.cost_rows()
+        if r["cost_actual_usd"] is not None and r["cost_estimate_usd"] and r["cost_estimate_usd"] > 0.001
+    ]
+    if len(ratios) < 3:
+        return None
+    ordered = sorted(ratios)
+    median = ordered[len(ordered) // 2]
+    return {"n": len(ratios), "median_ratio": round(median, 3), "drift": not 0.75 <= median <= 1.33}
 
 
 def _execute(
@@ -278,6 +446,8 @@ def _execute(
     store: ResultsStore,
     reason: str | None,
     cost_estimate: dict[str, Any],
+    generation_cache: GenerationCache,
+    pricing: PricingTable,
 ) -> dict[str, Any]:
     retriever = build_retriever(
         config.retriever,
@@ -285,6 +455,7 @@ def _execute(
         chunk_text=chunk_text,
         doc_pooling=config.doc_pooling,
         index=index,
+        generation_cache=generation_cache,
         **config.retriever_params,
     )
     store.update_run(run_id, retriever_meta=json.dumps(retriever.provenance(), default=str))
@@ -397,6 +568,54 @@ def _execute(
     else:
         aggregate["cost_per_query_usd"] = None
         aggregate["cost_per_query_source"] = "estimate: pre-run cost estimate / questions"
+
+    # P2-03 — a pipeline that called an LLM is not deterministic unless the
+    # generation cache served every call. The hit rate goes on the row; a repeat of
+    # an identical config with a hit rate under 100% is flagged, not averaged away.
+    pipeline_llm = getattr(retriever, "pipeline_llm", None)
+    if pipeline_llm is not None:
+        stats = pipeline_llm.stats()
+        store.update_run(run_id, pipeline_nondeterministic=1, pipeline_llm_json=json.dumps(stats))
+        aggregate["pipeline_nondeterministic"] = True
+        aggregate["pipeline_llm_temperature"] = stats["temperature"]
+        aggregate["pipeline_llm_calls"] = stats["calls"]
+        aggregate["pipeline_llm_cache_hit_rate"] = stats["hit_rate"]
+        earlier = store.runs_with_config_hash(config.config_hash, exclude=run_id)
+        if earlier and (stats["hit_rate"] is None or stats["hit_rate"] < 1.0):
+            flag = (
+                f"repeat of config {config.config_hash} (earlier: {earlier[-1]['run_id']}) with a "
+                f"generation cache hit rate of {stats['hit_rate'] or 0:.0%}: the in-pipeline LLM "
+                "calls were not replayed, so retrieval outcomes may differ from the earlier run "
+                "for reasons unrelated to the config (P2-03)"
+            )
+            aggregate["pipeline_cache_flag"] = flag
+            warnings.warn(flag, stacklevel=2)
+    else:
+        store.update_run(run_id, pipeline_nondeterministic=0)
+        aggregate["pipeline_nondeterministic"] = False
+
+    # P2-06 — what the run actually cost, against the estimate.
+    actual = actual_run_cost(
+        retriever_meta=retriever.provenance(),
+        generator_tokens_in=sum(g.get("tokens_in", 0) for g in generated.values()),
+        generator_tokens_out=sum(g.get("tokens_out", 0) for g in generated.values()),
+        generator_model=config.generator_model,
+        judge_estimate_usd=cost_estimate.get("judge_usd") if config.eval_tier is EvalTier.TIER_2 else None,
+        pipeline_llm_stats=pipeline_llm.stats() if pipeline_llm is not None else None,
+        pricing=pricing,
+    )
+    aggregate["cost_actual_usd"] = actual["total_usd"]
+    aggregate["cost_actual_source"] = actual["source"]
+    store.update_run(run_id, cost_actual_usd=actual["total_usd"], cost_actual_json=json.dumps(actual))
+    drift = _estimate_drift(store)
+    if drift:
+        aggregate["cost_estimate_drift"] = drift
+        if drift["drift"]:
+            warnings.warn(
+                f"cost estimator drift: median actual/estimate ratio {drift['median_ratio']} over "
+                f"{drift['n']} runs — recalibrate rag/runner/cost.py (P2-06, DEC-035)",
+                stacklevel=2,
+            )
 
     slice_report = aggregate_by_slice(per_question, slices, percentiles={"collapse_ratio": (90,)})
     aggregate["slice_meta"] = slices.meta

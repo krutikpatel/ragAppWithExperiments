@@ -16,6 +16,27 @@ from rag.hashing import canonical_json, short_id
 from rag.retrieval.pooling import DEFAULT_POOLING, POOLING_RULES
 
 
+# Phase 2 axes (P2-07 … P2-16). `axis` places a run under the split policy (P2-04),
+# the promotion rule (P2-05) and the per-axis experiment cap (P2-06). Empty means a
+# Phase 0/1 config or a harness smoke test, which none of those apply to.
+AXES = (
+    "control",
+    "chunking",          # Axis 1, P2-07
+    "embedding",         # Axis 2, P2-08
+    "retrieval_method",  # Axis 3, P2-09 — decided on `dev` ONLY
+    "query_transform",   # Axis 4, P2-12
+    "reranking",         # Axis 5, P2-10
+    "assembly",          # Axis 6, P2-13
+    "generation",        # Axis 7, P2-14
+    "agentic",           # Axis 8, P2-15
+    "combination",       # P2-16 — the one kind of run allowed to change several dimensions
+)
+# P2-04: which split decides an axis. Retrieval axes decide on dev_large and confirm
+# on dev; Axis 3 and the judged axes decide on dev only.
+RETRIEVAL_AXES = ("chunking", "embedding", "reranking", "assembly")
+DEV_ONLY_AXES = ("retrieval_method", "query_transform", "generation", "agentic")
+
+
 class EvalTier(str, Enum):
     """P0-09. Tier 1 is the default because it is the one you can afford to repeat.
 
@@ -36,6 +57,9 @@ class RunConfig:
     """Everything that determines a run's numbers."""
 
     name: str
+    # Which Phase 2 axis this run belongs to (see AXES). Like `name`, it does not
+    # change a number, so it is excluded from config_hash and recorded on the row.
+    axis: str = ""
     split: str = "dev"
     eval_tier: EvalTier = EvalTier.TIER_1
 
@@ -137,6 +161,8 @@ class RunConfig:
             raise ValueError("eval_subsample_size must be at least 1")
         if "@" not in self.generator_prompt:
             raise ValueError(f"generator_prompt must be '<id>@<version>', got {self.generator_prompt!r}")
+        if self.axis and self.axis not in AXES:
+            raise ValueError(f"unknown axis {self.axis!r}; known: {AXES}")
 
     @property
     def generator_prompt_id(self) -> str:
@@ -167,14 +193,52 @@ class RunConfig:
     def config_hash(self) -> str:
         """Stable over field order; changes when anything that moves a number moves.
 
-        `name` is excluded: renaming a run does not change its numbers, and two runs
-        of the same configuration should collide here on purpose.
+        `name` and `axis` are excluded: relabelling a run does not change its
+        numbers, and two runs of the same configuration should collide here on purpose.
         """
-        payload = {k: v for k, v in self.as_dict().items() if k != "name"}
+        payload = {k: v for k, v in self.as_dict().items() if k not in ("name", "axis")}
         return short_id(canonical_json(payload), length=16)
 
     def with_(self, **changes: Any) -> RunConfig:
         return replace(self, **changes)
+
+    # Fields that can move a Tier 1 number. Everything else (generator, judge,
+    # subsample) only exists in Tier 2, so two Tier 1 runs that differ only there are
+    # the same experiment. `config_hash` still covers every field: it is the exact
+    # identity; `identity_hash` is the identity *for the tier that ran*.
+    TIER1_FIELDS = (
+        "split", "eval_tier", "retriever", "retriever_params", "chunker", "chunker_params",
+        "retrieval_depth", "top_k", "candidate_pool", "doc_pooling", "seed", "harness_smoke_test",
+    )
+
+    @property
+    def identity_hash(self) -> str:
+        """The configuration's identity for its tier (P2-05: what `promoted` resolves by).
+
+        A default that only Tier 2 reads changed after EXP-0005 (`generator_prompt`,
+        DEC-042), which moved the dense control's `config_hash` without changing a
+        single Tier 1 number. Matching runs to a config by the exact hash would then
+        lose the control's own runs.
+        """
+        data = self.as_dict()
+        if self.eval_tier is EvalTier.TIER_1:
+            payload = {k: data[k] for k in self.TIER1_FIELDS}
+        else:
+            payload = {k: v for k, v in data.items() if k not in ("name", "axis")}
+        return short_id(canonical_json(payload), length=16)
+
+
+def config_from_json(text: str) -> RunConfig:
+    """Rebuild a RunConfig from a run row's `config_json`. Fields the row predates
+    take today's defaults; fields today's code no longer has are dropped."""
+    import json
+
+    document = {k: v for k, v in json.loads(text).items() if k in RunConfig.__dataclass_fields__}
+    if "eval_tier" in document:
+        document["eval_tier"] = EvalTier(document["eval_tier"])
+    if "judge_provider_order" in document:
+        document["judge_provider_order"] = tuple(document["judge_provider_order"])
+    return RunConfig(**document)
 
 
 def load_config_file(path: str | Any) -> RunConfig:

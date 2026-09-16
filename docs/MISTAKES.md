@@ -72,6 +72,24 @@ Derived from the prevention rules below. Run through it and say in chat that you
     `rag/eval/noise_floor.py` (DEC-037, DEC-046); a scorecard entry without its MDD is
     incomplete. Citation precision's MDD on the dense control is 0.08 — the generator,
     not the judge, is the noisiest instrument there.
+23. **Never default an object with `__len__` using `or`.** An empty cache, store or
+    frame is falsy, and `x or default()` silently swaps it for the default — here a
+    test's cold cache for the shared one, which made a fake model look 100% cached.
+    Use `if x is None`, and give container-like classes a `__bool__`. (MIS-017)
+24. **Retrieval deltas are called by `rag compare` (paired test, DEC-047), judged
+    deltas by their MDD family (DEC-048).** A run whose pipeline called an LLM is
+    not a fixed outcome unless its cache hit rate was 100% (DEC-049); `rag compare`
+    warns, and the warning goes in the EXP file.
+25. **A table appended by code ends at the next `## ` heading, and a test proves
+    the count.** The openings logger counted every `| ` row to the end of the file.
+    (MIS-018)
+26. **Changing a config default changes every config's `config_hash`, including
+    the controls'.** Match runs to configs by `identity_hash` (the tier's own
+    fields); when a default must change, say in the DEC entry which hashes move.
+    (MIS-019)
+27. **Estimate the index build before a dense run, and check the index key on
+    disk first.** A new embedding model or chunk config is a full-corpus embed; the
+    $2 gate exists for exactly this, and `rag run --estimate-only` costs nothing.
 
 ---
 
@@ -506,3 +524,76 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** Test every parser of model output on stored model output, not
   on the format the prompt asked for.
 - **Added to preflight:** yes
+
+## MIS-017 — `cache or GenerationCache()` replaced a test's empty cache with the shared one
+- **Date:** 2026-09-15
+- **Severity:** Low — caught by the P2-03 determinism test before any experiment;
+  no run affected. The stray shared cache held 200 fake-model rows and was deleted.
+- **What happened:** `ToyLLMRewriteRetriever` picked its cache with
+  `self.generation_cache or GenerationCache()`. `GenerationCache` defines `__len__`,
+  so an *empty* cache is falsy and the expression fell through to the default under
+  `results/`. The test's "fresh cache" third run therefore hit the shared cache the
+  first run had just filled, reported a 100% hit rate, and the cold-repeat flag never
+  fired.
+- **How it was caught:** `test_repeat_run_with_warm_cache_is_identical_and_flags_a_cold_repeat`
+  expected a warning and got none; the recorded `cache_path` pointed at `results/`.
+- **Root cause:** Python truthiness on a container-like object, used as a null check.
+- **Impact:** None on results. Had it shipped, every Axis 4 run would have read as
+  fully cached whenever the test suite had warmed the shared cache — a false
+  determinism claim that is exactly what P2-03 exists to prevent.
+- **Fix applied:** `if self.generation_cache is not None`, and `GenerationCache.__bool__`
+  returns True so the trap cannot recur on this class.
+- **Prevention rule:** Never default a container-like object with `or`; check
+  `is None`. Any class with `__len__` that is passed around as a handle gets a
+  `__bool__`.
+- **Added to preflight:** yes (item 23)
+
+## MIS-018 — The test-split openings logger counted every table row after its heading
+- **Date:** 2026-09-15
+- **Severity:** Low — latent; the test split has never been opened, so no count was
+  ever wrong on record.
+- **What happened:** `record_test_opening` split `DECISIONS.md` at the "Test-split
+  openings log" heading and counted every `| ` row in the *rest of the file* as an
+  opening. The log sits in the middle of the file (before DEC-010) and DEC-046 has
+  since added MDD tables after it, so the first real opening would have been logged
+  as opening #30-something.
+- **How it was caught:** Adding two more machine-written tables (promotion log,
+  cost approvals) for P2-05/P2-06 and reading the existing appender before reusing it.
+- **Root cause:** No section boundary; no test of the count against a file with
+  other tables in it.
+- **Impact:** None recorded. Would have made P2-18's "opened exactly once" claim
+  unverifiable from the file.
+- **Fix applied:** `rag/runner/decision_log.py` bounds a section at the next `## `
+  heading; all three logs use it; `test_log_sections_end_at_the_next_heading`
+  proves the count with a DEC-046-style table following the log.
+- **Prevention rule:** A parser of our own documents gets a test on a realistic
+  document, not on the minimal one it was written against.
+- **Added to preflight:** yes (item 25)
+
+## MIS-019 — A Tier-2-only default change moved the Tier 1 control's `config_hash`
+- **Date:** 2026-09-15
+- **Severity:** Medium — no number affected; identity of the control broken. Every
+  citation of EXP-0005's hash `c535f774bff4b067` remains correct for those rows, but
+  `configs/baseline_dense.yaml` now hashes to `7c99bc8e9a88e878`.
+- **What happened:** DEC-042 changed `RunConfig.generator_prompt`'s default from
+  `answer@v1` to `baseline_answer@v1` after EXP-0005 had run. `config_hash` covers
+  every field, so the dense control's hash changed although Tier 1 never reads that
+  field. `rag promoted show` found no run of the promoted config; the P2-03 repeat
+  detector (`runs_with_config_hash`) would likewise not recognise a repeat of the
+  control.
+- **How it was caught:** `rag promoted show` printed "no VALID run" for a config
+  with three recorded runs.
+- **Root cause:** One hash for two purposes — the exact record of what ran (right to
+  include everything) and the identity used to find runs of "the same experiment"
+  (must not include fields the tier never reads).
+- **Impact:** None on any recorded metric. Comparability keys (corpus, split, judge)
+  were never involved.
+- **Fix applied:** `RunConfig.identity_hash` — Tier 1 fields only for a Tier 1 run,
+  everything for Tier 2 — and `ResultsStore.latest_run_of` / `rag promote` match on
+  it, rebuilt from each row's `config_json`. `config_hash` is unchanged and still
+  the exact identity on the row. The repeat detector still uses `config_hash`
+  (stricter; a missed repeat is the safe failure).
+- **Prevention rule:** When a config default changes, the DEC entry says which
+  configs' hashes move and why that is acceptable. Match runs to configs by the
+  tier's identity, never by the exact hash.
+- **Added to preflight:** yes (item 26)

@@ -279,35 +279,61 @@ def test_judge_concurrency_is_part_of_config_but_not_of_results():
 
 
 def test_noise_floor_verdicts():
-    """DEC-037 / DEC-046: a delta inside the measured spread is not a finding."""
+    """DEC-037 / DEC-046: a delta inside the measured spread is not a finding.
+    P2-02 / DEC-048: the label is the tool's — 'significant' or 'within judge noise'."""
     from rag.eval.noise_floor import ACTIVE_FAMILY, FLOOR_FAMILIES, MEASURED_ON, NOISE_FLOOR, verdict
 
     assert ACTIVE_FAMILY == "dense-control-v1"
     assert len(MEASURED_ON["runs"]) == 3
     assert all(len(f["measured_on"]["runs"]) == 3 for f in FLOOR_FAMILIES.values())
-    assert verdict("faithfulness", 0.010) == "within noise"
-    assert verdict("faithfulness", -0.05) == "finding"
-    assert verdict("answer_correctness", NOISE_FLOOR["answer_correctness"]) == "within noise"  # equal is not above
+    assert verdict("faithfulness", 0.010) == "within judge noise"
+    assert verdict("faithfulness", -0.05) == "significant"
+    assert verdict("answer_correctness", NOISE_FLOOR["answer_correctness"]) == "within judge noise"  # equal is not above
     # Dense retrieval carries a floor (OQ-023); BM25's would be zero, and latency has none.
     assert verdict("strict_recall@5", 0.010) == "within noise"
-    assert verdict("strict_recall@5", 0.30) == "finding"
-    assert verdict("p95_latency_ms", 1000) == "no floor measured"
+    assert verdict("strict_recall@5", 0.30) == "significant"
+    assert verdict("p95_latency_ms", 1000) == "no MDD measured"
     # The Phase 0 family is kept, with its own runs, for reading old rows.
     assert FLOOR_FAMILIES["phase0-bm25-answer-v1"]["floors"]["faithfulness"] == 0.032
+
+
+def _dense_control_provenance() -> dict:
+    """Run-row fields that place a run in the `dense-control-v1` floor family."""
+    return {
+        "judge_model": "openai/gpt-oss-120b",
+        "judge_provider_order": json.dumps(["Cerebras", "Groq"]),
+        "judge_embedding_model": "qwen/qwen3-embedding-8b",
+        "ragas_version": "0.4.3",
+        "metric_prompt_versions": json.dumps({
+            "faithfulness": "sha256:475517e1d53e61ad",
+            "answer_correctness": "sha256:24e941af1230520b",
+            "answer_relevance": "sha256:4417e7484c29c546",
+        }),
+        "generator_model": "openai/gpt-5-nano",
+        "prompt_versions": json.dumps({"answer": "baseline_answer@v1"}),
+        "retriever": "dense",
+        "eval_subsample_id": "sub100:b551f7f49c91",
+    }
 
 
 def test_diff_applies_noise_floor_to_judged_aggregates(store):
     import json as _json
 
     for run_id, faith in (("run_a", 0.80), ("run_b", 0.82)):
+        store.update_run(run_id, **_dense_control_provenance())
         store.conn.execute(
             "UPDATE runs SET metrics_json = ? WHERE run_id = ?",
             (_json.dumps({"strict_recall@5": 0.5, "faithfulness": faith}), run_id),
         )
     store.conn.commit()
     report = diff_runs("run_a", "run_b", store=store)
-    assert report["aggregate_deltas"]["faithfulness"]["verdict"] == "finding"  # 0.02 > 0.014
+    assert report["mdd"]["family"] == "dense-control-v1"
+    assert report["aggregate_deltas"]["faithfulness"]["verdict"] == "significant"  # 0.02 > 0.014
+    assert report["aggregate_deltas"]["faithfulness"]["replicates_advised"] is True  # 0.02 ≤ 1.5 × 0.014
     assert report["aggregate_deltas"]["strict_recall@5"]["verdict"] == "within noise"  # delta 0
+    assert report["aggregate_deltas"]["faithfulness"]["text"] == (
+        "faithfulness 0.820 (baseline 0.800, Δ+0.020, MDD ±0.014 → significant — marginal, resolve with 3 replicates)"
+    )
 
 
 def test_p1_09_diff_smoke_against_the_dense_control():

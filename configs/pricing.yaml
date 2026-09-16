@@ -1,0 +1,94 @@
+# Prices in USD per million tokens, per model, per provider. `_model` is the
+# model-level (unpinned) price; a named provider is what a pinned config pays
+# (DEC-032/034: the two differ ~12x for the judge). Written by `rag pricing
+# refresh` from OpenRouter's /models and /models/<id>/endpoints; edit the model
+# list by hand, never the numbers. The estimator records pricing_version on
+# every run (P2-06, DEC-050).
+pricing_version: '2026-09-16'
+source: OpenRouter /api/v1/models (model-level) and /api/v1/models/<id>/endpoints
+  (per provider)
+chat:
+  openai/gpt-5-nano:
+    _model:
+      in: 0.05
+      out: 0.4
+    OpenAI:
+      in: 0.025
+      out: 0.2
+    Azure:
+      in: 0.05
+      out: 0.4
+  openai/gpt-oss-120b:
+    _model:
+      in: 0.037
+      out: 0.17
+    AkashML:
+      in: 0.03
+      out: 0.17
+    CoreWeave:
+      in: 0.03
+      out: 0.17
+    DekaLLM:
+      in: 0.03
+      out: 0.18
+    DeepInfra:
+      in: 0.037
+      out: 0.17
+    Crusoe:
+      in: 0.05
+      out: 0.25
+    Novita:
+      in: 0.05
+      out: 0.25
+    Mancer 2:
+      in: 0.055
+      out: 0.5
+    DigitalOcean:
+      in: 0.06
+      out: 0.42
+    Google:
+      in: 0.09
+      out: 0.36
+    BaseTen:
+      in: 0.1
+      out: 0.5
+    Parasail:
+      in: 0.1
+      out: 0.75
+    SambaNova:
+      in: 0.14
+      out: 0.95
+    Amazon Bedrock:
+      in: 0.15
+      out: 0.6
+    Nebius:
+      in: 0.15
+      out: 0.6
+    SiliconFlow:
+      in: 0.15
+      out: 0.6
+    Phala:
+      in: 0.15
+      out: 0.6
+    Together:
+      in: 0.15
+      out: 0.6
+    Groq:
+      in: 0.15
+      out: 0.6
+    Mara:
+      in: 0.15
+      out: 0.75
+    Cerebras:
+      in: 0.35
+      out: 0.75
+embeddings:
+  qwen/qwen3-embedding-8b:
+    Nebius:
+      in: 0.01
+    DeepInfra:
+      in: 0.01
+    SiliconFlow:
+      in: 0.04
+    _model:
+      in: 0.01

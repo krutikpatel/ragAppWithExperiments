@@ -350,6 +350,15 @@ credibility.
 **Commits.** One experiment per commit where possible.
 `EXP-0002: hybrid RRF retrieval — recall@10 0.61→0.74`.
 Docs update lands in the same commit as the run it describes.
+**Every story is committed before the next one begins.** A story's code, tests
+and documentation land in one commit (`P2-05: promoted.yaml pointer + rag promote`)
+and the next story starts from that SHA. Do not carry two stories in one working
+tree; if it has happened, split the commits before continuing.
+
+**Spend.** Every experiment run that costs money needs Krutik's explicit go-ahead in
+chat before it starts, regardless of the $2 gate — the gate is a backstop, not the
+approval. Give the heads-up as: config, split, `--estimate-only` output, and what
+the run decides. Budget is flexible; surprise is not. (DEC-053)
 
 **Scope.** Do not refactor beyond the task. Do not add pipeline stages, swap
 libraries, or restructure configs without an entry in `DECISIONS.md`.
@@ -403,20 +412,35 @@ rag/
                     pooling.py (doc_pooling; select_distinct_docs + collapse ratio),
                     bm25.py (the sparse control; rank-bm25 Okapi), dense.py (cosine
                     over a numpy index cached under indexes/<key>/, key = provenance
-                    tuple, P1-04), toy.py (smoke tests only)
+                    tuple, P1-04), toy.py (smoke tests only; toy_llm_rewrite puts a
+                    fake non-deterministic LLM call inside retrieval for the P2-03 test)
   eval/             qrels.py (binary document-level qrels + alignment check),
                     retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
                     generation_metrics.py (citations, refusal — no LLM calls),
                     steps.py (procedural step coverage), slices.py (P0-08),
                     judge.py — the ONLY module that may import Ragas,
                     noise_floor.py — measured run-to-run spread (MDD) per configuration
-                    family; `dense-control-v1` active; rag diff uses it (DEC-037/046)
-  generation/       base.py — Generator interface + OpenRouter generator
-  runner/           config.py (RunConfig, EvalTier, config_hash), run.py
-                    (run(config) -> row), store.py (SQLite runs + run_questions),
-                    diff.py (rag diff), registry.py (retrievers by name),
-                    subsample.py (fixed Tier 2 subsample), cost.py (pre-run estimate),
-                    test_openings.py (appends each test-split opening to DECISIONS.md)
+                    family, matched from a run row's judge/generator/prompt provenance;
+                    labels every delta significant / within judge noise / no MDD
+                    measured; rag diff and rag compare use it (DEC-037/046/048)
+  generation/       base.py — Generator interface + OpenRouter generator;
+                    cache.py — GenerationCache, SQLite keyed on (question_id, prompt_id,
+                    prompt_version, model_id, input_hash) for in-pipeline LLM calls;
+                    pipeline_llm.py — PipelineLLM, the ONLY way retrieval-side code calls
+                    a model: temperature 0 constant, cached, hit rate counted (P2-03)
+  runner/           config.py (RunConfig, EvalTier, AXES, config_hash = exact identity,
+                    identity_hash = the tier's identity, MIS-019), run.py (run(config)
+                    -> row; split policy, cost gate, promoted diff, pipeline cache
+                    stats, actual cost), store.py (SQLite runs + run_questions),
+                    diff.py (rag diff), compare.py (rag compare — paired bootstrap CI +
+                    permutation p per question, per slice, P2-01), promoted.py (the
+                    promoted.yaml pointer, P2-04 split policy, `rag promote`, resolves
+                    `promoted` as a run ref), cost.py (PricingTable over
+                    configs/pricing.yaml, whole-run estimate, $2 gate, actuals),
+                    decision_log.py (machine-appended tables in DECISIONS.md, bounded
+                    at the next heading — MIS-018), test_openings.py and
+                    cost_approvals.py (the openings and approvals rows),
+                    registry.py (retrievers by name), subsample.py (fixed Tier 2 subsample)
   embedding/        base.py — Embedder interface with explicit input_type (query |
                     passage) and a per-family prefix table that REFUSES unknown
                     models; backends: sentence_transformers (local, pinned revision)
@@ -431,18 +455,23 @@ prompts/            versioned YAML, addressed by (id, version). answer.yaml (Pha
                     are pinned in tests/test_prompts.py, so an edit without a version
                     bump fails the suite. The runner asserts the generator's prompt_ref
                     equals the recorded one (MIS-015).
-configs/            experiment configs. smoke_p1_09_dense_k10.yaml is the P1-09 diff
+configs/            experiment configs. promoted.yaml is the committed "current best"
+                    (P2-05) — moved only by `rag promote`, never by hand; every axis
+                    config is a one-dimension diff against it and carries `axis:`.
+                    pricing.yaml is the dated price table the cost estimator reads
+                    (`rag pricing refresh`). smoke_p1_09_dense_k10.yaml is the P1-09 diff
                     smoke (baseline_dense with top_k 10). Otherwise: exp_NNNN_*.yaml are experiments and are
                     committed BEFORE their run so git_sha is clean. baseline_dense.yaml
                     is the dense control (EXP-0005) that Phase 2 diffs against (P1-09);
                     baseline_dense_tier2.yaml adds generation + judge (P1-07 run 2,
                     and `rag ask`'s default); exp_0004_bm25_distinct_docs.yaml is the
-                    sparse control. smoke_toy*.yaml
+                    sparse control. smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml
                     and tier2_smoke.yaml are harness smoke tests, not experiments.
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
                     chunker_id, model_id, revision, prefix_convention)
-results/            runs.sqlite — the results store. GITIGNORED.
+results/            runs.sqlite — the results store; generation_cache.sqlite — the
+                    in-pipeline LLM cache (P2-03). Both GITIGNORED.
   corpus_profile/   <key>.json written by `rag corpus profile`; the EXPERIMENTS.md
                     profile block mirrors it
 
@@ -540,6 +569,16 @@ Rules that outlive any particular library:
   79.0% of articles fit in one chunk. **36.7% of those chunks exceed 512 tokens**
   (p95 748, max 1,336): a 512-context embedding model truncates a third of the
   index silently (preflight item 19).
+- **Phase 2 run discipline is in the runner, not in memory.** `axis:` on every
+  experiment config; Axis 3 and Tier 2 are refused on `dev_large` (DEC-050); a run
+  estimated above $2 halts before it starts and needs `--approve-cost` (DEC-052;
+  `--estimate-only` is free); `promoted` is a run reference and `rag promote` is the
+  only thing that moves `configs/promoted.yaml` (DEC-051).
+- **Deterministic metrics get a paired test, judged metrics get an MDD label, and
+  both come from the tool, not from prose.** `rag compare` (DEC-047) for retrieval
+  deltas; `rag/eval/noise_floor.py` (DEC-048) for judged ones, with "no MDD measured"
+  when the run's judge/generator/prompt match no measured family. Any LLM call inside
+  retrieval goes through `PipelineLLM` (DEC-049) or it is a bug.
 - **`top_k` is distinct documents, not chunks** (DEC-040). The walk scans at most
   `candidate_pool` (50) ranked chunks; one chunk per document reaches the generator;
   the collapse ratio and exhaustion are recorded per question. The frozen text has **no list markers**:

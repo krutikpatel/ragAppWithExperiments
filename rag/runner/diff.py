@@ -55,18 +55,19 @@ def _diff(store: ResultsStore, run_a: str, run_b: str, metric: str) -> dict[str,
         }
         (gained if after > before else lost).append(entry)
 
-    # Aggregate deltas for every metric both runs report, each with the noise-floor
-    # verdict where one has been measured (DEC-037). A judged delta inside the floor
-    # is reported as such rather than left for the reader to remember.
-    from rag.eval.noise_floor import verdict
+    # Aggregate deltas for every metric both runs report, each with the MDD
+    # verdict of the floor family the runs belong to (DEC-046, P2-02 / DEC-048).
+    # The label is the tool's — "within judge noise" is never left to prose — and a
+    # run under a judge no family was measured for gets "no MDD measured", not a
+    # borrowed floor.
+    from rag.eval.noise_floor import judged_report
 
-    agg_a = json.loads(meta_a.get("metrics_json") or "{}")
-    agg_b = json.loads(meta_b.get("metrics_json") or "{}")
-    aggregate_deltas = {}
-    for key in sorted(set(agg_a) & set(agg_b)):
-        va, vb = agg_a[key], agg_b[key]
-        if isinstance(va, (int, float)) and isinstance(vb, (int, float)) and not isinstance(va, bool):
-            aggregate_deltas[key] = {"a": va, "b": vb, "delta": round(vb - va, 4), "verdict": verdict(key, vb - va)}
+    mdd = judged_report(meta_a, meta_b)
+    aggregate_deltas = {
+        key: {"a": info["a"], "b": info["b"], "delta": info["delta"], "verdict": info["label"],
+              "mdd": info["mdd"], "replicates_advised": info["replicates_advised"], "text": info["text"]}
+        for key, info in mdd["metrics"].items()
+    }
 
     return {
         "run_a": run_a,
@@ -75,6 +76,7 @@ def _diff(store: ResultsStore, run_a: str, run_b: str, metric: str) -> dict[str,
         "comparable": comparability["comparable"],
         "comparability": comparability,
         "aggregate_deltas": aggregate_deltas,
+        "mdd": mdd,
         "n_shared_questions": len(shared),
         "n_gained": len(gained),
         "n_lost": len(lost),

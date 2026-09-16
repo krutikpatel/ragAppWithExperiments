@@ -26,6 +26,8 @@ from rag.retrieval.pooling import (
 
 if TYPE_CHECKING:
     from rag.chunking.index_map import ChunkIndex
+    from rag.generation.cache import GenerationCache
+    from rag.generation.pipeline_llm import PipelineLLM
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,10 @@ class Retriever(ABC):
     """Ranks chunks for a query, then pools them to documents."""
 
     name: str
+    # Set by retrievers that call an LLM inside retrieval (query transforms,
+    # LLM-as-reranker, agentic loops). The runner reads its stats, records the cache
+    # hit rate and marks the run `pipeline_nondeterministic` (P2-03).
+    pipeline_llm: PipelineLLM | None = None
 
     def __init__(
         self,
@@ -76,12 +82,16 @@ class Retriever(ABC):
         *,
         doc_pooling: str = DEFAULT_POOLING,
         index: ChunkIndex | None = None,
+        generation_cache: GenerationCache | None = None,
     ) -> None:
         self.chunk_to_doc = chunk_to_doc
         self.doc_pooling = doc_pooling
         # The index's provenance (corpus hash, normalization, chunker id). Retrievers
         # that build something expensive from the chunks key it on this.
         self.index = index
+        # The runner hands every retriever the generation cache; only those that
+        # call an LLM inside retrieval build a `PipelineLLM` on it (P2-03).
+        self.generation_cache = generation_cache
 
     @abstractmethod
     def search(self, query: str, *, top_k: int) -> list[tuple[str, float]]:

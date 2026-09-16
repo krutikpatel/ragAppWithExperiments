@@ -98,13 +98,34 @@ def run_experiment(
         False, "--open-test", help="Required to run against the held-out test split."
     ),
     reason: str = typer.Option("", "--reason", help="Recorded on the run row."),
+    allow_leaky_split: bool = typer.Option(
+        False, "--allow-leaky-split",
+        help="Override the P2-04 split policy (Axis 3 or Tier 2 on dev_large); the run is marked leakage-affected.",
+    ),
+    approve_cost: str = typer.Option(
+        "", "--approve-cost",
+        help="Approval reference (DEC-NNN or reason) for a run estimated above the $2 gate; logged in DECISIONS.md.",
+    ),
+    estimate_only: bool = typer.Option(
+        False, "--estimate-only", help="Print the cost estimate and running totals, then stop. Records nothing."
+    ),
 ) -> None:
     """Run one experiment: run(config) -> row in the results store."""
     from rag.runner.config import load_config_file
+    from rag.runner.cost import CostGateError
     from rag.runner.run import run as run_config
 
     config = load_config_file(config_path)
-    row = run_config(config, open_test=open_test, reason=reason or None)
+    try:
+        row = run_config(
+            config, open_test=open_test, reason=reason or None,
+            allow_leaky_split=allow_leaky_split, approve_cost=approve_cost, estimate_only=estimate_only,
+        )
+    except (CostGateError, PermissionError) as exc:
+        typer.echo(f"REFUSED: {exc}", err=True)
+        raise typer.Exit(code=2)
+    if estimate_only:
+        return
     typer.echo(f"run_id      = {row['run_id']}")
     typer.echo(f"config_hash = {row['config_hash']}")
     typer.echo(f"status      = {row['status']}")
@@ -140,33 +161,142 @@ def ask(
     typer.echo(format_ask(result, max_chunk_chars=max_chunk_chars or None))
 
 
-def _floor_family() -> str:
-    from rag.eval.noise_floor import ACTIVE_FAMILY
-
-    return ACTIVE_FAMILY
-
-
 @app.command("diff")
 def diff(
     run_a: str = typer.Argument(..., help="Baseline run id."),
     run_b: str = typer.Argument(..., help="Run to compare against it."),
     metric: str = typer.Option("strict_recall@5", "--metric"),
 ) -> None:
-    """List questions whose outcome flipped between two runs, in either direction."""
+    """List questions whose outcome flipped between two runs, in either direction.
+    Either id may be `promoted` — the newest run of configs/promoted.yaml on the other run's split."""
     from rag.runner.diff import diff_runs
 
+    run_a, run_b = _resolve_pair(run_a, run_b)
     report = diff_runs(run_a, run_b, metric=metric)
     typer.echo(report["comparability"]["verdict"])
-    judged = {k: v for k, v in report["aggregate_deltas"].items() if v["verdict"] != "no floor measured"}
-    if judged:
-        typer.echo(f"noise-floor verdicts ({_floor_family()}, DEC-037/046):")
-        for k, v in judged.items():
-            typer.echo(f"  {k:<22} {v['a']:.4f} -> {v['b']:.4f}  Δ{v['delta']:+.4f}  {v['verdict'].upper()}")
+    floored = {k: v for k, v in report["aggregate_deltas"].items() if v["mdd"] is not None}
+    mdd = report["mdd"]
+    if floored:
+        typer.echo(
+            f"MDD verdicts (family {mdd['family'] or 'none'}, retrieval family "
+            f"{mdd['retrieval_family'] or 'none'}; DEC-046/048):"
+        )
+        for v in floored.values():
+            typer.echo(f"  {v['text']}")
+    for note in mdd["notes"]:
+        typer.echo(f"  note: {note}")
     typer.echo(
         f"{report['n_gained']} gained, {report['n_lost']} lost, "
         f"{report['n_unchanged']} unchanged, over {report['n_shared_questions']} questions"
     )
     typer.echo(json.dumps({"gained": report["gained"], "lost": report["lost"]}, indent=2))
+
+
+def _resolve_pair(run_a: str, run_b: str) -> tuple[str, str]:
+    from rag.runner.promoted import resolve_run_ref
+    from rag.runner.store import ResultsStore
+
+    with ResultsStore() as store:
+        other = run_b if run_a == "promoted" else run_a
+        return (
+            resolve_run_ref(run_a, store=store, like_run=other),
+            resolve_run_ref(run_b, store=store, like_run=other),
+        )
+
+
+@app.command("compare")
+def compare(
+    run_a: str = typer.Argument(..., help="Baseline run id (A)."),
+    run_b: str = typer.Argument(..., help="Candidate run id (B). The difference reported is B − A."),
+    metric: str = typer.Option("strict_recall@5", "--metric", help="Any per-question metric in run_questions."),
+    seed: int = typer.Option(20260915, "--seed", help="Resampling seed; recorded in the report."),
+    resamples: int = typer.Option(10000, "--resamples"),
+    as_json: bool = typer.Option(False, "--json", help="Print the full report as JSON."),
+) -> None:
+    """Paired significance test between two runs (P2-01): contingency, Δ, bootstrap CI,
+    permutation p — overall and per slice — plus MDD verdicts for judged metrics (P2-02).
+    Zero LLM calls."""
+    from rag.runner.compare import compare_runs, format_compare
+
+    run_a, run_b = _resolve_pair(run_a, run_b)
+    report = compare_runs(run_a, run_b, metric=metric, seed=seed, resamples=resamples)
+    typer.echo(json.dumps(report, indent=2, default=str) if as_json else format_compare(report))
+
+
+@app.command("promote")
+def promote_cmd(
+    candidate: str = typer.Argument(..., help="Config YAML to promote (the run under --confirm/--decide must be its run)."),
+    axis: str = typer.Option(..., "--axis", help="Which axis this decides (see rag.runner.config.AXES)."),
+    confirm: tuple[str, str] = typer.Option(..., "--confirm", help="baseline_run candidate_run on `dev`."),
+    decide: tuple[str, str] = typer.Option((None, None), "--decide", help="baseline_run candidate_run on `dev_large` (retrieval axes)."),
+    metric: str = typer.Option("strict_recall@5", "--metric"),
+    reason: str = typer.Option(..., "--reason", help="Written into the promotion log."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Check the policy, change nothing."),
+) -> None:
+    """Advance configs/promoted.yaml to CANDIDATE if the comparison passes the P2-04 split policy."""
+    from rag.runner.promoted import promote
+    from rag.runner.run import git_state
+    from rag.runner.store import ResultsStore
+
+    with ResultsStore() as store:
+        result = promote(
+            candidate, axis=axis, decide=None if decide == (None, None) else decide, confirm=confirm,
+            metric=metric, reason=reason, store=store, git_sha=git_state().sha, dry_run=dry_run,
+        )
+    typer.echo(json.dumps(result, indent=2, default=str))
+    if result["problems"]:
+        typer.echo("NOT PROMOTED — see problems above.", err=True)
+        raise typer.Exit(code=2)
+    typer.echo("promoted.yaml advanced" if result["promoted"] else "dry run: policy passed, nothing changed")
+
+
+promoted_app = typer.Typer(help="The promoted configuration pointer (P2-05).", no_args_is_help=True)
+app.add_typer(promoted_app, name="promoted")
+
+
+@promoted_app.command("show")
+def promoted_show() -> None:
+    """Print the promoted config's hash and its newest recorded run per split."""
+    from rag.runner.promoted import PROMOTED_PATH, load_promoted
+    from rag.runner.store import ResultsStore
+
+    promoted = load_promoted()
+    typer.echo(f"{PROMOTED_PATH}: config_hash {promoted.config_hash}  ({promoted.name})")
+    with ResultsStore() as store:
+        for split in ("dev", "dev_large", "unanswerable"):
+            row = store.latest_run_of(promoted, split=split)
+            typer.echo(f"  {split:<13} {row['run_id'] if row else '— no VALID run'}")
+
+
+@promoted_app.command("diff")
+def promoted_diff(config_path: str = typer.Argument(..., help="Experiment config YAML.")) -> None:
+    """Which fields, and which dimensions, CONFIG changes against promoted.yaml."""
+    from rag.runner.config import load_config_file
+    from rag.runner.promoted import config_diff, load_promoted
+
+    typer.echo(json.dumps(config_diff(load_config_file(config_path), load_promoted()), indent=2, default=str))
+
+
+pricing_app = typer.Typer(help="The dated pricing table the cost estimator reads (P2-06).", no_args_is_help=True)
+app.add_typer(pricing_app, name="pricing")
+
+
+@pricing_app.command("refresh")
+def pricing_refresh() -> None:
+    """Re-fetch every listed model's prices from OpenRouter and stamp today's date."""
+    from rag.runner.cost import refresh_pricing
+
+    table = refresh_pricing()
+    typer.echo(f"pricing_version = {table.pricing_version}  ({table.path})")
+    for model, providers in {**table.chat, **table.embeddings}.items():
+        typer.echo(f"  {model}: {len(providers) - ('_model' in providers)} providers")
+
+
+@pricing_app.command("show")
+def pricing_show() -> None:
+    from rag.runner.cost import PRICING_PATH
+
+    typer.echo(PRICING_PATH.read_text())
 
 
 @run_app.command("list")

@@ -121,7 +121,12 @@ rag data describe dev      # shape and slice counts
 
 rag run configs/smoke_toy.yaml   # harness smoke test — NOT an experiment
 rag runs list
-rag diff <run_a> <run_b> --metric strict_recall@5
+rag diff <run_a> <run_b> --metric strict_recall@5      # which questions flipped, MDD verdicts
+rag compare <run_a> <run_b> --metric strict_recall@5   # paired test: Δ, CI, p, per slice (P2-01)
+rag compare promoted <run_b>                           # `promoted` = newest run of configs/promoted.yaml
+rag run configs/exp_0008_x.yaml --estimate-only        # cost estimate + running totals, spends nothing
+rag promote configs/exp_0008_x.yaml --axis chunking --decide <a> <b> --confirm <a> <b> --reason "..."
+rag pricing refresh                                    # re-date configs/pricing.yaml from OpenRouter
 
 pytest
 ```

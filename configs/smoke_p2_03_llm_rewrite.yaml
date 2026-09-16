@@ -1,0 +1,20 @@
+# Harness smoke test — NOT an experiment.
+#
+# P2-03's determinism control: `toy_llm_rewrite` puts a (fake, deliberately
+# non-deterministic) LLM call inside retrieval. Two runs of this config agree only
+# when the generation cache replays the first run's completions; the test in
+# tests/test_pipeline_cache.py checks exactly that. Its numbers mean nothing.
+name: harness smoke test (toy_llm_rewrite, P2-03 determinism)
+split: dev
+eval_tier: tier1
+retriever: toy_llm_rewrite
+retriever_params:
+  fake_backend: drop_random_word
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+top_k: 5
+doc_pooling: max
+harness_smoke_test: true

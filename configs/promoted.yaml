@@ -1,0 +1,25 @@
+# configs/promoted.yaml — the committed "current best" (P2-05).
+#
+# Started 2026-09-15 as a copy of configs/baseline_dense.yaml (the dense control,
+# EXP-0005, DEC-041). It advances only through `rag promote`, which checks the
+# comparison against the P2-04 split policy and appends to the promotion log in
+# docs/DECISIONS.md. Every Phase 2 axis experiment is a diff against this file,
+# recorded on the run row as vs_promoted_json. Do not edit by hand.
+name: promoted = EXP-0005 dense control — qwen3-embedding-8b (DeepInfra), fixed-600/100, top-5 distinct docs, pool 50, Tier 1, dev
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
