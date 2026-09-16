@@ -151,24 +151,45 @@ Acceptance criteria:
 
 ---
 
-### P2-06 — Experiment budget
+### P2-06 — Experiment budget and cost gate
 
-**As the project, I need a declared stopping rule, because an eight-axis program has no natural
-end.**
+**As the project, I need spending to be visible and approved before it happens, not discovered
+afterwards.**
 
 Acceptance criteria:
-- Budget recorded in `docs/DECISIONS.md` before the first axis run: approximately **40–60 Tier 1
-  runs and 12–15 Tier 2 runs**, plus the P2-14 gated allowance.
-- The runner prints running totals against budget.
-- Exceeding budget requires an explicit decision entry stating what is being bought.
+- **Cost estimator.** Before any run, the runner estimates its cost from actual token counts
+  (corpus tokens to embed, query tokens, judge tokens) and current per-model pricing, and prints
+  the estimate with a breakdown of what drives it.
+- **Any single experiment estimated above $2 halts and requires explicit human approval.** The
+  runner prints the estimate and exits. It does not prompt-and-continue, and it does not proceed
+  on a default. Approval is recorded in `docs/DECISIONS.md` with the estimate and the decision.
+- Actual cost is recorded on every run row and compared against the estimate; systematic estimate
+  drift is flagged.
+- Running totals for the phase are printed on every run.
+- Axis caps are enforced: the runner warns when an axis reaches 5 recorded experiments.
+- Prices change; the pricing table is a config file with a dated `pricing_version`, not hardcoded.
+
+Note: the dominant cost in this project is **full-corpus embedding** (Axis 2, and re-indexing for
+any chunking change), not judged evaluation. Budget attention accordingly.
 
 ---
 
 ## 4. The axes
 
-Each axis story specifies: what to sweep, which split and tier, what to report, and a **kill
-criterion** — the condition under which Claude Code stops working that axis and records a negative
-result rather than continuing to grind.
+Each axis story specifies: what to sweep, which split and tier, and what to report.
+
+**Two rules apply to every axis:**
+
+1. **Maximum 4–5 experiments per axis.** This is a learning repository, not an exhaustive study.
+   Run the listed configurations once each, record the results, and move on. Do not refine grids,
+   add variants, or re-tune an axis after moving past it. If an axis looks interesting enough to
+   deserve more, note that in `docs/HYPOTHESES.md` as future work rather than expanding scope.
+2. **Cost gate: any single experiment estimated to cost more than $2 must be flagged for approval
+   before running.** Print the estimate, state what drives it, and stop. Do not proceed on
+   assumption. See P2-06.
+
+There are no kill criteria. Every listed experiment runs; results are recorded whether positive,
+negative, or null.
 
 Run order is given in §5, and is **not** the axis numbering.
 
@@ -196,30 +217,53 @@ Acceptance criteria:
   these techniques normally provide is already priced into the baseline, so deltas may be smaller
   than published results suggest. Record this reasoning — it is a genuine insight.
 
-**Kill criterion:** if three consecutive chunking variants show multi-hop strict recall deltas
-below significance on both splits, stop the axis and record the negative result.
+**Experiment count:** 5. The fixed+overlap control is already the Phase 1 baseline run, so the five
+new experiments are sentence-window, parent-document/small-to-big, semantic, structure-aware, and
+late chunking. One configuration each — no parameter refinement within a strategy.
+
+**Cost note:** each chunking variant requires a full re-index. Estimate before running (P2-06).
 
 ---
 
 ### P2-08 — Axis 2: Embeddings
 
-**Sweep:** 3–4 models (bge-large, e5-large, gte, a hosted model such as text-embedding-3-large or
-Voyage). Matryoshka dimension truncation where supported.
+**All embedding models are accessed through OpenRouter's embeddings endpoint
+(`/api/v1/embeddings`). The rule is about where inference runs, not which models are eligible:
+execution is hosted for speed, and open-weight models are preferred where OpenRouter serves them.
+Nothing runs on local hardware.**
+
+**Sweep — 5 experiments:**
+
+| # | Model | Rationale |
+|---|---|---|
+| 1 | `openai/text-embedding-3-large` | Hosted reference point; supports output-dimension truncation |
+| 2 | `qwen/qwen3-embedding-8b` | Highest-usage embedding model on OpenRouter; open weights |
+| 3 | `baai/bge-m3` | Open weights, 1024-dim, 8192-token context — the model closest to what would otherwise have been run locally, executed hosted for speed. Self-hosting remains a real Phase 3 deployment option for it |
+| 4 | `google/gemini-embedding-2` | Different provider lineage; flexible output dims (128–3072) |
+| 5 | Dimension truncation | Best model from 1–4 that supports it, at one reduced dimension |
 
 **Split/tier:** `dev_large` to decide, `dev` to confirm. Tier 1.
 
 Acceptance criteria:
-- Query/passage prefix handling verified per model family (P1-04). A model evaluated without its
-  required prefixes is an invalid run and must be discarded, not reported.
-- Index build time, index size, and embedding cost recorded per model.
-- Matryoshka results are framed as **quality-vs-dimension, not cost savings.** At 6,221 documents
+- **Model slugs are verified against OpenRouter's models page before running** — slugs and
+  availability change, and a wrong slug returns 404. Record the exact slug and the date checked.
+- **Prefix handling is verified per model, not per family** (extends P1-04). These four differ:
+  `text-embedding-3-large` and `bge-m3` need no query/passage prefixes; Qwen3 embedding uses an
+  instruction prefix on the query side. A model evaluated with the wrong prefix convention is an
+  invalid run — discard it, do not report it. This is the silent-failure mode from
+  `docs/MISTAKES.md`.
+- **Embedding cache.** Vectors are cached on disk keyed by
+  `(model_slug, normalization_version, chunk_hash)`. Re-running an identical config must cost
+  nothing. Cache hit rate recorded. Without this, every re-run re-pays for the whole corpus.
+- Cost per full index recorded per model, estimated **before** the run (P2-06). Full-corpus
+  embedding is the largest single cost in the project; expect the $2 gate to trigger here.
+- Index build time, index size, and embedding dimension recorded per model.
+- Batch sizes and rate-limit/retry handling documented — embeddings do not stream, and 429s are
+  expected at corpus scale.
+- **Dimension truncation is framed as quality-vs-dimension, not cost savings.** At 6,221 documents
   the storage and serving savings are negligible. The writeup must state explicitly that the cost
   argument only bites at a scale this project does not operate at. Overclaiming here is a
   credibility risk.
-- Cheapest axis available — full re-index is minutes — so it runs early.
-
-**Kill criterion:** once a winner is significant on both splits, stop. Do not sweep further models
-for marginal gains.
 
 ---
 
@@ -240,15 +284,32 @@ Acceptance criteria:
   contender here rather than a straw man.
 - Chosen alpha is recorded with its confidence interval, not just its point estimate.
 
-**Kill criterion:** if the alpha sweep is flat within significance across a wide range, record that
-the system is insensitive to fusion weight and move on — do not refine the grid.
+**Experiment count:** 5. Dense-only and BM25-only already exist as the Phase 1 controls, so the
+five experiments are RRF, and weighted score fusion at four alpha values (e.g. 0.2 / 0.4 / 0.6 /
+0.8). Do not refine the alpha grid further — report the curve as measured, including if it is flat.
+
+**Cost note:** cheapest axis in the phase. No re-index, no LLM calls; reuses the winning embedding
+index from P2-08.
 
 ---
 
 ### P2-10 — Axis 5: Reranking
 
-**Sweep:** cross-encoder (bge-reranker-v2, mxbai), a hosted reranker (Cohere), LLM-as-reranker,
-ColBERT late interaction. Retrieve-k → rerank-to-n ratio: 50→5, 20→5, and at least one wider setting.
+**All rerankers run through OpenRouter's rerank endpoint (`/api/v1/rerank`), which serves both
+open-weight and proprietary rerank models.**
+
+**Sweep — 5 experiments:** three rerankers at a fixed 50→5 ratio, plus two retrieve-k → rerank-to-n
+ratios on the best of those (20→5 and one wider setting). Suggested three:
+
+| Reranker | Why |
+|---|---|
+| `qwen/qwen3-reranker-8b` (or 4B) | Open weights, instruction-aware, the open-weight cross-encoder equivalent of what would have run locally |
+| `cohere/rerank-v3.5` or Rerank 4 Fast | Strong proprietary baseline; check current pricing — Cohere rerank models were listed at $0 on OpenRouter at launch, which if still true makes this axis nearly free |
+| LLM-as-reranker | Via OpenRouter chat completions, not the rerank endpoint — a different mechanism worth contrasting |
+
+ColBERT late interaction is **out of scope**: multi-vector late interaction needs its own index
+format and is not served by a rerank endpoint. This is an availability constraint, not a
+hosted-vs-local one. Note it in `docs/HYPOTHESES.md` as future work.
 
 **Split/tier:** `dev_large` to decide, `dev` to confirm. Tier 1 (LLM-as-reranker also needs P2-03).
 
@@ -261,8 +322,15 @@ Acceptance criteria:
   separately from local ones.
 - LLM-as-reranker runs are marked `pipeline_nondeterministic` and cache-backed per P2-03.
 
-**Kill criterion:** if no reranker beats no-reranker on multi-hop strict recall at significance,
-record the negative result and skip P2-11.
+**Cost note:** reranking runs per query, not per corpus, and rerank-endpoint pricing is typically
+per search rather than per token. On `dev_large` (6,221 queries) the LLM-as-reranker config at 50
+candidates each will likely exceed the $2 gate — estimate first, and consider deciding that one on
+`dev` with a `dev_large` confirmation only if it wins.
+
+**Note for P2-11:** if no reranker improves multi-hop strict recall at significance, still run the
+revisit pass with the best-performing reranker. "Chunking differences persist because reranking
+didn't help" is a different finding from "chunking differences collapsed under reranking", and both
+are worth recording.
 
 ---
 
@@ -276,7 +344,8 @@ true here it is a headline finding, and it only exists if the revisit is planned
 for.
 
 Acceptance criteria:
-- Re-run the **full Axis 1 sweep** (P2-07) with the winning reranker from P2-10 enabled.
+- Re-run the **top 3 chunking configurations** from P2-07 (by multi-hop strict recall) with the
+  winning reranker from P2-10 enabled. 3 experiments, not a full re-sweep.
 - Produce a side-by-side table: chunking deltas without reranker vs. with reranker, per slice.
 - State explicitly whether the Phase 2 winners composed, partially composed, or cancelled.
 - If chunking differences collapse under reranking, `promoted.yaml` reverts to the **simplest**
@@ -303,8 +372,12 @@ Acceptance criteria:
 - Added latency and LLM cost per query recorded for every config.
 - Cache hit rate recorded (P2-03).
 
-**Kill criterion:** any transformation that adds more than a documented latency budget without a
-significant multi-hop gain is killed after one configuration, not tuned further.
+**Experiment count:** 4 — decomposition, HyDE, multi-query expansion, step-back. One configuration
+each, no prompt tuning within a technique.
+
+**Cost note:** every config adds an LLM call per query. On `dev_large` this will exceed the $2 gate;
+decide this axis on `dev` and confirm only the winner more broadly, if at all. The P2-03 cache makes
+repeat runs free.
 
 ---
 
@@ -328,8 +401,14 @@ Acceptance criteria:
   retrieval metrics by construction. Do not report retrieval deltas for it.
 - Contextual compression reports tokens-per-query reduction alongside quality.
 
-**Kill criterion:** contextual retrieval runs **once** at the chosen configuration. If it does not
-beat the promoted config at significance, record the cost and the negative result and do not tune it.
+**Experiment count:** 5 — top-k sweep (one run covering the k values), MMR, contextual compression,
+lost-in-the-middle reordering, contextual retrieval. One configuration each.
+
+**Cost note:** contextual retrieval is the single most expensive experiment in the phase — one LLM
+call per chunk across the whole corpus. It will trigger the $2 gate. Estimate it, present the
+number, and get approval before running. If approval is withheld, record that in
+`docs/DECISIONS.md` as a scope decision with the estimate attached — an honest "we priced this and
+chose not to spend it" is a legitimate entry.
 
 ---
 
@@ -353,33 +432,36 @@ Acceptance criteria:
   false-refusal contribution.
 - All judged deltas reported against MDD (P2-02).
 
-**Kill criterion:** if the self-check pass does not reduce false-answer rate beyond MDD, kill it —
-it is pure added cost.
+**Experiment count:** 4 — citation enforcement, span-level vs chunk-level citations, abstention
+threshold sweep (one run covering the thresholds), groundedness self-check.
+
+**Cost note:** Tier 2 on the dev subsample plus the ~50-question unanswerable set. Judge cost per
+run is modest; the self-check config adds a generation call per query.
 
 ---
 
-### P2-15 — Axis 8: Agentic retrieval (gated)
+### P2-15 — Axis 8: Agentic retrieval
 
-**Sweep:** an iterative loop that critiques its own retrieval and re-queries.
+**Sweep — 3 experiments:** an iterative loop that critiques its own retrieval and re-queries, at
+three iteration caps (e.g. max 1, 2, 3 extra rounds).
 
-**Gate — do not start this axis unless both hold:**
-1. Multi-hop strict recall is still the binding constraint after Axes 1–7, and
-2. The gap to single-doc strict recall remains larger than a threshold declared in
-   `docs/DECISIONS.md` before Axis 1 begins.
+**Split/tier:** `dev` only. Tier 1 for retrieval effect, one Tier 2 run on the best setting.
 
 Acceptance criteria:
-- The gate decision is recorded — including the case where the gate does **not** open, which is
-  itself a result ("the simpler pipeline closed the gap; agentic retrieval was not needed").
-- A **kill criterion is declared before the first run**: maximum iterations, maximum cost per query,
-  maximum p95 latency.
+- A **hard per-query iteration cap and a hard per-run cost ceiling** are set in config before the
+  first run. These are runtime safety limits, not performance judgments — an unbounded agentic loop
+  can spend real money fast.
 - Cost per query and p95 latency reported alongside every quality number. The claim being tested is
   a ratio, not a numerator.
 - Runs are `pipeline_nondeterministic` and cache-backed (P2-03).
 - Report the iteration-count distribution and how often extra iterations changed the retrieved
-  document set at all.
+  document set at all — that second number is often the more interesting one.
+- Cost-gated per P2-06 like every other axis.
 
 **Explicitly acceptable outcome:** iterative retrieval cost 4× and gained less than MDD. A recorded
 negative result here is more valuable — and rarer in portfolios — than a marginal positive one.
+This axis runs last and is the first thing to drop if budget or time runs short; dropping it is
+recorded as a scope decision, not a failure.
 
 ---
 
@@ -412,8 +494,8 @@ Acceptance criteria:
   calling it null, the cost it would have added, and the decision taken.
 - Target form: *"Semantic chunking cost 3× at index time and gained 0.4 points strict recall@5,
   below the 1.2-point detectable threshold on this split, so fixed chunking was retained."*
-- Every killed axis (per its kill criterion) produces an entry. An axis abandoned without an entry
-  is incomplete work.
+- Every experiment that produced a null or negative result gets an entry — including any axis that
+  was priced, gated at $2, and deliberately not run, with its estimate attached.
 
 ---
 
@@ -444,7 +526,7 @@ Not the axis numbering. Cheap and deterministic first.
 3. **Revisit pass:** P2-11 — chunking under the winning reranker.
 4. **Multi-hop targeted:** P2-12 (decomposition first) → P2-13 (MMR, then contextual retrieval).
 5. **Grounding, Tier 2:** P2-14 against the Phase 1 unanswerable baseline.
-6. **Gated:** P2-15, only if the gate opens.
+6. **Last and droppable:** P2-15 (agentic), if budget and time allow.
 7. **Combinations:** P2-16.
 8. **Test:** P2-18, once.
 
@@ -460,21 +542,22 @@ Not the axis numbering. Cheap and deterministic first.
 4. Split usage policy enforced in code, including the Axis 3 refusal on `dev_large`.
 5. `configs/promoted.yaml` reflects the final configuration, with a decision trail for each advance.
 6. Every axis has either a confirmed winner or a Negative Results entry.
-7. The chunking revisit pass (P2-11) has been run and its composition verdict recorded.
-8. The abstention trade-off curve exists and an operating point is chosen and justified.
-9. The agentic gate decision is recorded, whichever way it went.
-10. 3–5 hypothesis-driven combinations run; sub-additivity reported; cost/quality frontier plotted.
-11. `test` opened once; dev-to-test gap reported.
-12. Experiment budget respected, or overruns justified by decision entries.
+7. No axis exceeded 5 experiments.
+8. Every run above $2 was flagged and approved before execution; no unapproved spend occurred.
+9. The chunking revisit pass (P2-11) has been run and its composition verdict recorded.
+10. The abstention trade-off curve exists and an operating point is chosen and justified.
+11. 3–5 hypothesis-driven combinations run; sub-additivity reported; cost/quality frontier plotted.
+12. `test` opened once; dev-to-test gap reported.
+13. Total actual spend recorded and compared against estimates.
 
 ---
 
 ## 7. Open questions for the human
 
 Flag rather than guess:
-- The multi-hop gap threshold that opens the P2-15 agentic gate — declare it before Axis 1 starts.
-- Which hosted services are in budget (Cohere Rerank, hosted embedding models).
-- The contextual-retrieval index-cost ceiling (P2-13) before that run is attempted.
+- Total phase spending ceiling, so the $2 per-experiment gate sits inside a known envelope.
+- Which hosted rerankers are in budget (Cohere Rerank, others).
 - Whether the abstention operating point should favour refusing too often or answering too often,
   for an enterprise support assistant.
-- Alpha sweep granularity for Axis 3.
+- Confirmation of the four OpenRouter embedding slugs at implementation time — slugs and
+  availability change, so verify against the models page rather than trusting this document.

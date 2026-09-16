@@ -90,6 +90,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 27. **Estimate the index build before a dense run, and check the index key on
     disk first.** A new embedding model or chunk config is a full-corpus embed; the
     $2 gate exists for exactly this, and `rag run --estimate-only` costs nothing.
+28. **`git status --short` prints nothing before a run launches — whoever's change it
+    is.** A killed run leaves a RUNNING row: set it VOID with the reason at once.
+    (MIS-020)
 
 ---
 
@@ -597,3 +600,21 @@ Derived from the prevention rules below. Run through it and say in chat that you
   configs' hashes move and why that is acceptable. Match runs to configs by the
   tier's identity, never by the exact hash.
 - **Added to preflight:** yes (item 26)
+
+## MIS-020 — Launched EXP-0008 on a dirty tree
+- **Date:** 2026-09-15
+- **Severity:** Low — killed after ~30 s, ~$0.00001 of query embeddings; row
+  `run_20260916_061852_f583` set to VOID by hand with the reason.
+- **What happened:** Krutik's revision of `user_stories/phase2stories.md` was sitting
+  uncommitted since the session began. I committed my own files around it and launched
+  the run; the runner warned `GIT WORKING TREE IS DIRTY` and recorded `git_dirty = 1`.
+- **How it was caught:** Reading the launch log's first lines.
+- **Root cause:** I treated "my files are committed" as "the tree is clean". The
+  runner's check is on the tree, and rightly so.
+- **Impact:** One VOID row. No numbers.
+- **Fix applied:** Committed the spec revision (it is the document the P2 work was
+  built against), relaunched.
+- **Prevention rule:** `git status --short` must print nothing before a run is
+  launched, whoever's change is pending. A killed run leaves a RUNNING row — set it
+  VOID with the reason at once.
+- **Added to preflight:** yes (item 28)
