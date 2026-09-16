@@ -92,3 +92,24 @@ embeddings:
       in: 0.04
     _model:
       in: 0.01
+  openai/text-embedding-3-large:
+    Azure:
+      in: 0.13
+    OpenAI:
+      in: 0.13
+    _model:
+      in: 0.13
+  baai/bge-m3:
+    Parasail:
+      in: 0.01
+    DeepInfra:
+      in: 0.01
+    _model:
+      in: 0.01
+  google/gemini-embedding-2:
+    Google:
+      in: 0.2
+    Google AI Studio:
+      in: 0.2
+    _model:
+      in: 0.2

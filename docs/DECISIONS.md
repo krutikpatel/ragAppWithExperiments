@@ -1862,3 +1862,58 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   every run are the envelope's record.
 - **Revisit if:** Krutik sets a ceiling, or the per-run heads-up becomes a
   bottleneck on a cheap axis (Axis 3 costs ~$0 and could be batch-approved).
+
+## DEC-054 — Axis 2 (embeddings): the four models and their provider pins
+- **Date:** 2026-09-15
+- **Decided by:** Krutik (models, confirming the Phase 2 handover's P2-08 table);
+  Claude proposed the provider pins and the gemini disambiguation, Krutik confirmed
+- **Status:** Active
+- **Context:** P2-08 sweeps four hosted embedding models plus one dimension-truncation
+  run, all through OpenRouter's `/embeddings` endpoint. Slugs and availability change,
+  so each was verified against `/models/<slug>/endpoints` on **2026-09-15**.
+- **Decision — exact slugs, pins, prefix conventions:**
+
+| # | Slug (verified 2026-09-15) | Provider pin | $/Mtok | Context | Prefix convention | Index estimate |
+|---|---|---|---|---|---|---|
+| 1 | `openai/text-embedding-3-large` | **OpenAI** | 0.13 | 8,192 | `none` (table) | ~$0.42 |
+| 2 | `qwen/qwen3-embedding-8b` | DeepInfra (DEC-041) | 0.01 | 32,768 | `qwen3` (instruct prefix on queries) | $0 — index cached from EXP-0005 |
+| 3 | `baai/bge-m3` | **DeepInfra** — served as `baai/bge-m3-20251117`, fp32 | 0.01 | 8,192 | `none` (table) | ~$0.03 |
+| 4 | `google/gemini-embedding-2` | **Google AI Studio** | 0.20 | 8,192 | `none`, set **explicitly** in the config | ~$0.65 |
+
+  - Pins: OpenAI is first-party for #1 (Azure is the same price, a second vendor for
+    nothing). DeepInfra for #3 holds the provider constant with the qwen control, so
+    the #2-vs-#3 comparison changes the model and nothing else. For #4 the three
+    endpoints named "Google" are Vertex regions (`google-vertex/us|global|eu`, the eu
+    one at $0.22) and cannot be told apart by provider name, which is what the pin
+    is; "Google AI Studio" is one endpoint at $0.20. The provider is part of the
+    index key (DEC-041), so each pin starts its own index.
+  - Prefixes, verified per model (P2-08): text-embedding-3 and bge-m3 take no
+    query/passage prefix and the table says so; gemini's native API expresses the
+    query/document asymmetry as `task_type`, which OpenRouter's `/embeddings` request
+    has no field for, so it is embedded symmetrically with `prefix_convention: none`
+    stated in the config. Whether OpenRouter passes `task_type` through is
+    **unprobed** — OQ-025 — and so is the `dimensions` passthrough run 5 needs.
+  - Every chunk fits every model: the longest 600/100 chunk is 1,336 tokens
+    (preflight item 19).
+- **Cost, before running (P2-06; estimates):** EXP-0008 $0.003 (queries only),
+  EXP-0009 $0.46, EXP-0010 $0.04, EXP-0011 $0.71, each `dev` confirmation ~$0.001–0.002
+  on the cached index. Axis total ≈ **$1.2** plus the truncation run (≤ the winner's
+  index). Nothing crosses the $2 gate; every run still needs Krutik's go-ahead
+  (DEC-053). The estimator's corpus token count (3.23M, overlap included) is 3% above
+  what DeepInfra billed for EXP-0005's index (3,125,318).
+- **Batching and retries (P2-08):** batches of 64 chunks; 4 attempts with exponential
+  back-off on transport errors and 408/409/425/429/5xx, retries counted in the index
+  meta (EXP-0005 needed 7 over 129 calls, MIS-014).
+- **Caching (P2-08):** the index is cached whole under `indexes/<key>/` keyed on
+  (corpus hash, normalization, chunker id, model, provider, prefix convention), and
+  `cache_hit` is recorded on the run. An identical config re-run costs only its query
+  vectors. This is an index-level cache, not the per-chunk cache the story describes;
+  the difference matters only when chunking changes (Axis 1), where every chunk is
+  new anyway.
+- **Evidence:** slugs, prices and context lengths from the OpenRouter endpoints API on
+  2026-09-15; no quality data.
+- **Consequences:** EXP-0008 through EXP-0012 are Axis 2. The qwen control gets its
+  first `dev_large` run (EXP-0008) as the axis baseline.
+- **Revisit if:** a slug disappears or a pinned provider's price moves (refresh the
+  pricing table, note it in the EXP file); or OQ-025 shows `task_type` does pass
+  through, which would make EXP-0011 a symmetric-only measurement of gemini.

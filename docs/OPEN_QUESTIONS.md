@@ -316,3 +316,12 @@ gives CIs narrower than ~±0.10 on strict recall@5, retrieval axes are decided t
 and confirmed on `dev` as P2-04 says; if it is also too small, the slice needs more
 questions and that is a split decision, not a tuning one.
 **Status:** open — measure on the first `dev_large` run of Phase 2.
+
+## OQ-025 — Do `task_type` (gemini) and `dimensions` (text-embedding-3, gemini) pass through OpenRouter's `/embeddings`?
+Both matter for Axis 2: gemini's query/document asymmetry lives in `task_type`, and
+run 5 (dimension truncation) needs `dimensions`. OpenRouter's request schema documents
+neither for embeddings; absence from the docs is not evidence (MIS-005).
+**Decided by:** one request per parameter on the pinned provider, checking the
+response's vector length (for `dimensions`) and whether an unknown field errors or is
+ignored (for `task_type`). Cost: a few tokens.
+**Status:** open — probe queued with Krutik's approval before EXP-0011 and EXP-0012.

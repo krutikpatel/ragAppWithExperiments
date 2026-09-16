@@ -117,3 +117,38 @@ fact about the eval set (40 questions need 2–3 documents).
 No entry here is Claude's prediction. Claude's intuitions go to `OPEN_QUESTIONS.md` as
 questions with decision rules, per CLAUDE.md §3; if a Phase 2 story asks for a written
 expectation before a run, it goes here as H-005 onward, dated before the run.
+
+## H-005 — Embedding model differences will be small next to the dense-vs-sparse gap
+- **Date written:** 2026-09-15, before any Axis 2 run
+- **Source:** Claude. Not from the handover, which states no expectation for Axis 2.
+- **Hypothesis:** on `dev_large`, the spread of strict recall@5 across the four
+  models (text-embedding-3-large, qwen3-embedding-8b, bge-m3, gemini-embedding-2)
+  will be under 0.10 — less than a third of the dense-vs-sparse gap on `dev`
+  (0.305, EXP-0005 vs EXP-0004). Reasoning: all four are current, ≥1024-dim,
+  long-context models on a corpus where 79% of articles fit one chunk; the retrieval
+  task is closer to "find the right article" than to fine-grained passage ranking.
+- **Tested by:** EXP-0008–EXP-0011, strict recall@5 on `dev_large`, max minus min.
+- **Resolution:** pending.
+
+## H-006 — bge-m3 will trail the two large models on multi-document questions
+- **Date written:** 2026-09-15, before any Axis 2 run
+- **Source:** Claude.
+- **Hypothesis:** bge-m3 (1024-dim) will have the lowest multi-document strict
+  recall@5 of the four on `dev_large`, and the gap to the best will be significant by
+  `rag compare` (p < 0.05). Reasoning: it is the smallest model by a wide margin;
+  multi-document questions need two or three distinct articles in the top five, the
+  hardest slice on this corpus.
+- **Tested by:** EXP-0010 vs the best of EXP-0008/0009/0011 on `gold_docs:multi`.
+- **Resolution:** pending.
+
+## H-007 — The `dev_large` and `dev` verdicts will agree in direction for every candidate
+- **Date written:** 2026-09-15, before any Axis 2 run
+- **Source:** Claude.
+- **Hypothesis:** each candidate's sign of Δ strict recall@5 against the qwen control
+  will be the same on `dev_large` and on `dev`. Reasoning: embedding quality is not
+  the thing `dev_large`'s leakage inflates (that is lexical overlap, which flatters
+  BM25, not one dense model over another). If this is wrong it is the more interesting
+  result: it would mean the synthetic questions favour one model's training
+  distribution.
+- **Tested by:** the P2-04 agreement check in `rag promote` for EXP-0009–0011.
+- **Resolution:** pending.

@@ -1,0 +1,22 @@
+# EXP-0009 — Axis 2, candidate 1: openai/text-embedding-3-large, pinned to OpenAI (DEC-054).
+# Diff against promoted.yaml: retriever_params.embedding_model/provider only. No prefix
+# convention (model card; table entry `none`). Full re-index: ~$0.37 estimated.
+name: EXP-0009 text-embedding-3-large (OpenAI) on dev_large — 600/100, top-5 distinct docs
+axis: embedding
+split: dev_large
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: openai/text-embedding-3-large
+  embedding_provider: OpenAI
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

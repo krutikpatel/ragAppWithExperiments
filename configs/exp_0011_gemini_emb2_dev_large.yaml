@@ -1,0 +1,25 @@
+# EXP-0011 — Axis 2, candidate 4: google/gemini-embedding-2, pinned to Google AI Studio
+# (the one unambiguously named endpoint; the three "Google" ones are Vertex regions;
+# DEC-054). prefix_convention is set explicitly: the family is not in the prefix table,
+# and through OpenRouter's /embeddings there is no task_type, so queries and passages
+# are embedded symmetrically. Full re-index: ~$0.57 estimated.
+name: EXP-0011 gemini-embedding-2 (Google AI Studio) on dev_large — 600/100, top-5 distinct docs
+axis: embedding
+split: dev_large
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: google/gemini-embedding-2
+  embedding_provider: Google AI Studio
+  batch_size: 64
+  prefix_convention: none
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
