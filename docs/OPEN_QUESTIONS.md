@@ -324,4 +324,14 @@ neither for embeddings; absence from the docs is not evidence (MIS-005).
 **Decided by:** one request per parameter on the pinned provider, checking the
 response's vector length (for `dimensions`) and whether an unknown field errors or is
 ignored (for `task_type`). Cost: a few tokens.
-**Status:** open — probe queued with Krutik's approval before EXP-0011 and EXP-0012.
+**Status:** **answered 2026-09-15** by seven probe calls (≈$0.00001 total):
+- `dimensions` **passes through**: text-embedding-3-large returned 3072 → 256 and
+  gemini-embedding-2 3072 → 768 on request. Run 5 is possible.
+- `task_type` is **silently dropped**: gemini's vector for the same input is
+  byte-identical with no `task_type`, with `RETRIEVAL_QUERY` and with
+  `RETRIEVAL_DOCUMENT` (cosine 1.0, arrays equal), and a made-up parameter is also
+  accepted without error — so "no error" was never going to be evidence (MIS-005).
+  EXP-0011 therefore measures gemini symmetrically, and that is the only gemini
+  measurement OpenRouter's endpoint can give. Recorded in DEC-054's config comment.
+- Incidental: gemini on Google AI Studio is byte-deterministic call to call (two plain
+  calls identical), where DeepInfra's qwen is not (OQ-023).
