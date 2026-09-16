@@ -128,7 +128,12 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   long-context models on a corpus where 79% of articles fit one chunk; the retrieval
   task is closer to "find the right article" than to fine-grained passage ranking.
 - **Tested by:** EXP-0008–EXP-0011, strict recall@5 on `dev_large`, max minus min.
-- **Resolution:** pending.
+- **Resolution:** **confirmed as stated, and the statement was about the wrong split.**
+  On `dev_large` the four models span 0.973–0.988 (spread 0.015, well under 0.10) —
+  but `dev_large` is single-gold synthetic questions at ceiling. On `dev` they span
+  **0.560–0.750 (spread 0.190)**, more than half the dense-vs-sparse gap, driven by
+  bge-m3's −0.160. The reasoning ("find the right article, all models current") held
+  for synthetic questions and failed for user phrasings. `run_20260916_*`, EXP-0008–0011.
 
 ## H-006 — bge-m3 will trail the two large models on multi-document questions
 - **Date written:** 2026-09-15, before any Axis 2 run
