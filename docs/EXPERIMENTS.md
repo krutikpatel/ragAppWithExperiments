@@ -16,6 +16,8 @@ produced one.
 | EXP-0008 | `run_20260916_061952_ffc5` | 2026-09-16 | embedding (baseline) | **dense control on `dev_large`** (6,221 synthetic, all single-gold — no multi-doc slice exists); same index as EXP-0005. Not a headline number (preflight 3). strict@1 0.857, strict@20 0.992 | 0.973 | 0.973 | 0.928 | 0.909 (n=6,221) | — | 3490 | 0.0000004 | VALID | [→](experiments/EXP-0008.md) |
 | EXP-0009 | `run_20260916_081043_877a` | 2026-09-16 | embedding | `openai/text-embedding-3-large` (OpenAI), 3072-d, on `dev_large`: +0.0085 vs EXP-0008, p=0.0001 — **all of it on `feature_request` articles** (+0.033; `article` −0.003 n.s.). Index $0.40, 245 s | 0.982 | 0.982 | 0.945 | 0.929 (n=6,221) | — | 717 | 0.0000021 | VALID | [→](experiments/EXP-0009.md) |
 | EXP-0009 | `run_20260916_091357_887a` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (`be04`, 0.720): **Δ −0.005, p=1.0** (15 gained / 16 lost); multi-doc 0.350→0.300 (p=0.72); strict@1 +0.060 (p=0.078), nDCG +0.035 (p=0.071). **Null; not promoted** | 0.715 | 0.840 | 0.665 | 0.622 (n=160) | — | 735 | 0.0000024 | VALID | [→](experiments/EXP-0009.md) |
+| EXP-0010 | `run_20260916_091959_3929` | 2026-09-16 | embedding | `baai/bge-m3` (DeepInfra), 1024-d, on `dev_large`: +0.0053 vs EXP-0008, p=0.019 — again **all on `feature_request`** (+0.032, 67/1); `article` **−0.008, p=0.002**. Index $0.04, 1,448 s (batch 5, MIS-023) | 0.978 | 0.978 | 0.942 | 0.927 (n=6,221) | — | 1535 | 0.0000002 | VALID | [→](experiments/EXP-0010.md) |
+| EXP-0010 | `run_20260916_104021_e4ee` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (0.720): **Δ −0.160, CI [−0.225, −0.095], p=0.0001** (8 gained / **40 lost**); every slice down; multi-doc nDCG −0.209. **Splits disagree in direction** (DEC-055). **Negative; not promoted** | **0.560** | 0.640 | 0.504 | 0.461 (n=160) | — | 1491 | 0.0000002 | VALID | [→](experiments/EXP-0010.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -82,6 +84,13 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   retained; not promoted.** Worth noting for later: top-1 placement and nDCG on
   single-document questions were better (nDCG single-doc +0.045, p = 0.043), which
   a reranking or k=1 context might care about and a five-document context does not.
+- **EXP-0010 — `baai/bge-m3` for `qwen3-embedding-8b`.** On `dev`, strict recall@5
+  0.720 → 0.560, Δ −0.160, 95% CI [−0.225, −0.095], p = 0.0001 (8 gained / 40 lost);
+  nDCG@10 −0.127; multi-document nDCG −0.209. On `dev_large` it *gained* +0.005
+  (p = 0.019) — the two splits disagree in direction, which is the P2-04 finding this
+  program was told to look for. Cost it would have saved: 3/4 of the index size at the
+  same per-token price. **Decision: control retained; not promoted; `dev_large` cannot
+  be the sole decider for a dense-model comparison (DEC-055).**
 
 ## Phase 1 scorecard — the controls (P1-08)
 

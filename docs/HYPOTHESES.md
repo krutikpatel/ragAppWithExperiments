@@ -139,7 +139,13 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   multi-document questions need two or three distinct articles in the top five, the
   hardest slice on this corpus.
 - **Tested by:** EXP-0010 vs the best of EXP-0008/0009/0011 on `gold_docs:multi`.
-- **Resolution:** pending.
+- **Resolution:** **confirmed, and understated** — but only on `dev`, since `dev_large`
+  has no multi-document slice (MIS-021). On `dev` bge-m3 has the lowest multi-document
+  strict recall@5 of the three measured so far (0.225 vs 0.350 control, 0.300
+  text-embedding-3-large); the paired test on that slice alone is p = 0.12 (n = 40, 1
+  gained / 6 lost), while multi-document nDCG@10 is −0.209, p = 0.0001. The "smallest
+  model" reasoning was right in direction; the gap is not confined to multi-document
+  questions — single-document lost 0.169. Final ranking waits for EXP-0011.
 
 ## H-007 — The `dev_large` and `dev` verdicts will agree in direction for every candidate
 - **Date written:** 2026-09-15, before any Axis 2 run
@@ -154,4 +160,9 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
 - **Resolution:** pending — first data point (EXP-0009) **disagrees**: `dev_large`
   +0.0085 (p = 0.0001), `dev` −0.005 (p = 1.0). The `dev` delta is one question and
   within noise, so "disagreement" here is a null on `dev` against a small real gain on
-  `dev_large`, not opposite findings. Resolved after EXP-0010 and EXP-0011.
+  `dev_large`, not opposite findings. **EXP-0010 resolves it: wrong.** bge-m3 is
+  +0.005 (p = 0.019) on `dev_large` and −0.160 (p = 0.0001) on `dev`. The reasoning
+  ("leakage inflates lexical overlap, which favours BM25 but not one dense model over
+  another") was wrong: a dense model trained toward surface paraphrase is flattered by
+  synthetic questions in exactly the way BM25 is. Recorded as the direct evidence for
+  DEC-055.

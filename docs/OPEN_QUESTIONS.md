@@ -340,3 +340,18 @@ ignored (for `task_type`). Cost: a few tokens.
   measurement OpenRouter's endpoint can give. Recorded in DEC-054's config comment.
 - Incidental: gemini on Google AI Studio is byte-deterministic call to call (two plain
   calls identical), where DeepInfra's qwen is not (OQ-023).
+
+## OQ-026 — Why is the qwen control weak on `feature_request` articles in `dev_large`, and does it matter on real questions?
+Both EXP-0009 (text-embedding-3-large) and EXP-0010 (bge-m3) gained +0.032–0.033 strict
+recall@5 on the 2,049 `feature_request` questions of `dev_large` (67 gained / ≤1 lost
+each) while losing on ordinary articles. Two unrelated models fixing the same questions
+points at the control, not the candidates: "Request:"-titled articles are short and
+templated, and the qwen3 instruct prefix ("retrieve relevant passages that answer the
+query") may push those away from question-shaped queries. `dev` has **zero**
+feature-request gold documents, so nothing measured so far says whether this matters
+for user questions.
+**Decided by:** (1) the list of the ~67 questions — same set across EXP-0009/0010? (2) a
+run of the control with `prefix_convention: none` on `dev_large` and `dev` (one config
+change, ~$0.003 + $0.0001, no re-index needed if the passage side is unchanged — it is:
+`qwen3` prefixes queries only). If the gap closes, the prefix is the cause.
+**Status:** open.
