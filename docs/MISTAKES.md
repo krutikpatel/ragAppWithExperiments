@@ -93,6 +93,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
 28. **`git status --short` prints nothing before a run launches — whoever's change it
     is.** A killed run leaves a RUNNING row: set it VOID with the reason at once.
     (MIS-020)
+29. **Count a slice before you write a policy about it.** DEC-050 made `dev_large`
+    the deciding split for retrieval axes; its multi-document slice has zero rows,
+    which `load_split("dev_large")["n_gold_docs"].value_counts()` would have shown in
+    one line. Item 1 again, unlearned. (MIS-021)
 
 ---
 
@@ -618,3 +622,30 @@ Derived from the prevention rules below. Run through it and say in chat that you
   launched, whoever's change is pending. A killed run leaves a RUNNING row — set it
   VOID with the reason at once.
 - **Added to preflight:** yes (item 28)
+
+## MIS-021 — Encoded "decide retrieval axes on `dev_large`" without counting its multi-document slice, which is empty
+- **Date:** 2026-09-16
+- **Severity:** Medium — no run invalid; a Phase 2 policy (DEC-050, from P2-04) rests on
+  a slice that does not exist, and OQ-024 asked the wrong question ("is it big
+  enough?").
+- **What happened:** The handover assumed `dev_large` carries multi-hop questions
+  ("decide on `dev_large` for statistical power"). It carries 6,221 synthetic
+  single-gold questions and nothing else. EXP-0008 made it visible: strict and loose
+  recall identical at every k, MRR's single-gold "subset" equal to the whole split,
+  `gold_docs:multi` slice absent from `slices_json`.
+- **How it was caught:** Reading EXP-0008's aggregate before writing its row, then
+  counting `n_gold_docs` on all three splits (dev 160/35/5; dev_large 6,221/0/0; test
+  161/35/4).
+- **Root cause:** I implemented the split policy from the handover's description and
+  did not count the thing it depended on — preflight item 1, verbatim. The split
+  builder's own `describe_split` output would have shown it.
+- **Impact:** DEC-050's "decide on `dev_large`" gives power on single-document
+  questions only, at a ceiling (strict recall@5 0.973 for the control). Every
+  multi-hop verdict in Phase 2 comes from 40 questions on `dev` — the power problem
+  OQ-024 measured (p = 0.063 on a 0.175 gain). The organizing question is decided at
+  n = 40 whatever the policy says.
+- **Fix applied:** Recorded here and in OQ-024; the policy change is Krutik's call
+  (DEC-055, pending). No code change until it is made.
+- **Prevention rule:** Before a DEC entry names a split or slice as the decider, the
+  entry quotes its row count from the data.
+- **Added to preflight:** yes (item 29)

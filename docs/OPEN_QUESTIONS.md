@@ -315,7 +315,12 @@ count is unknown until measured) versus `dev`. If `dev_large`'s multi-document s
 gives CIs narrower than ~±0.10 on strict recall@5, retrieval axes are decided there
 and confirmed on `dev` as P2-04 says; if it is also too small, the slice needs more
 questions and that is a split decision, not a tuning one.
-**Status:** open — measure on the first `dev_large` run of Phase 2.
+**Status:** **answered 2026-09-16 by EXP-0008, and not as posed.** `dev_large` has
+**no** multi-document questions: `n_gold_docs = 1` for all 6,221 rows (all
+`wixqa_synthetic`). The slice is not small, it is absent, so `dev_large` cannot decide
+anything about the multi-hop gap. The only multi-document questions in the project are
+the 40 on `dev` (35 two-gold, 5 three-gold) and 39 on `test`. Consequence for P2-04 /
+DEC-050 is an open decision — see MIS-021 and DEC-055.
 
 ## OQ-025 — Do `task_type` (gemini) and `dimensions` (text-embedding-3, gemini) pass through OpenRouter's `/embeddings`?
 Both matter for Axis 2: gemini's query/document asymmetry lives in `task_type`, and
