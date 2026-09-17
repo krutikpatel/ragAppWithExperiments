@@ -570,7 +570,10 @@ Rules that outlive any particular library:
   (p95 748, max 1,336): a 512-context embedding model truncates a third of the
   index silently (preflight item 19).
 - **Phase 2 run discipline is in the runner, not in memory.** `axis:` on every
-  experiment config; Axis 3 and Tier 2 are refused on `dev_large` (DEC-050); a run
+  experiment config; **`dev` decides every axis** — `dev_large` is 6,221 synthetic
+  single-gold questions at ceiling (0.973) that flattered a model `dev` rejected by
+  16 points, so it is only a direction check (DEC-055 supersedes DEC-050's split rule;
+  EXP-0008/0010); Axis 3 and Tier 2 are refused on `dev_large` (DEC-050); a run
   estimated above $2 halts before it starts and needs `--approve-cost` (DEC-052;
   `--estimate-only` is free); `promoted` is a run reference and `rag promote` is the
   only thing that moves `configs/promoted.yaml` (DEC-051).

@@ -227,20 +227,20 @@ def compare(
 def promote_cmd(
     candidate: str = typer.Argument(..., help="Config YAML to promote (the run under --confirm/--decide must be its run)."),
     axis: str = typer.Option(..., "--axis", help="Which axis this decides (see rag.runner.config.AXES)."),
-    confirm: tuple[str, str] = typer.Option(..., "--confirm", help="baseline_run candidate_run on `dev`."),
-    decide: tuple[str, str] = typer.Option((None, None), "--decide", help="baseline_run candidate_run on `dev_large` (retrieval axes)."),
+    dev: tuple[str, str] = typer.Option(..., "--dev", help="baseline_run candidate_run on `dev` — the deciding pair (DEC-055)."),
+    dev_large: tuple[str, str] = typer.Option((None, None), "--dev-large", help="baseline_run candidate_run on `dev_large` — required direction check for retrieval axes."),
     metric: str = typer.Option("strict_recall@5", "--metric"),
     reason: str = typer.Option(..., "--reason", help="Written into the promotion log."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Check the policy, change nothing."),
 ) -> None:
-    """Advance configs/promoted.yaml to CANDIDATE if the comparison passes the P2-04 split policy."""
+    """Advance configs/promoted.yaml to CANDIDATE if the `dev` comparison passes (DEC-055: dev decides)."""
     from rag.runner.promoted import promote
     from rag.runner.run import git_state
     from rag.runner.store import ResultsStore
 
     with ResultsStore() as store:
         result = promote(
-            candidate, axis=axis, decide=None if decide == (None, None) else decide, confirm=confirm,
+            candidate, axis=axis, dev=dev, dev_large=None if dev_large == (None, None) else dev_large,
             metric=metric, reason=reason, store=store, git_sha=git_state().sha, dry_run=dry_run,
         )
     typer.echo(json.dumps(result, indent=2, default=str))

@@ -93,11 +93,18 @@ def check_split_policy(config: RunConfig, *, allow_leaky_split: bool) -> dict[st
 
 
 def decision_splits(axis: str) -> dict[str, str]:
-    """Which split decides and which confirms an axis (P2-04)."""
+    """Which split decides an axis, and which one is the sanity check (DEC-055).
+
+    `dev` decides every axis: it is the only split with multi-document questions
+    (`dev_large` has none, MIS-021) and the only one with user-written phrasings
+    (`dev_large` flattered bge-m3 by +0.005 while `dev` lost 0.160, EXP-0010). For
+    retrieval axes `dev_large` is still run and must agree in direction on its
+    single-document questions; it cannot promote on its own.
+    """
     if axis in RETRIEVAL_AXES:
-        return {"decide": "dev_large", "confirm": "dev"}
+        return {"decide": "dev", "check": "dev_large"}
     if axis in DEV_ONLY_AXES or axis == "combination":
-        return {"decide": "dev", "confirm": "dev"}
+        return {"decide": "dev"}
     raise ValueError(f"axis {axis!r} has no promotion rule")
 
 
@@ -133,21 +140,21 @@ def promote(
     candidate_path: str | Path,
     *,
     axis: str,
-    decide: tuple[str, str] | None,
-    confirm: tuple[str, str],
+    dev: tuple[str, str],
+    dev_large: tuple[str, str] | None,
     metric: str,
     reason: str,
     store: Any,
     git_sha: str,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Advance `promoted.yaml` to `candidate_path` if the comparisons pass the policy.
+    """Advance `promoted.yaml` to `candidate_path` if the comparison passes the policy.
 
-    `decide` and `confirm` are (baseline_run, candidate_run) pairs. For retrieval
-    axes both are required — decide on dev_large, confirm on dev — and the delta must
-    be significant on dev_large **and** in the same direction on dev. Dev-only axes
-    use `confirm` alone. A retrieval metric is judged by the paired test (p < 0.05,
-    DEC-047); a metric with an MDD family by its MDD label (DEC-048).
+    `dev` and `dev_large` are (baseline_run, candidate_run) pairs. **`dev` decides**
+    (DEC-055): a retrieval metric must be significant by the paired test (p < 0.05,
+    DEC-047), a judged or generated metric by its MDD label (DEC-048). For retrieval
+    axes the `dev_large` pair is required as a check and must agree in direction; it
+    never promotes on its own. Other axes take the `dev` pair alone.
     """
     from rag.eval.noise_floor import RETRIEVAL_METRICS, family_for_run, mdd_verdict
     from rag.runner.compare import compare_runs
@@ -155,13 +162,13 @@ def promote(
     candidate = load_config_file(candidate_path)
     promoted = load_promoted()
     splits = decision_splits(axis)
-    pairs = {"confirm": confirm}
-    if splits["decide"] != splits["confirm"]:
-        if decide is None:
-            raise ValueError(f"axis {axis!r} decides on {splits['decide']} and confirms on {splits['confirm']}: pass --decide")
-        pairs["decide"] = decide
-    elif decide is not None and decide != confirm:
-        raise ValueError(f"axis {axis!r} is decided on {splits['decide']} only; pass one pair")
+    pairs = {"decide": dev}
+    if "check" in splits:
+        if dev_large is None:
+            raise ValueError(f"axis {axis!r} is decided on dev and checked on dev_large: pass --dev-large")
+        pairs["check"] = dev_large
+    elif dev_large is not None:
+        raise ValueError(f"axis {axis!r} is decided on dev only; --dev-large does not apply")
 
     verdicts: dict[str, Any] = {}
     problems: list[str] = []
@@ -188,12 +195,11 @@ def promote(
         overall = report["overall"]
         if metric in RETRIEVAL_METRICS:
             # Deterministic metric: the paired test is the verdict (DEC-047). The
-            # deciding split must be significant; the confirming split must agree
-            # in direction (P2-04), which is checked below.
+            # deciding split must be significant; the check split only has to agree
+            # in direction, which is tested below.
             verdicts[role] = {"rule": "paired test", "delta": overall["delta"], "ci95": overall["ci95"],
                               "p_value": overall["p_value"]}
-            is_confirm_only = role == "confirm" and "decide" in pairs
-            passed = overall["delta"] > 0 and (is_confirm_only or overall["p_value"] < 0.05)
+            passed = overall["delta"] > 0 and (role == "check" or overall["p_value"] < 0.05)
         else:
             # Judged or generated metric: the MDD label is the verdict (DEC-048).
             family, _ = family_for_run(meta_b)
@@ -205,17 +211,17 @@ def promote(
             info = mdd_verdict(metric, agg_b - agg_a, family=family)
             verdicts[role] = {"rule": "MDD", "delta": info["delta"], "label": info["label"], "mdd": info["mdd"],
                               "replicates_advised": info["replicates_advised"], "p_value": overall["p_value"]}
-            passed = info["label"] == "significant" and info["delta"] > 0
+            passed = info["delta"] > 0 and (role == "check" or info["label"] == "significant")
         verdicts[role]["passed"] = passed
         verdicts[role]["runs"] = [run_a, run_b]
         verdicts[role]["split"] = expected_split
 
-    if "decide" in verdicts and "confirm" in verdicts:
-        if (verdicts["decide"]["delta"] > 0) != (verdicts["confirm"]["delta"] > 0):
+    if "check" in verdicts:
+        if (verdicts["decide"]["delta"] > 0) != (verdicts["check"]["delta"] > 0):
             problems.append(
-                "dev_large and dev DISAGREE in direction "
-                f"({verdicts['decide']['delta']:+.4f} vs {verdicts['confirm']['delta']:+.4f}); "
-                "that is a finding — write it up (P2-04), do not promote"
+                "dev and dev_large DISAGREE in direction "
+                f"({verdicts['decide']['delta']:+.4f} vs {verdicts['check']['delta']:+.4f}); "
+                "that is a finding — write it up (P2-04 / DEC-055), do not promote"
             )
     failed = [role for role, v in verdicts.items() if not v["passed"]]
     if failed:

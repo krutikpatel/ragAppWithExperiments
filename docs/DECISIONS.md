@@ -1724,7 +1724,9 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Date:** 2026-09-15
 - **Decided by:** Claude, encoding P2-04 from the Phase 2 handover (Krutik's spec);
   the enforcement mechanics are Claude's
-- **Status:** Active
+- **Status:** **Superseded by DEC-055** for the "retrieval axes decide on `dev_large`"
+  rule. The Axis 3 refusal, the Tier 2 refusal on `dev_large`, `--allow-leaky-split`
+  and `leakage_affected` stay in force.
 - **Context:** `dev` has 200 questions (40 multi-document); `dev_large` has 6,221
   synthetic ones whose text was generated from the gold article, so lexical overlap
   is inflated (preflight item 3). Power and validity pull in opposite directions
@@ -1917,3 +1919,50 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** a slug disappears or a pinned provider's price moves (refresh the
   pricing table, note it in the EXP file); or OQ-025 shows `task_type` does pass
   through, which would make EXP-0011 a symmetric-only measurement of gemini.
+
+## DEC-055 — `dev` decides every axis; `dev_large` is a single-document direction check, never the decider
+- **Date:** 2026-09-16
+- **Decided by:** Krutik (options and recommendation by Claude)
+- **Status:** Active — supersedes DEC-050's split rule for retrieval axes
+- **Context:** DEC-050 (from P2-04) made `dev_large` the deciding split for the
+  retrieval axes on the assumption that it carried multi-hop questions with
+  statistical power. Two measurements this week undid the assumption:
+  - **`dev_large` has no multi-document questions** — all 6,221 are synthetic,
+    single-gold, and the control already scores 0.973 strict recall@5 on them
+    (EXP-0008, MIS-021). The slice the organizing question is about does not exist
+    there.
+  - **It can give a confident wrong answer.** bge-m3 gained +0.005 (p = 0.019) on
+    `dev_large` and lost 0.160 (p = 0.0001, 40 of 200 questions) on `dev` (EXP-0010,
+    H-007 wrong). Synthetic questions reuse their article's wording, which flatters a
+    model that tracks surface wording — a dense model, not only BM25.
+- **Options considered:**
+  1. Keep DEC-050 — rejected: it would have promoted gemini-embedding-2 on a +1.5-point
+     gain in synthetic single-article questions while the split with real, multi-article
+     questions could not tell it from the control (EXP-0011).
+  2. **`dev` decides at p < 0.05; `dev_large` must agree in direction** — chosen.
+     Cost: with 200 questions a candidate needs roughly 15 more net flips right than
+     wrong to clear the bar, so small real gains are recorded as "no measurable
+     difference". That is the honest verdict for a 200-question set.
+  3. Build a larger multi-document eval set — deferred: forbidden by the Phase 2
+     non-goals (changing splits resets the controls) and a new comparison family.
+     Noted for Phase 3 / OQ-024.
+- **Decision:**
+  - `rag promote` takes `--dev a b` as the deciding pair for every axis. Retrieval
+    metrics: paired test p < 0.05 and Δ > 0 (DEC-047). Judged and generated metrics:
+    MDD label "significant" and Δ > 0 (DEC-048). Retrieval axes also require
+    `--dev-large a b`, which must agree in direction and nothing more; disagreement
+    is a finding to write up, not a promotion.
+  - The `dev_large` runs of Axis 2 remain valid single-document measurements and are
+    reported as such; they are never a headline (preflight item 3).
+  - Everything else in DEC-050 stands: Axis 3 and Tier 2 are refused on `dev_large`
+    without `--allow-leaky-split`, and a leakage-affected run cannot decide anything.
+- **Evidence:** EXP-0008 (split composition), EXP-0010 (direction disagreement),
+  EXP-0011 (the case the rule change decides).
+- **Consequences:** Applied immediately to Axis 2: gemini-embedding-2 is **not
+  promoted** (`dev` +0.030, CI [−0.030, +0.090], p = 0.41; `rag promote --dry-run`
+  refuses). `configs/promoted.yaml` stays the qwen dense control. Decision 2 (whether
+  to pay 20x per token and take a Google dependency for gemini) does not arise.
+- **Revisit if:** a larger human-sourced multi-document set exists (then it decides);
+  or three axes in a row end in "no measurable difference on `dev`" while `dev_large`
+  and nDCG agree on a gain — that would say the bar is above what 200 questions can
+  ever clear and the eval set, not the rule, is the problem.

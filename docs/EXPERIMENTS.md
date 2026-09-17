@@ -19,7 +19,7 @@ produced one.
 | EXP-0010 | `run_20260916_091959_3929` | 2026-09-16 | embedding | `baai/bge-m3` (DeepInfra), 1024-d, on `dev_large`: +0.0053 vs EXP-0008, p=0.019 — again **all on `feature_request`** (+0.032, 67/1); `article` **−0.008, p=0.002**. Index $0.04, 1,448 s (batch 5, MIS-023) | 0.978 | 0.978 | 0.942 | 0.927 (n=6,221) | — | 1535 | 0.0000002 | VALID | [→](experiments/EXP-0010.md) |
 | EXP-0010 | `run_20260916_104021_e4ee` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (0.720): **Δ −0.160, CI [−0.225, −0.095], p=0.0001** (8 gained / **40 lost**); every slice down; multi-doc nDCG −0.209. **Splits disagree in direction** (DEC-055). **Negative; not promoted** | **0.560** | 0.640 | 0.504 | 0.461 (n=160) | — | 1491 | 0.0000002 | VALID | [→](experiments/EXP-0010.md) |
 | EXP-0011 | `run_20260916_104407_1cb0` | 2026-09-16 | embedding | `google/gemini-embedding-2` (Google AI Studio), 3072-d, symmetric (OQ-025), on `dev_large`: **+0.0153 vs EXP-0008, p=0.0001** — `article` +0.007 (p=0.003) **and** `feature_request` +0.033. strict@1 +0.055. Index $0.63, 249 s | **0.988** | 0.988 | 0.958 | 0.946 (n=6,221) | — | 613 | 0.0000036 | VALID | [→](experiments/EXP-0011.md) |
-| EXP-0011 | `run_20260916_113159_79c4` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (0.720): **Δ +0.030, CI [−0.030, +0.090], p=0.41** (22 gained / 16 lost); strict@1 +0.085 (p=0.02), **nDCG@10 +0.066 (p=0.002)**; multi-doc strict +0.025 (7/6), loose 0.85→0.95. Passes DEC-050's rule; **promotion pending DEC-055** | 0.750 | 0.865 | 0.697 | 0.650 (n=160) | — | 475 | 0.0000036 | VALID | [→](experiments/EXP-0011.md) |
+| EXP-0011 | `run_20260916_113159_79c4` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (0.720): **Δ +0.030, CI [−0.030, +0.090], p=0.41** (22 gained / 16 lost); strict@1 +0.085 (p=0.02), **nDCG@10 +0.066 (p=0.002)**; multi-doc strict +0.025 (7/6), loose 0.85→0.95. **Not promoted under DEC-055** (`dev` decides; p=0.41). Passed DEC-050's superseded rule | 0.750 | 0.865 | 0.697 | 0.650 (n=160) | — | 475 | 0.0000036 | VALID | [→](experiments/EXP-0011.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -93,6 +93,15 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   program was told to look for. Cost it would have saved: 3/4 of the index size at the
   same per-token price. **Decision: control retained; not promoted; `dev_large` cannot
   be the sole decider for a dense-model comparison (DEC-055).**
+- **EXP-0011 — `google/gemini-embedding-2` for `qwen3-embedding-8b`.** No measurable
+  difference on the headline: `dev` strict recall@5 0.720 → 0.750, Δ +0.030, 95% CI
+  [−0.030, +0.090], p = 0.41 (22 gained / 16 lost); multi-document +0.025 (7 / 6).
+  What did move: strict recall@1 +0.085 (p = 0.020) and nDCG@10 +0.066 (p = 0.002)
+  on `dev`, and +0.0153 (p = 0.0001) on `dev_large` including ordinary articles. Cost
+  it would have added: 20x per embedded token ($0.63 vs $0.03 per index), 9x per
+  query, and a Google-only dependency in place of open weights. **Decision: control
+  retained under DEC-055; the ranking gain is filed for the reranking axis (OQ-027)
+  — a better-ordered top 5 is what a reranker would otherwise have to buy.**
 
 ## Phase 1 scorecard — the controls (P1-08)
 

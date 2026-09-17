@@ -60,11 +60,12 @@ def test_retrieval_axes_may_use_dev_large_and_dev_needs_nothing():
     assert check_split_policy(RunConfig(name="x", axis="retrieval_method", split="dev"), allow_leaky_split=False)["leakage_affected"] is False
 
 
-def test_decision_splits_follow_p2_04():
+def test_decision_splits_follow_dec_055():
+    """DEC-055: dev decides every axis; dev_large is a direction check for retrieval axes."""
     for axis in ("chunking", "embedding", "reranking", "assembly"):
-        assert decision_splits(axis) == {"decide": "dev_large", "confirm": "dev"}
+        assert decision_splits(axis) == {"decide": "dev", "check": "dev_large"}
     for axis in ("retrieval_method", "query_transform", "generation", "agentic"):
-        assert decision_splits(axis) == {"decide": "dev", "confirm": "dev"}
+        assert decision_splits(axis) == {"decide": "dev"}
 
 
 # --- P2-05: promoted.yaml ---------------------------------------------------------
@@ -167,7 +168,7 @@ def _promotion_fixture(tmp_path, *, large_delta: float, dev_delta: float):
     return store, candidate
 
 
-def test_promotion_requires_dev_large_significance_and_dev_agreement(tmp_path, monkeypatch):
+def test_promotion_requires_dev_significance_and_dev_large_agreement(tmp_path, monkeypatch):
     from rag.runner import promoted as promoted_mod
     from rag.runner.compare import compare_runs
 
@@ -177,16 +178,32 @@ def test_promotion_requires_dev_large_significance_and_dev_agreement(tmp_path, m
     store, candidate = _promotion_fixture(tmp_path, large_delta=0.2, dev_delta=-0.1)
     monkeypatch.setattr(promoted_mod, "PROMOTED_PATH", tmp_path / "promoted.yaml")
     result = promoted_mod.promote(
-        candidate, axis="assembly", decide=("a_dev_large", "b_dev_large"), confirm=("a_dev", "b_dev"),
+        candidate, axis="assembly", dev=("a_dev", "b_dev"), dev_large=("a_dev_large", "b_dev_large"),
         metric="strict_recall@5", reason="test", store=store, git_sha="abc1234", dry_run=True,
     )
-    assert result["verdicts"]["decide"]["p_value"] < 0.05
-    assert any("DISAGREE" in p for p in result["problems"]), "dev_large and dev disagree: not promoted, a finding"
+    assert result["verdicts"]["check"]["p_value"] < 0.05, "dev_large is significant, and that is not enough"
+    assert result["verdicts"]["decide"]["passed"] is False
+    assert any("DISAGREE" in p for p in result["problems"]), "dev and dev_large disagree: not promoted, a finding"
     assert result["promoted"] is False
 
-    with pytest.raises(ValueError, match="pass --decide"):
-        promoted_mod.promote(candidate, axis="assembly", decide=None, confirm=("a_dev", "b_dev"),
+    with pytest.raises(ValueError, match="pass --dev-large"):
+        promoted_mod.promote(candidate, axis="assembly", dev=("a_dev", "b_dev"), dev_large=None,
                              metric="strict_recall@5", reason="t", store=store, git_sha="abc", dry_run=True)
+    store.close()
+
+
+def test_a_dev_gain_below_significance_does_not_promote_even_if_dev_large_is_significant(tmp_path, monkeypatch):
+    """The EXP-0011 shape: +0.03 on dev (p ≈ 0.4), +0.015 on dev_large (p = 0.0001)."""
+    from rag.runner import promoted as promoted_mod
+
+    monkeypatch.setattr("rag.runner.compare._slices_from_split", lambda split, ids: {"all": []})
+    store, candidate = _promotion_fixture(tmp_path, large_delta=0.2, dev_delta=0.05)
+    result = promoted_mod.promote(
+        candidate, axis="embedding", dev=("a_dev", "b_dev"), dev_large=("a_dev_large", "b_dev_large"),
+        metric="strict_recall@5", reason="t", store=store, git_sha="abc", dry_run=True,
+    )
+    assert result["verdicts"]["check"]["passed"] is True and result["verdicts"]["decide"]["passed"] is False
+    assert result["promoted"] is False and any("decide" in p for p in result["problems"])
     store.close()
 
 
@@ -195,7 +212,8 @@ def test_promotion_advances_the_pointer_and_logs_it(tmp_path, monkeypatch):
 
     slices = {"all": [f"q{i}" for i in range(100)]}
     monkeypatch.setattr("rag.runner.compare._slices_from_split", lambda split, ids: slices)
-    store, candidate = _promotion_fixture(tmp_path, large_delta=0.2, dev_delta=0.1)
+    # dev decides (DEC-055): 12 net flips of 40 clears p < 0.05; dev_large only has to agree.
+    store, candidate = _promotion_fixture(tmp_path, large_delta=0.2, dev_delta=0.3)
 
     pointer = tmp_path / "promoted.yaml"
     pointer.write_text(PROMOTED_PATH.read_text())
@@ -207,7 +225,7 @@ def test_promotion_advances_the_pointer_and_logs_it(tmp_path, monkeypatch):
     monkeypatch.setattr(decision_log, "DECISIONS_PATH", log)
 
     result = promoted_mod.promote(
-        candidate, axis="assembly", decide=("a_dev_large", "b_dev_large"), confirm=("a_dev", "b_dev"),
+        candidate, axis="assembly", dev=("a_dev", "b_dev"), dev_large=("a_dev_large", "b_dev_large"),
         metric="strict_recall@5", reason="test win", store=store, git_sha="abc1234",
     )
     assert result["problems"] == [] and result["promoted"] is True and result["log_row"] == 1
@@ -225,7 +243,7 @@ def test_promotion_refuses_a_run_that_is_not_the_candidate(tmp_path, monkeypatch
     monkeypatch.setattr("rag.runner.compare._slices_from_split", lambda split, ids: {"all": []})
     store, candidate = _promotion_fixture(tmp_path, large_delta=0.2, dev_delta=0.1)
     result = promoted_mod.promote(
-        candidate, axis="retrieval_method", decide=None, confirm=("b_dev", "a_dev"),  # swapped
+        candidate, axis="retrieval_method", dev=("b_dev", "a_dev"), dev_large=None,  # swapped
         metric="strict_recall@5", reason="t", store=store, git_sha="abc", dry_run=True,
     )
     assert any("not a run of the current promoted config" in p for p in result["problems"])

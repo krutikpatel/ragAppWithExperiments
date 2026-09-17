@@ -355,3 +355,15 @@ run of the control with `prefix_convention: none` on `dev_large` and `dev` (one 
 change, ~$0.003 + $0.0001, no re-index needed if the passage side is unchanged — it is:
 `qwen3` prefixes queries only). If the gap closes, the prefix is the cause.
 **Status:** open.
+
+## OQ-027 — Is gemini-embedding-2's better top-5 ordering worth anything once a reranker is in the loop?
+EXP-0011: on `dev` gemini did not change which questions had every gold document in the
+top five (Δ +0.030, p = 0.41) but placed the gold higher when it was there (strict
+recall@1 +0.085, p = 0.020; nDCG@10 +0.066, p = 0.002). A reranker over a 50-chunk pool
+re-orders the top of the list anyway; if it recovers the same ordering from the qwen
+index, the 20x-per-token model buys nothing. If it does not, ordering quality upstream
+of the reranker matters.
+**Decided by:** in Axis 5 (P2-10), run the winning reranker over the qwen control *and*
+over the gemini index (the index is cached; ~$0.001 of queries plus rerank cost) and
+compare nDCG@10 and strict recall@1 on `dev` by paired test.
+**Status:** open — queued for Axis 5.
