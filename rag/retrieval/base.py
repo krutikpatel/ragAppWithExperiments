@@ -97,6 +97,15 @@ class Retriever(ABC):
     def search(self, query: str, *, top_k: int) -> list[tuple[str, float]]:
         """Return ranked (chunk_id, score), best first."""
 
+    @classmethod
+    def embedding_params(cls, retriever_params: dict[str, Any]) -> dict[str, Any] | None:
+        """The embedder settings this retriever would build from `retriever_params`,
+        or None when it embeds nothing. The runner asks this *before* the retriever
+        exists, to check the index on disk and estimate the build (P2-06) — keyed on
+        the class rather than on the name "dense", so a retriever that wraps a dense
+        one (hybrid, P2-09) is costed the same way and never read as free."""
+        return None
+
     def provenance(self) -> dict[str, Any]:
         """What this retriever was built from, recorded on the run row. Empty when
         there is nothing beyond the chunk index itself (BM25 is rebuilt in-process)."""

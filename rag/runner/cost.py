@@ -345,16 +345,18 @@ def format_estimate(estimate: dict[str, Any]) -> str:
 def estimate_index_cost(
     *,
     retriever: str,
-    retriever_params: dict[str, Any],
+    retriever_params: dict[str, Any] | None,
     corpus_words: int,
     index_exists: bool,
     n_questions: int,
     pricing: PricingTable,
 ) -> dict[str, Any]:
-    """What a dense retriever will spend: the full-corpus embedding if the index is
-    not cached (the dominant cost in this project, P2-06), plus the query vectors.
-    Zero for in-process retrievers."""
-    if retriever != "dense" or retriever_params.get("embedding_backend", "openrouter") != "openrouter":
+    """What a retriever's embedder will spend: the full-corpus embedding if the index
+    is not cached (the dominant cost in this project, P2-06), plus the query vectors.
+    `retriever_params` is what `Retriever.embedding_params` returned — None for an
+    in-process retriever, the `dense` block for a hybrid — so a retriever is costed
+    by what it embeds, not by its name."""
+    if not retriever_params or retriever_params.get("embedding_backend", "openrouter") != "openrouter":
         return {"index_usd": 0.0, "query_usd": 0.0, "index_exists": True, "source": "in-process retriever"}
     model = retriever_params.get("embedding_model", "")
     provider = retriever_params.get("embedding_provider", "")

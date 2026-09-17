@@ -27,6 +27,7 @@ def _ensure_builtins() -> None:
     _BUILTINS_LOADED = True
     import rag.retrieval.bm25  # noqa: F401
     import rag.retrieval.dense  # noqa: F401
+    import rag.retrieval.hybrid  # noqa: F401
     import rag.retrieval.toy  # noqa: F401
 
 
@@ -45,6 +46,15 @@ def build_retriever(name: str, **kwargs: Any) -> Any:
     if name not in _RETRIEVERS:
         raise KeyError(f"unknown retriever {name!r}; registered: {sorted(_RETRIEVERS)}")
     return _RETRIEVERS[name](**kwargs)
+
+
+def retriever_class(name: str) -> type:
+    """The registered class, for questions that must be answered before the
+    retriever is built — what it would embed, and so what it would cost (P2-06)."""
+    _ensure_builtins()
+    if name not in _RETRIEVERS:
+        raise KeyError(f"unknown retriever {name!r}; registered: {sorted(_RETRIEVERS)}")
+    return _RETRIEVERS[name]
 
 
 def registered_retrievers() -> list[str]:

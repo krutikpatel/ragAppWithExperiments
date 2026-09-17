@@ -412,7 +412,11 @@ rag/
                     pooling.py (doc_pooling; select_distinct_docs + collapse ratio),
                     bm25.py (the sparse control; rank-bm25 Okapi), dense.py (cosine
                     over a numpy index cached under indexes/<key>/, key = provenance
-                    tuple, P1-04), toy.py (smoke tests only; toy_llm_rewrite puts a
+                    tuple, P1-04), hybrid.py (P2-09: dense + BM25 fused by RRF k=60 or
+                    min-max weighted `alpha` on dense, DEC-056; owns no index — the
+                    dense half does, and `Retriever.embedding_params` is how the
+                    runner costs a retriever by what it embeds, not by its name),
+                    toy.py (smoke tests only; toy_llm_rewrite puts a
                     fake non-deterministic LLM call inside retrieval for the P2-03 test)
   eval/             qrels.py (binary document-level qrels + alignment check),
                     retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
@@ -467,7 +471,9 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     is the dense control (EXP-0005) that Phase 2 diffs against (P1-09);
                     baseline_dense_tier2.yaml adds generation + judge (P1-07 run 2,
                     and `rag ask`'s default); exp_0004_bm25_distinct_docs.yaml is the
-                    sparse control. smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml
+                    sparse control; exp_0014..0018_hybrid_*_dev.yaml are Axis 3
+                    (RRF, then weighted α 0.2/0.4/0.6/0.8; dev only, DEC-056).
+                    smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml
                     and tier2_smoke.yaml are harness smoke tests, not experiments.
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,

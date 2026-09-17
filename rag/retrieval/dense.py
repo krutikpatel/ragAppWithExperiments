@@ -110,6 +110,10 @@ class DenseRetriever(Retriever):
         # everything after is queries.
         self._build_cost_usd = self._usage_cost()
 
+    @classmethod
+    def embedding_params(cls, retriever_params: dict[str, Any]) -> dict[str, Any] | None:
+        return retriever_params
+
     def _usage_cost(self) -> float:
         usage = getattr(self.embedder, "usage", None)
         return float(usage.cost_usd) if usage is not None else 0.0

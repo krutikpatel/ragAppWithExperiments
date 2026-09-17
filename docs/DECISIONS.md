@@ -1966,3 +1966,58 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   or three axes in a row end in "no measurable difference on `dev`" while `dev_large`
   and nDCG agree on a gain — that would say the bar is above what 200 questions can
   ever clear and the eval set, not the rule, is the problem.
+
+## DEC-056 — Axis 3 fusion definitions: RRF at k=60, weighted fusion as min-max convex combination, each half at the scoring depth
+- **Date:** 2026-09-17
+- **Decided by:** Claude (design choices made while building `rag/retrieval/hybrid.py`; put to Krutik in chat before the first run)
+- **Status:** Active
+- **Context:** P2-09 asks for "hybrid via RRF" and "hybrid via weighted score fusion"
+  with an alpha sweep, but neither is a single thing: RRF has a constant, weighted
+  fusion needs a rule for putting cosine (in [−1, 1]) and Okapi (in [0, ∞)) on one
+  scale, and both need to know how deep each half's list goes. Each of these moves
+  the fused ranking, so they have to be fixed and recorded before the sweep rather
+  than tuned inside it.
+- **Options considered:**
+  1. **RRF constant.** k = 60, the value from the paper that introduced it (Cormack,
+     Clarke & Buettcher 2009) and the default in every library implementation —
+     chosen, with no sweep: the story allows one configuration per method.
+  2. **Score normalisation for weighted fusion.** (a) Raw scores — rejected, the
+     scales are incomparable and alpha would mean nothing. (b) z-score per list —
+     rejected because a chunk missing from one list has no natural value on that
+     scale. (c) **Min-max over each list's own returned candidates, missing = 0** —
+     chosen. It is the convex-combination form studied by Bruch et al. (2023) and has
+     one artefact, recorded in the module docstring and pinned by a test: a list's
+     lowest-scored candidate normalises to 0 and ties with everything the list did not
+     return. At depth 100 that is rank 100 on both sides, below every k this project
+     scores (max 20).
+  3. **Depth of each half.** Each sub-retriever contributes its top `retrieval_depth`
+     (100) chunks and the fused ranking is scored at the same depth — chosen over a
+     separate "fusion depth" knob, which would be one more parameter with no story
+     behind it. BM25 returns only chunks with a positive score, so its half can be
+     shorter than 100 on short queries; the fused list is then whatever the union is.
+  4. **Alpha semantics and grid.** `alpha` is the weight on **dense** (so 1.0 is the
+     dense control's ranking and 0.0 is BM25's). Grid 0.2 / 0.4 / 0.6 / 0.8 as the
+     story suggests; **not refined afterwards**, whatever the curve looks like (P2-09:
+     "report the curve as measured, including if it is flat").
+- **Decision:** `hybrid` is registered with `fusion: rrf | weighted`, `rrf_k`
+  (default 60), `alpha` (weighted only, refused for rrf), nested `dense:` and `bm25:`
+  blocks. Ties in the fused score break on `chunk_id` (MIS-003). The dense half owns
+  the index, so the run row's `retriever_meta` carries the dense index key and
+  embedder usage at top level (the cost bookkeeping reads them there), plus a
+  `fusion` block and per-run `fusion_stats` (mean Jaccard overlap between the two
+  candidate sets; how many context documents came from dense only / BM25 only / both).
+  The cost estimator and the on-disk index check ask the retriever *class* what it
+  embeds (`Retriever.embedding_params`) instead of matching the name "dense", so a
+  hybrid run is costed by its dense half and never read as free.
+- **Evidence:** No measured data; judgment call on definitions. The BM25 half is the
+  EXP-0004 configuration (k1 1.5, b 0.75) and the dense half is the promoted control,
+  so both endpoints of the alpha axis have measured runs.
+- **Consequences:** Five configs, `configs/exp_0014_hybrid_rrf_dev.yaml` and
+  `exp_0015..0018_hybrid_w{02,04,06,08}_dev.yaml`, each a one-dimension diff against
+  `promoted.yaml` (`rag promote` sees `retrieval` only). All on `dev`, Tier 1; the
+  runner refuses `dev_large` for this axis (DEC-050). `--estimate-only` on EXP-0014:
+  index cached, $0.0001 of query embeddings.
+- **Revisit if:** the weighted curve behaves asymmetrically at its ends — α=0.8 far
+  from the dense control while α=0.2 sits on BM25, or the reverse — which would point
+  at the normalisation rather than at the weight; or a later axis needs a third list
+  in the fusion (RRF takes any number; the weighted rule is written for two).

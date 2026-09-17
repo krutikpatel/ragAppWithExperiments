@@ -39,7 +39,7 @@ from rag.runner.cost import (
     format_run_estimate,
 )
 from rag.runner.promoted import check_split_policy, config_diff, load_promoted
-from rag.runner.registry import build_retriever
+from rag.runner.registry import build_retriever, retriever_class
 from rag.runner.store import ResultsStore
 from rag.runner.subsample import build_subsample
 
@@ -209,7 +209,7 @@ def _run(
     # project, so the index build is estimated before anything is spent.
     index_estimate = estimate_index_cost(
         retriever=config.retriever,
-        retriever_params=config.retriever_params,
+        retriever_params=retriever_class(config.retriever).embedding_params(config.retriever_params),
         corpus_words=sum(len(text.split()) for text in chunk_text.values()),
         index_exists=_dense_index_exists(config, index),
         n_questions=len(frame),
@@ -377,17 +377,18 @@ def _cost_estimate(config: RunConfig, frame, pricing: PricingTable) -> dict:
 
 def _dense_index_exists(config: RunConfig, index: ChunkIndex) -> bool:
     """Whether the dense index this config needs is already on disk — the difference
-    between a ~$0.03 run and a full-corpus embed (P2-06). True for other retrievers."""
-    if config.retriever != "dense":
-        return True
+    between a ~$0.03 run and a full-corpus embed (P2-06). True for retrievers that
+    embed nothing; a retriever that wraps a dense one (hybrid) is asked for its
+    embedder settings rather than matched by name."""
     from pathlib import Path
 
     from rag.embedding.base import EmbedderConfig, build_embedder
     from rag.paths import INDEXES_DIR
     from rag.retrieval.dense import VECTORS_FILE, index_key
+    from rag.runner.registry import retriever_class
 
-    params = config.retriever_params
-    if params.get("embedder") is not None:
+    params = retriever_class(config.retriever).embedding_params(config.retriever_params)
+    if params is None or params.get("embedder") is not None:
         return True
     embedder = build_embedder(
         params.get("embedding_backend", "openrouter"),

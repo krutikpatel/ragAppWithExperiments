@@ -1,0 +1,38 @@
+# EXP-0016 — Axis 3, run 3: weighted score fusion, alpha 0.4 (dense weight) (P2-09).
+#
+# Diff against configs/promoted.yaml (the dense control, EXP-0005): the retriever
+# only. The dense half is the promoted embedder, same index on disk (key
+# f0e720da2aa33751, qwen3 prefix, 4096-d — checked by --estimate-only); the sparse half is the EXP-0004
+# BM25 (Okapi k1 1.5, b 0.75). Each half contributes its top retrieval_depth (100)
+# chunks; fused ranking scored at the same depth; top_k 5 DISTINCT documents over a
+# 50-chunk pool (DEC-040). No re-index, no LLM calls. Estimated: query embeddings only.
+#
+# Split: dev ONLY (P2-04 / DEC-055 — dev_large is refused for this axis).
+# Compared against: promoted (dense control, 0.720 on this split) with rag compare;
+# and against EXP-0004 (sparse control, 0.410) for the "does fusion beat both
+# halves" question. Pre-registered expectations: docs/HYPOTHESES.md H-010..H-012.
+name: EXP-0016 hybrid weighted α=0.4 (dense weight) — qwen3-embedding-8b (DeepInfra) + BM25, fixed-600/100, top-5 distinct docs, pool 50, Tier 1, dev
+axis: retrieval_method
+split: dev
+eval_tier: tier1
+retriever: hybrid
+retriever_params:
+  fusion: weighted
+  alpha: 0.4
+  dense:
+    embedding_backend: openrouter
+    embedding_model: qwen/qwen3-embedding-8b
+    embedding_provider: DeepInfra
+    batch_size: 64
+  bm25:
+    k1: 1.5
+    b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

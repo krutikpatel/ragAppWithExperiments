@@ -209,3 +209,46 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   0.705 at 1024-d against bge-m3's 0.560 at the same width. `dev_large` identical
   (Δ +0.0002). The only significant movement was strict recall@1 on `dev_large`,
   −0.005 (p = 0.004). `run_20260917_071034_7a2d`, `run_20260917_085730_9ea7`.
+
+## H-010 — Fusion does not beat the dense control on `dev` at p < 0.05
+- **Date written:** 2026-09-17, before any Axis 3 run
+- **Source:** Claude.
+- **Hypothesis:** no hybrid configuration (EXP-0014 RRF, EXP-0015–0018 weighted)
+  clears DEC-055's bar against `promoted` on `dev` strict recall@5: every Δ has
+  p ≥ 0.05. Reasoning from measured data, not from the literature: H-001 found BM25
+  won **nine** questions against dense and lost seventy (EXP-0004 vs EXP-0005). Nine
+  is the ceiling on what fusion can recover from the sparse side; the bar needs
+  roughly fifteen net flips (DEC-055). Unless fusion also re-orders questions that
+  *both* halves already answer — possible, since strict recall@5 is decided by ranks
+  4–6 on collapsed questions — the arithmetic does not reach significance. If this is
+  wrong, the interesting number is how many of the gained questions were ones
+  neither half answered alone.
+- **Tested by:** `rag compare promoted <run>` on `dev` for each of the five runs.
+- **Resolution:** pending.
+
+## H-011 — The alpha curve rises with the dense weight and its ends bracket the two controls
+- **Date written:** 2026-09-17, before any Axis 3 run
+- **Source:** Claude.
+- **Hypothesis:** strict recall@5 on `dev` is monotone non-decreasing over
+  α = 0.2 → 0.4 → 0.6 → 0.8, with α=0.2 below the dense control (0.720) and above the
+  sparse control (0.410), and α=0.8 within 0.03 of the dense control. Reasoning: the
+  two halves are 0.305 apart on this split, so a weight that moves the ranking toward
+  the weaker half should cost recall roughly in proportion. A non-monotone curve — a
+  peak in the middle — would be the result worth having, because it would mean the
+  lexical signal is complementary on some questions rather than just weaker.
+- **Tested by:** the four weighted runs' strict recall@5, plus `rag compare` between
+  adjacent alphas for whether adjacent points differ at all.
+- **Resolution:** pending.
+
+## H-012 — Under RRF, BM25-only documents reach the five-document context on fewer than one question in ten
+- **Date written:** 2026-09-17, before any Axis 3 run
+- **Source:** Claude.
+- **Hypothesis:** in EXP-0014's `fusion_stats`, `context_docs_by_source.bm25_only`
+  is under 10% of context documents (fewer than 100 of ~1,000 across 200 questions),
+  and the mean candidate-set Jaccard overlap between the two halves' top-100 lists is
+  above 0.3. Reasoning: the corpus profile says the halves are looking at the same
+  6,221 short articles, and H-001's nine BM25 wins were exact product-name matches,
+  which dense also finds — just lower. If instead BM25-only documents are common in
+  the context, the lexical signal is contributing more than its solo recall suggests.
+- **Tested by:** `retriever_meta.fusion_stats` on the EXP-0014 run row.
+- **Resolution:** pending.

@@ -260,9 +260,26 @@ def test_index_build_dominates_when_the_index_is_not_cached():
                                index_exists=True, n_questions=200, pricing=TABLE)
     assert cold["index_usd"] == pytest.approx(2_250_000 * 1.27 / 1e6 * 0.01, abs=1e-4)
     assert warm["index_usd"] == 0.0 and warm["query_usd"] == cold["query_usd"] > 0
-    bm25 = estimate_index_cost(retriever="bm25", retriever_params={}, corpus_words=1, index_exists=False,
+    bm25 = estimate_index_cost(retriever="bm25", retriever_params=None, corpus_words=1, index_exists=False,
                                n_questions=1, pricing=TABLE)
     assert bm25["index_usd"] == 0.0
+
+
+def test_hybrid_is_costed_by_its_dense_half_not_read_as_free():
+    """P2-09: the estimator is keyed on what a retriever embeds, not on its name. A
+    hybrid config with a cold dense index is a full-corpus embed, like dense."""
+    from rag.runner.registry import retriever_class
+
+    dense = {"embedding_backend": "openrouter", "embedding_model": "qwen/qwen3-embedding-8b", "embedding_provider": "DeepInfra"}
+    hybrid_params = {"fusion": "rrf", "rrf_k": 60, "dense": dense, "bm25": {"k1": 1.5, "b": 0.75}}
+    embeds = retriever_class("hybrid").embedding_params(hybrid_params)
+    assert embeds == dense
+    cold = estimate_index_cost(retriever="hybrid", retriever_params=embeds, corpus_words=2_250_000,
+                               index_exists=False, n_questions=200, pricing=TABLE)
+    as_dense = estimate_index_cost(retriever="dense", retriever_params=dense, corpus_words=2_250_000,
+                                   index_exists=False, n_questions=200, pricing=TABLE)
+    assert cold["index_usd"] == as_dense["index_usd"] > 0
+    assert cold["query_usd"] == as_dense["query_usd"] > 0
 
 
 def test_unpriced_embedding_model_is_unavailable_and_gated():
