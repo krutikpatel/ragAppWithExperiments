@@ -1,0 +1,45 @@
+# EXP-0012 — OQ-026 probe: the dense control with NO query prefix.
+#
+# The qwen3 convention prefixes queries with "Instruct: Given a web search query,
+# retrieve relevant passages that answer the query\nQuery: ". All three Axis 2
+# candidates fixed the same 66 synthetic `feature_request` questions the control
+# misses (EXP-0009/0010/0011), which points at the control's query side, not at the
+# candidates. This run is the control with `prefix_convention: none`; passages are
+# unprefixed under both conventions, so only the query vectors change (the index is
+# rebuilt because the convention is part of the index key — DEC-041).
+#
+# DECISION CRITERIA, written before the run (Krutik, 2026-09-16):
+#   C1 (answered, $0): the three candidates fix the same questions — yes, 66 of 67.
+#   C2 "the prefix is the cause": on dev_large, strict recall@5 on the
+#       article_type:feature_request slice rises from 0.966 (EXP-0008) to >= 0.99
+#       with p < 0.05 by rag compare on that slice.
+#   C3 "it is not a trade": on dev (the deciding split, DEC-055), strict recall@5
+#       vs promoted is not significantly negative (paired test, one-sided harm p >= 0.05
+#       read from the CI: upper bound of Δ >= 0).
+#   Outcome table:  C2 & C3  -> prefix is the cause; the no-prefix control becomes a
+#                   promotion candidate ONLY via rag promote with dev deciding.
+#                   C2 & !C3 -> prefix trades synthetic feature_request hits for real
+#                   questions; control keeps the prefix; recorded as a finding.
+#                   !C2      -> the prefix is not the cause; OQ-026 stays open with the
+#                   next hypothesis (the "Request:" title template) noted.
+# Estimated cost: ~$0.031 index rebuild + $0.003 dev_large queries + $0.0001 dev.
+name: EXP-0012 dense control without query prefix — qwen3-embedding-8b (DeepInfra), prefix none, on dev
+axis: embedding
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+  prefix_convention: none
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

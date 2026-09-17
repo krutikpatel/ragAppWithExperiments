@@ -171,3 +171,20 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   another") was wrong: a dense model trained toward surface paraphrase is flattered by
   synthetic questions in exactly the way BM25 is. Recorded as the direct evidence for
   DEC-055.
+
+## H-008 — The qwen instruct prefix is why the control misses synthetic `feature_request` questions
+- **Date written:** 2026-09-16, before EXP-0012 ran
+- **Source:** Claude.
+- **Hypothesis:** with `prefix_convention: none`, the control's strict recall@5 on
+  `dev_large`'s `feature_request` slice rises from 0.966 to ≥ 0.99 (C2 in the config
+  header of `configs/exp_0012_qwen_noprefix_dev_large.yaml`). Reasoning: the prefix
+  instructs the model to find passages that *answer* the query; for "Can I do X?"
+  questions whose gold is a "Request: X" article (a feature that does not exist), the
+  answering passage is the how-to for the nearest existing feature — which is what the
+  control ranks first (66 of 66 common flips). Without the instruction the query
+  should sit closer to the request article's title wording.
+- **Also expected:** on `dev` (no feature-request gold documents) the change is within
+  noise either way — the prefix's value on real questions is the part I cannot guess.
+- **Tested by:** EXP-0012 against EXP-0008 (`dev_large`) and `promoted` (`dev`), per
+  the criteria C2/C3 in the config header.
+- **Resolution:** pending.

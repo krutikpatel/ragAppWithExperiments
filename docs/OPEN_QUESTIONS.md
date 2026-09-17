@@ -11,7 +11,12 @@ under `max` a document whose best chunk ranks 3rd can never reach rank 1; under
 `sum` it can, when several of its chunks match. 79 of 400 questions need 2-3 gold
 documents, where repeated weaker matches may be the signal.
 **Decided by:** strict recall@5 on the `n_gold_docs > 1` slice of `dev`, `max` vs
-`sum`, same index and seeds, ≥3 points difference. **Status:** open.
+`sum`, same index and seeds, ≥3 points difference. **Status:** **queued as EXP-0012** (Krutik, 2026-09-16), decision criteria C1–C3 written
+into `configs/exp_0012_qwen_noprefix_*.yaml` before the run. C1 answered at zero cost
+from the stored runs: **66 of the 67** `feature_request` flips are the same questions
+across EXP-0009, 0010 and 0011, out of 69 the control misses on that type; the
+control ranks the how-to article for the nearest *existing* feature first and the
+"Request:" article 6th–50th.
 
 ## OQ-002 — How much does `dev_large` leakage inflate lexical retrieval?
 Synthetic questions were generated from their gold article, so BM25 should be
