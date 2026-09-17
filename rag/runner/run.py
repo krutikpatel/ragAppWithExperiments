@@ -396,6 +396,7 @@ def _dense_index_exists(config: RunConfig, index: ChunkIndex) -> bool:
             revision=params.get("embedding_revision", ""),
             provider=params.get("embedding_provider", ""),
             prefix_convention=params.get("prefix_convention"),
+            dimensions=params.get("dimensions"),
         ),
     )
     key = index_key(
@@ -405,6 +406,7 @@ def _dense_index_exists(config: RunConfig, index: ChunkIndex) -> bool:
         model_id=embedder.model_id,
         revision=embedder.pinned_identity,
         prefix_convention=embedder.prefix.name,
+        dimensions=embedder.config.dimensions,
     )
     index_dir = Path(params["index_dir"]) if params.get("index_dir") else INDEXES_DIR / key
     return (index_dir / VECTORS_FILE).exists()

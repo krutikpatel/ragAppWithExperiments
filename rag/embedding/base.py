@@ -122,6 +122,11 @@ class EmbedderConfig:
     provider: str = ""
     max_attempts: int = 4
     backoff_s: float = 2.0
+    # openrouter only. Ask the provider for a truncated output (Matryoshka /
+    # `dimensions` in the request; OQ-025 showed it passes through). None = the
+    # model's native width. Part of the index key; the response length is asserted
+    # against it at the point of the call (MIS-006). P2-08 run 5.
+    dimensions: int | None = None
 
 
 class Embedder(ABC):
@@ -235,6 +240,7 @@ class OpenRouterEmbedder(Embedder):
                         "model": self.config.model,
                         "input": batch,
                         "provider": {"order": [self.config.provider], "allow_fallbacks": False},
+                        **({"dimensions": self.config.dimensions} if self.config.dimensions else {}),
                     },
                     timeout=self.config.timeout_s,
                 )
@@ -275,6 +281,13 @@ class OpenRouterEmbedder(Embedder):
             raise RuntimeError(
                 f"embeddings served by {served_by!r}, not the pinned {self.config.provider!r}"
             )
+        if self.config.dimensions and data and len(data[0]["embedding"]) != self.config.dimensions:
+            # A provider that ignores `dimensions` returns the native width; scoring
+            # that as if it were truncated would misattribute the result (MIS-005/006).
+            raise RuntimeError(
+                f"asked {self.config.provider!r} for {self.config.dimensions}-d vectors, got "
+                f"{len(data[0]['embedding'])}-d: `dimensions` is not honoured for {self.config.model!r}"
+            )
         self.usage.calls += 1
         usage = payload.get("usage", {})
         self.usage.prompt_tokens += int(usage.get("prompt_tokens", 0))
@@ -286,6 +299,7 @@ class OpenRouterEmbedder(Embedder):
     def provenance(self) -> dict[str, Any]:
         meta = super().provenance()
         meta["provider"] = self.config.provider
+        meta["dimensions"] = self.config.dimensions
         meta["usage"] = {
             "calls": self.usage.calls,
             "retries": self.usage.retries,

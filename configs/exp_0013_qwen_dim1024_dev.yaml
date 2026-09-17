@@ -1,0 +1,33 @@
+# EXP-0013 — Axis 2, run 5: dimension truncation on the control (P2-08).
+#
+# The promoted control (qwen3-embedding-8b, DeepInfra, qwen3 prefix) asked for
+# 1024-dimensional output instead of its native 4096. DeepInfra honours `dimensions`
+# for this model (probed 2026-09-17: 4096 -> 1024 -> 256 on request); the embedder
+# asserts the returned width. Why 1024: a quarter of native, and the same width as
+# bge-m3 (EXP-0010) — so "same dimension, different model" has a clean reference.
+# One reduced dimension only (Phase 2 rule 1: no grid).
+#
+# Framing, per P2-08: quality versus dimension, NOT cost. At 8,218 vectors the
+# storage saved is 134.6 MB -> ~34 MB and the query-time saving is unmeasurable;
+# the cost argument bites at a scale this project does not operate at. The
+# embedding bill is identical (same tokens). Estimated: ~$0.031 rebuild + $0.003.
+name: EXP-0013 dense control truncated to 1024-d — qwen3-embedding-8b (DeepInfra), on dev
+axis: embedding
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+  dimensions: 1024
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

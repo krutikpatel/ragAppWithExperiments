@@ -193,3 +193,16 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   the decisive one: removing the prefix cost 0.060 strict recall@5 on `dev`
   (p = 0.035), so "within noise either way" was **wrong** too. `run_20260917_050235_e588`,
   `run_20260917_070405_a562`.
+
+## H-009 — Truncating the control to 1024 dimensions costs less than bge-m3's 1024 dimensions did
+- **Date written:** 2026-09-17, before EXP-0013 ran
+- **Source:** Claude.
+- **Hypothesis:** the 1024-d control will be within noise of the 4096-d control on
+  `dev` strict recall@5 (|Δ| ≤ 0.02, p > 0.05), and far above bge-m3's 0.560 at the
+  same width. Reasoning: Qwen3-Embedding is trained with Matryoshka objectives so its
+  leading dimensions carry most of the ranking signal; bge-m3's deficit (EXP-0010) came
+  with the model, not the width. If instead the 1024-d control lands near 0.560, width
+  was the story all along and EXP-0010's conclusion needs rewriting.
+- **Tested by:** EXP-0013 vs `promoted` on `dev` (paired test), and vs EXP-0008 on
+  `dev_large`.
+- **Resolution:** pending.

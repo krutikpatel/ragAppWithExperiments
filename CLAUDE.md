@@ -444,7 +444,9 @@ rag/
   embedding/        base.py — Embedder interface with explicit input_type (query |
                     passage) and a per-family prefix table that REFUSES unknown
                     models; backends: sentence_transformers (local, pinned revision)
-                    and openrouter
+                    and openrouter. `dimensions` asks a hosted model for truncated
+                    output, is asserted on the response, and joins the index key
+                    (P2-08 run 5)
   reranking/        base.py — Reranker interface ONLY; a test fails if an
                     implementation appears without a story
 

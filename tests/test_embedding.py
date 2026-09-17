@@ -149,6 +149,25 @@ def test_index_key_is_a_function_of_the_provenance_tuple_only():
         ("revision", "def"), ("prefix_convention", "none"),
     ):
         assert index_key(**{**base, field: value}) != index_key(**base), field
+    # P2-08 run 5: a truncated output is a different index; unset leaves old keys alone.
+    assert index_key(**base, dimensions=None) == index_key(**base)
+    assert index_key(**base, dimensions=1024) != index_key(**base)
+
+
+def test_dimensions_are_requested_and_asserted():
+    """P2-08 run 5: `dimensions` goes into the request, and a provider that ignores it
+    is caught at the response rather than scored as a truncated index."""
+    from rag.embedding.base import OpenRouterEmbedder
+
+    embedder = OpenRouterEmbedder(
+        EmbedderConfig(model="qwen/qwen3-embedding-8b", provider="DeepInfra", dimensions=2)
+    )
+    assert embedder.provenance()["dimensions"] == 2
+    good = {"data": [{"index": 0, "embedding": [1.0, 0.0]}], "provider": "DeepInfra", "usage": {}}
+    assert embedder._parse(good, 1, 1) == [[1.0, 0.0]]
+    native = {"data": [{"index": 0, "embedding": [1.0, 0.0, 0.0, 0.0]}], "provider": "DeepInfra", "usage": {}}
+    with pytest.raises(RuntimeError, match="not honoured"):
+        embedder._parse(native, 1, 1)
 
 
 def test_index_builds_once_and_is_reused_from_cache(tmp_path):

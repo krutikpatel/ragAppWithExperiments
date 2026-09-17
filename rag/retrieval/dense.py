@@ -40,11 +40,17 @@ def index_key(
     model_id: str,
     revision: str,
     prefix_convention: str,
+    dimensions: int | None = None,
 ) -> str:
-    """The identity of a dense index. Deterministic in the P1-04 tuple and nothing else."""
-    return short_id(
-        corpus_hash, normalization_version, chunker_id, model_id, revision, prefix_convention, length=16
-    )
+    """The identity of a dense index. Deterministic in the P1-04 tuple and nothing else.
+
+    `dimensions` (P2-08 run 5) joins the tuple only when set, so every key built
+    before it existed is unchanged.
+    """
+    parts = [corpus_hash, normalization_version, chunker_id, model_id, revision, prefix_convention]
+    if dimensions:
+        parts.append(f"dim:{dimensions}")
+    return short_id(*parts, length=16)
 
 
 @register_retriever("dense")
@@ -64,6 +70,7 @@ class DenseRetriever(Retriever):
         batch_size: int = 64,
         device: str | None = None,
         max_seq_length: int | None = None,
+        dimensions: int | None = None,
         index_dir: Path | str | None = None,
         embedder: Any | None = None,
         **kwargs: Any,
@@ -84,6 +91,7 @@ class DenseRetriever(Retriever):
                 batch_size=batch_size,
                 device=device,
                 max_seq_length=max_seq_length,
+                dimensions=dimensions,
             ),
         )
         self.chunk_ids = sorted(chunk_text)
@@ -94,6 +102,7 @@ class DenseRetriever(Retriever):
             model_id=self.embedder.model_id,
             revision=self.embedder.pinned_identity,
             prefix_convention=self.embedder.prefix.name,
+            dimensions=self.embedder.config.dimensions,
         )
         self.index_dir = Path(index_dir) if index_dir else INDEXES_DIR / self.key
         self.vectors, self.index_meta = self._load_or_build(chunk_text)
