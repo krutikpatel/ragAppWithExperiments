@@ -76,6 +76,38 @@ Column notes:
   of EXP-0005 ranged 0.005 on strict recall@5 (OQ-023). Any dense delta at or under
   one question is within that.
 
+## Axis 2 scorecard — embeddings (P2-08, EXP-0008–0013)
+
+Five experiments against the promoted control (`qwen3-embedding-8b`, DeepInfra, 4096-d,
+`qwen3` prefix). `dev` decides (DEC-055); `dev_large` is the single-document direction
+check. Every retrieval delta is a paired test (DEC-047, seed 20260915). Total actual
+spend for the axis: **$1.17** over 11 runs (estimate $1.30).
+
+| EXP | Change vs control | `dev` strict R@5 (Δ, p) | `dev` nDCG@10 (Δ, p) | `dev` multi-doc R@5 | `dev_large` strict R@5 (Δ, p) | Index | Verdict |
+|---|---|---|---|---|---|---|---|
+| 0008 | — (control on `dev_large`) | 0.720 (be04) | 0.631 | 0.350 | **0.973** | cached | baseline |
+| 0009 | `text-embedding-3-large` (OpenAI), 3072-d | 0.715 (−0.005, 1.0) | 0.665 (+0.035, 0.07) | 0.300 | 0.982 (+0.0085, 0.0001; `feature_request` only) | $0.40, 101 MB | null |
+| 0010 | `bge-m3` (DeepInfra), 1024-d | **0.560 (−0.160, 0.0001)** | 0.504 (−0.127, 0.0001) | 0.225 | 0.978 (+0.005, 0.02) | $0.04, 34 MB | **negative; splits disagree** |
+| 0011 | `gemini-embedding-2` (AI Studio), 3072-d | 0.750 (+0.030, 0.41) | **0.697 (+0.066, 0.002)** | 0.375 | **0.988 (+0.015, 0.0001)** | $0.63, 101 MB | not promoted (DEC-055) |
+| 0012 | control, no query prefix (probe) | 0.660 (−0.060, 0.035) | 0.574 (−0.057, 0.0001) | 0.250 | 0.977 (+0.004, 0.03) | $0.03 rebuild | negative; prefix stays |
+| 0013 | control at 1024-d | 0.705 (−0.015, 0.55) | 0.630 (−0.001, 0.93) | 0.350 | 0.973 (+0.0002, 1.0) | $0.03, 34 MB | null |
+
+What the axis established, in order of how much it changes later axes:
+1. **`dev_large` cannot decide a dense-model comparison.** It has no multi-document
+   questions, sits at 0.973 for the control, and gave bge-m3 a significant gain while
+   `dev` gave it a 16-point loss (DEC-055, MIS-021).
+2. **Four fifths of every candidate's `dev_large` gain was one thing**: 66 synthetic
+   `feature_request` questions the control's answer-oriented query prefix mis-ranks.
+   Removing the prefix recovers 53 of them and loses 6 points on `dev` (EXP-0012).
+3. **No embedding model beats the control on `dev` at p < 0.05.** Gemini improves the
+   ordering inside the top five (nDCG +0.066, strict R@1 +0.085) without changing
+   which questions have every gold document there; that is filed for the reranking
+   axis (OQ-027).
+4. **Width is not the lever at this scale**: a quarter of the dimensions is a null
+   (EXP-0013), and the model that lost 16 points was not losing them to width.
+5. **The multi-document slice did not move for any candidate** (0.225–0.375 on n=40, all
+   p ≥ 0.12). The organizing question is untouched by the embedding axis.
+
 ## Negative results (P2-17)
 
 Standing section, populated as Phase 2 runs. Each entry: what was tried, the measured

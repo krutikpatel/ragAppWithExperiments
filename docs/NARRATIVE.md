@@ -245,6 +245,45 @@ has a minimum detectable difference of 0.112 at n=26; small slice effects are no
 readable there. The full table is the standing reference every later scorecard
 carries (P1-11).
 
+### Embeddings: four models, one control kept (EXP-0008 to EXP-0013)
+
+Before the first Phase 2 axis ran I built the discipline it needed: a paired test for
+deterministic metrics (`rag compare`, DEC-047), noise-floor labels for judged ones
+(DEC-048), a generation cache for any model call inside retrieval (DEC-049), a
+committed "current best" that only a checked promotion can move (DEC-051), and a cost
+gate that estimates the corpus-embedding bill before a byte is sent (DEC-052). The
+first axis then spent most of its value on two things I had not planned to measure.
+
+The plan was to decide embedding models on `dev_large`, 6,221 questions, for
+statistical power, and confirm on the 200-question `dev`. The control's first run on
+`dev_large` showed the split had no multi-document questions at all and the control
+already at 0.973 strict recall@5 there (EXP-0008). I had encoded a decision rule
+without counting the slice it was for — the first item on my own preflight list
+(MIS-021). The second candidate made it worse than an oversight: `bge-m3` gained on
+`dev_large` (+0.005, p = 0.019) and lost 40 of 200 questions on `dev` (−0.160,
+p = 0.0001; EXP-0010). Synthetic questions reuse their article's wording, and a model
+that tracks wording is flattered by them. Krutik moved the decision to `dev` (DEC-055).
+
+On `dev` no model beat the control. `text-embedding-3-large` was a null (−0.005,
+p = 1.0; EXP-0009). `gemini-embedding-2` was the only one to improve ordinary articles
+on `dev_large` and it lifted nDCG@10 on `dev` by 0.066 (p = 0.002), but changed which
+questions had every gold document in the top five by six of two hundred (p = 0.41;
+EXP-0011). Under the new rule that is "no measurable difference", and I filed the
+ordering gain for the reranking axis rather than pay 20x per token for it (OQ-027).
+Truncating the control to a quarter of its width was a null on both splits
+(EXP-0013), which also settled that `bge-m3`'s deficit was the model, not its 1024
+dimensions.
+
+The one finding that changed how I read the others came from a probe. All three
+candidates had fixed the same 66 synthetic questions — "Can I do X?" questions whose
+gold is a *Request:* article for a feature that does not exist, where the control
+returns the how-to for the nearest feature that does. The control's query prefix tells
+the model to retrieve passages that *answer* the query. Removing it recovered 53 of the
+66 on `dev_large` and cost six points of strict recall@5 on `dev` (p = 0.035;
+EXP-0012). So four fifths of every candidate's apparent gain on the large split was the
+absence of an instruction that is worth six points on real questions. The prefix
+stayed; the axis closed with the control unchanged and $1.17 spent.
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control

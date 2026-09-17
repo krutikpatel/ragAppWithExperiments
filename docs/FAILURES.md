@@ -104,6 +104,38 @@ to prompt `v2` (DEC-042 freezes `v1`).
 
 ---
 
+### F8 — Gold is a "Request:" article; the retriever returns the how-to for the nearest existing feature
+Synthetic `dev_large` questions of the form "Can I do X?" whose gold document is a
+feature-request article (*Wix Editor Request: Uploading XML Files*). The control ranks
+the how-to for the closest *existing* feature first (*Uploading Documents (.pdf, .doc…)*)
+and the request article 6th–50th. Stage: `retrieval`; arguably `label` — which of the
+two an assistant should surface is not something the label decides. 69 questions in
+the control; every Axis 2 candidate without an answer-oriented query prefix fixes ~66
+of them, and the control without its prefix fixes 53 (EXP-0012). Only exists on
+`dev_large`: `dev` has no feature-request gold documents.
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0008 | "Can I upload XML files in the Wix Editor?" | *Wix Editor Request: Uploading XML Files* | rank 29; top-1 *Uploading Documents (.pdf, .doc, .xls…)* | EXP-0009/0010/0011 (all), EXP-0012 (prefix off) |
+| EXP-0008 | "Can I receive form submission notifications in Wix Inbox using Wix Forms?" | *Wix Forms Request: Receiving Form Submission Notifications…* | rank 50; top-1 *Choosing Who Gets Notified About Form Submissions* | same |
+| EXP-0008 | "Can I customize email receipts in Wix Stores POS?" | *Wix Stores POS Request: Customizing Email Receipts* | rank 10; top-1 *Wix Mobile POS: Customizing Receipts* | same |
+
+### F9 — Terse or indirect user phrasing; gold slips from rank 3–5 to 6–15
+Short `dev` questions that name the goal but not the feature (*"i wish to cancel a
+plan"*, *"a button that people can click and it will reveal info"*). The control has
+the gold just inside the top five; any perturbation of the query side — removing the
+instruct prefix (EXP-0012, −0.122 on short questions), a smaller model (EXP-0010,
+−0.230 on short), truncation (EXP-0013, −0.054 on short) — pushes it just outside.
+Stage: `retrieval`. The most fragile slice on `dev`, and the one where the query
+instruction earns its keep.
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0012 | "i wish to cancel a plan" | *Canceling a Wix Premium or Studio Plan* (control rank 3) | rank 11 without the prefix | keeping the prefix |
+| EXP-0012 | "I want to use a button that people can click and it will reveal info…" | *Adding and Setting Up Collapsible Text* (rank 5) | rank 15 | keeping the prefix |
+| EXP-0010 | "How to make the published changes draft?" | *Saving, Previewing and Publishing Your Site* (rank 5) | rank 48 under bge-m3 | — |
+| EXP-0013 | "How do I get notified of purchases" | gold at rank 4 | rank 11 at 1024-d | — |
+
 ## Counts by run
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
