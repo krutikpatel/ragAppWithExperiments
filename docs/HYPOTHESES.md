@@ -187,4 +187,9 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   noise either way — the prefix's value on real questions is the part I cannot guess.
 - **Tested by:** EXP-0012 against EXP-0008 (`dev_large`) and `promoted` (`dev`), per
   the criteria C2/C3 in the config header.
-- **Resolution:** pending.
+- **Resolution:** **wrong by the pre-registered threshold, right in direction.** The
+  slice rose 0.966 → 0.988 (p = 0.0001; 53 of the 67 questions), not to ≥ 0.99 — the
+  prefix is most of the cause, not all of it. The part I said I could not guess was
+  the decisive one: removing the prefix cost 0.060 strict recall@5 on `dev`
+  (p = 0.035), so "within noise either way" was **wrong** too. `run_20260917_050235_e588`,
+  `run_20260917_070405_a562`.

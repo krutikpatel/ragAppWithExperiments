@@ -17,6 +17,14 @@ from the stored runs: **66 of the 67** `feature_request` flips are the same ques
 across EXP-0009, 0010 and 0011, out of 69 the control misses on that type; the
 control ranks the how-to article for the nearest *existing* feature first and the
 "Request:" article 6th–50th.
+**Answered 2026-09-17 by EXP-0012, mostly.** Without the prefix the slice reaches
+0.988 (53 of the 67; C2's 0.99 threshold not met) and `dev` loses 0.060 (C3 fails):
+the instruct prefix is the main cause of the synthetic `feature_request` misses and is
+worth six points on real questions, so it stays. Residual: 16 `feature_request` misses
+the prefix does not explain — next hypothesis is the "Request:" title template; a
+query-side-only probe would not settle it, since the candidates that reach 0.999 differ
+in the passage side too. **Status: answered for the decision; residual open, low
+priority.**
 
 ## OQ-002 — How much does `dev_large` leakage inflate lexical retrieval?
 Synthetic questions were generated from their gold article, so BM25 should be
@@ -299,6 +307,11 @@ same config are two different families.
 more runs (P1-11, DEC-046) on the sub100: top-5 sets identical to run 1 on 93 and 95 of
 100; strict recall@5 range 0.01, @3/@10/@20 identical. Consistent with the first
 measurement.
+**Index side answered 2026-09-17 (EXP-0012):** a second DeepInfra build of the same
+8,218 passages (same 3,125,318 tokens) reproduced 4,816 vectors byte-for-byte and the
+rest to cosine ≥ 0.99977, none below 0.999. Not byte-deterministic; indistinguishable
+for any metric here. Two builds of one config are one comparison family. The query-side
+floor (0.012 on n=100) remains the binding one. **Status: answered.**
 
 ---
 

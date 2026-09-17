@@ -20,6 +20,8 @@ produced one.
 | EXP-0010 | `run_20260916_104021_e4ee` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (0.720): **Δ −0.160, CI [−0.225, −0.095], p=0.0001** (8 gained / **40 lost**); every slice down; multi-doc nDCG −0.209. **Splits disagree in direction** (DEC-055). **Negative; not promoted** | **0.560** | 0.640 | 0.504 | 0.461 (n=160) | — | 1491 | 0.0000002 | VALID | [→](experiments/EXP-0010.md) |
 | EXP-0011 | `run_20260916_104407_1cb0` | 2026-09-16 | embedding | `google/gemini-embedding-2` (Google AI Studio), 3072-d, symmetric (OQ-025), on `dev_large`: **+0.0153 vs EXP-0008, p=0.0001** — `article` +0.007 (p=0.003) **and** `feature_request` +0.033. strict@1 +0.055. Index $0.63, 249 s | **0.988** | 0.988 | 0.958 | 0.946 (n=6,221) | — | 613 | 0.0000036 | VALID | [→](experiments/EXP-0011.md) |
 | EXP-0011 | `run_20260916_113159_79c4` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (0.720): **Δ +0.030, CI [−0.030, +0.090], p=0.41** (22 gained / 16 lost); strict@1 +0.085 (p=0.02), **nDCG@10 +0.066 (p=0.002)**; multi-doc strict +0.025 (7/6), loose 0.85→0.95. **Not promoted under DEC-055** (`dev` decides; p=0.41). Passed DEC-050's superseded rule | 0.750 | 0.865 | 0.697 | 0.650 (n=160) | — | 475 | 0.0000036 | VALID | [→](experiments/EXP-0011.md) |
+| EXP-0012 | `run_20260917_050235_e588` | 2026-09-17 | embedding (probe) | **control without the qwen3 query prefix** (OQ-026), on `dev_large`: +0.004 (p=0.03); `feature_request` 0.966→**0.988** (p=0.0001; pre-registered C2 threshold 0.99 **not met**); `article` −0.005 (p=0.025), @1 −0.023 (p=0.0001). Index rebuilt: 59% of vectors byte-identical to EXP-0005's (OQ-023 index side) | 0.977 | 0.977 | 0.927 | 0.907 (n=6,221) | — | 3310 | 0.0000004 | VALID | [→](experiments/EXP-0012.md) |
+| EXP-0012 | `run_20260917_070405_a562` | 2026-09-17 | embedding (probe) | same, on **`dev`** vs promoted (0.720): **Δ −0.060, CI [−0.110, −0.010], p=0.035** (8 gained / 20 lost); nDCG −0.057 (p=0.0001); multi-doc nDCG −0.093 (p=0.007). **C3 fails; the prefix stays** | **0.660** | 0.755 | 0.574 | 0.516 (n=160) | — | 2052 | 0.0000002 | VALID | [→](experiments/EXP-0012.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -102,6 +104,14 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   query, and a Google-only dependency in place of open weights. **Decision: control
   retained under DEC-055; the ranking gain is filed for the reranking axis (OQ-027)
   — a better-ordered top 5 is what a reranker would otherwise have to buy.**
+- **EXP-0012 — the control without its qwen3 instruct prefix (OQ-026).** On `dev`
+  strict recall@5 0.720 → 0.660, Δ −0.060, 95% CI [−0.110, −0.010], p = 0.035; nDCG@10
+  −0.057 (p = 0.0001). On `dev_large` the `feature_request` slice rose 0.966 → 0.988
+  (p = 0.0001) but short of the pre-registered 0.99, while ordinary articles fell
+  (−0.005 at k=5, −0.023 at k=1). Cost: nothing either way (query-side only).
+  **Decision: the prefix stays. Finding: about 4/5 of every Axis 2 candidate's
+  `dev_large` gain was the absence of an answer-oriented query instruction, not a
+  better model.**
 
 ## Phase 1 scorecard — the controls (P1-08)
 
