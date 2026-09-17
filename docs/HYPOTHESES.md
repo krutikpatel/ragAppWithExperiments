@@ -205,4 +205,7 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   was the story all along and EXP-0010's conclusion needs rewriting.
 - **Tested by:** EXP-0013 vs `promoted` on `dev` (paired test), and vs EXP-0008 on
   `dev_large`.
-- **Resolution:** pending.
+- **Resolution:** **confirmed.** `dev` Δ −0.015 (p = 0.55), inside the |Δ| ≤ 0.02 bound;
+  0.705 at 1024-d against bge-m3's 0.560 at the same width. `dev_large` identical
+  (Δ +0.0002). The only significant movement was strict recall@1 on `dev_large`,
+  −0.005 (p = 0.004). `run_20260917_071034_7a2d`, `run_20260917_085730_9ea7`.

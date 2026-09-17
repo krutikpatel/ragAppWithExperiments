@@ -22,6 +22,8 @@ produced one.
 | EXP-0011 | `run_20260916_113159_79c4` | 2026-09-16 | embedding | same, on **`dev`** vs promoted (0.720): **Δ +0.030, CI [−0.030, +0.090], p=0.41** (22 gained / 16 lost); strict@1 +0.085 (p=0.02), **nDCG@10 +0.066 (p=0.002)**; multi-doc strict +0.025 (7/6), loose 0.85→0.95. **Not promoted under DEC-055** (`dev` decides; p=0.41). Passed DEC-050's superseded rule | 0.750 | 0.865 | 0.697 | 0.650 (n=160) | — | 475 | 0.0000036 | VALID | [→](experiments/EXP-0011.md) |
 | EXP-0012 | `run_20260917_050235_e588` | 2026-09-17 | embedding (probe) | **control without the qwen3 query prefix** (OQ-026), on `dev_large`: +0.004 (p=0.03); `feature_request` 0.966→**0.988** (p=0.0001; pre-registered C2 threshold 0.99 **not met**); `article` −0.005 (p=0.025), @1 −0.023 (p=0.0001). Index rebuilt: 59% of vectors byte-identical to EXP-0005's (OQ-023 index side) | 0.977 | 0.977 | 0.927 | 0.907 (n=6,221) | — | 3310 | 0.0000004 | VALID | [→](experiments/EXP-0012.md) |
 | EXP-0012 | `run_20260917_070405_a562` | 2026-09-17 | embedding (probe) | same, on **`dev`** vs promoted (0.720): **Δ −0.060, CI [−0.110, −0.010], p=0.035** (8 gained / 20 lost); nDCG −0.057 (p=0.0001); multi-doc nDCG −0.093 (p=0.007). **C3 fails; the prefix stays** | **0.660** | 0.755 | 0.574 | 0.516 (n=160) | — | 2052 | 0.0000002 | VALID | [→](experiments/EXP-0012.md) |
+| EXP-0013 | `run_20260917_071034_7a2d` | 2026-09-17 | embedding | **control truncated to 1024-d** (`dimensions: 1024`, DeepInfra honours it), on `dev_large`: Δ +0.0002 vs EXP-0008, p=1.0 (23/22); strict@1 −0.005 (p=0.004). Index 33.7 MB, same $0.031 build | 0.973 | 0.973 | 0.925 | 0.905 (n=6,221) | — | 3989 | 0.0000004 | VALID | [→](experiments/EXP-0013.md) |
+| EXP-0013 | `run_20260917_085730_9ea7` | 2026-09-17 | embedding | same, on **`dev`** vs promoted (0.720): **Δ −0.015, CI [−0.050, +0.015], p=0.55** (4 gained / 7 lost); nDCG −0.001; multi-doc unchanged (1/1). Same width as bge-m3, 0.705 vs its 0.560. **No measurable difference; 4096-d stays** | 0.705 | 0.800 | 0.630 | 0.575 (n=160) | — | 489 | 0.0000004 | VALID | [→](experiments/EXP-0013.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -112,6 +114,13 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   **Decision: the prefix stays. Finding: about 4/5 of every Axis 2 candidate's
   `dev_large` gain was the absence of an answer-oriented query instruction, not a
   better model.**
+- **EXP-0013 — the control at 1024 of its 4096 dimensions.** `dev` strict recall@5
+  0.720 → 0.705, Δ −0.015, 95% CI [−0.050, +0.015], p = 0.55 (4 gained / 7 lost);
+  nDCG@10 −0.001; `dev_large` strict recall@5 identical (p = 1.0). What it would have
+  saved: 100 MB of index and nothing on the embedding bill — a saving that does not
+  register at 8,218 vectors. **Decision: 4096-d retained (no reason to change a
+  control for a null); the null itself is the finding — width is not what separated
+  bge-m3 (0.560 at 1024-d) from the control (0.705 at 1024-d).**
 
 ## Phase 1 scorecard — the controls (P1-08)
 
