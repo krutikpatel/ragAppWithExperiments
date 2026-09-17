@@ -251,4 +251,9 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   which dense also finds — just lower. If instead BM25-only documents are common in
   the context, the lexical signal is contributing more than its solo recall suggests.
 - **Tested by:** `retriever_meta.fusion_stats` on the EXP-0014 run row.
-- **Resolution:** pending.
+- **Resolution:** **half wrong.** BM25-only context documents: 1 of 1,000 (the
+  "under 10%" half holds — but by a mechanism the hypothesis did not name: under RRF
+  a document in one list only is out-scored by almost anything in both, so 999 of
+  1,000 context documents came from the intersection). Mean candidate Jaccard:
+  **0.196, not above 0.3** — the two halves' top-100 lists share about a fifth of
+  their chunks. `run_20260917_174747_7c9f`.
