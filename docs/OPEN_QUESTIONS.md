@@ -385,3 +385,30 @@ of the reranker matters.
 over the gemini index (the index is cached; ~$0.001 of queries plus rerank cost) and
 compare nDCG@10 and strict recall@1 on `dev` by paired test.
 **Status:** open — queued for Axis 5.
+
+## OQ-028 — Is the α=0.8 re-ordering worth anything once a reranker is in the loop?
+The sibling of OQ-027. EXP-0018 moved ten questions and netted one; its six gains were
+documents dense had at rank 6–9 and BM25 at 1–7, pulled inside the top five. A reranker
+over a 50-chunk pool re-orders exactly that region. If the reranker recovers the same
+six from the dense pool, the lexical half buys nothing; if it does not — because the
+reranker, like dense, prefers the paraphrase over the exact term — a lexical prior
+upstream of the reranker is a cheap second signal.
+**Decided by:** in Axis 5 (P2-10), run the winning reranker over the dense control's
+pool and over the α=0.8 hybrid's pool (both indexes cached; rerank cost only) and
+compare strict recall@5 on `dev` by paired test, reading the ten EXP-0018 flips
+individually.
+**Status:** open — queued for Axis 5.
+
+## OQ-029 — Would a stronger lexical half change the fusion verdict?
+Axis 3 fused dense with the Phase 1 BM25: lowercase `[a-z0-9]+` tokens, no stemming,
+no stopwords, Okapi defaults (P0-13: "the dumbest thing that works, on purpose"). 22 of RRF's 38 losses had the gold
+absent from BM25's top 100 (EXP-0014); a BM25 that returned those documents anywhere in
+its list would change RRF's arithmetic and the whole low-α end of the curve. Whether
+stemming or a title-boost would do that is not known — the sparse control was never
+tuned, on purpose, and DEC-056 fixed the lexical half as EXP-0004's for comparability.
+**Decided by:** count, from the stored EXP-0004 ranking, how many of the 22 absent
+gold documents contain a stemmed form of a query term (zero cost); if most do, one run
+of RRF over a stemmed BM25 on `dev` (new sparse control first, then the fusion) decides
+by paired test against EXP-0014. Not queued: the axis is closed and the result would
+be a new comparison family for the sparse side.
+**Status:** open.

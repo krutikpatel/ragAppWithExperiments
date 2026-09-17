@@ -136,11 +136,55 @@ instruction earns its keep.
 | EXP-0010 | "How to make the published changes draft?" | *Saving, Previewing and Publishing Your Site* (rank 5) | rank 48 under bge-m3 | — |
 | EXP-0013 | "How do I get notified of purchases" | gold at rank 4 | rank 11 at 1024-d | — |
 
+### F10 — Exact-term query; dense has the gold at rank 6–33 while BM25 has it at 1–5
+The nine questions BM25 won in Phase 1 (H-001), seen again from the fusion side. The
+query carries a product term or a phrase the gold article's title repeats nearly
+verbatim (*PDF*, *header … scrolling*, *login … website designer*); dense places the
+article inside its top 100 but below five near-paraphrases, and BM25 places it first
+or second. Stage: `retrieval` (ranking, not recall — the gold is in the candidate
+pool). Every hybrid setting in Axis 3 recovered some of these (3 at α=0.8, 7 at
+α=0.6, 9 under RRF) and nothing recovers them without paying elsewhere (EXP-0014–0018).
+Under the promoted dense control they remain misses.
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0005 (control) | "I want to know how to add a full PDF to my portfolio site" | gold at BM25 rank 1 | dense rank 9 | hybrid at any α (EXP-0018: rank 1) — not promoted |
+| EXP-0005 (control) | "I want to change the header background to black when scrolling in Wix Editor." | BM25 rank 1 | dense rank 8 | hybrid α=0.8: rank 2 — not promoted |
+| EXP-0005 (control) | "do I have to give my login to a website designer to work on my site" | BM25 rank 2 | dense rank 33 | RRF: rank 4 (EXP-0014); α=0.8: still a miss |
+| EXP-0005 (control) | "I need help with setting up two different emails on my website…" | BM25 rank 2 | dense rank 19 | α=0.6: rank 4; α=0.8: still a miss |
+
+### F11 — Consensus fusion demotes a gold document the lexical half never returned
+A failure of the **rejected** hybrid configurations, recorded because it is the
+mechanism behind the axis's negatives and would recur in any deployment that fuses by
+rank. Under RRF (EXP-0014) and weighted fusion at α ≤ 0.4 (EXP-0015/0016), a document
+dense ranks first can score below any document both lists agree on, because the
+missing list contributes nothing. 22 of RRF's 38 lost questions had the gold absent
+from BM25's top 100; the other 16 had it at BM25 rank 16–65. Stage: `retrieval`
+(fusion). At α=0.6 the same documents land at fused rank 6–10 (EXP-0017); at α=0.8
+they stay in the top five except for four rank-5 → rank-6 cases (EXP-0018).
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0014 (RRF) | "how to add more static pages to a Wix website" | gold at dense rank 1; BM25 absent | RRF rank 20 | α=0.8 (rank stays 1); i.e. not fusing by rank |
+| EXP-0014 (RRF) | "how can I find my domain information purchased from Wix" | dense 1; BM25 absent | RRF rank 36 | α=0.8 |
+| EXP-0014 (RRF) | "What should I do if I'm having issues making a payment for a Wix service?" | dense 1; BM25 absent | RRF rank 29 | α=0.8 |
+| EXP-0017 (α=0.6) | "Im interested in finding a Wix Partner to help redesign and update my existing website." | dense 3; BM25 absent | fused rank 6 | α=0.8 |
+| EXP-0018 (α=0.8) | "How to make the published changes draft?" | dense 5; BM25 65 | fused rank 6 | — (also F9) |
+
 ## Counts by run
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
 |---|---|---|---|---|---|---|---|
 | EXP-0006 (dev sub100) | 30 / 33 | — | 2 / 67 | not swept | 7 / 21 (2 read) | not swept | 0 |
 | EXP-0007 (unanswerable) | — | 12 / 45 | — | — | — | 7 / 33 (v1) → 0 (v2) | 2 / 45 |
+
+Retrieval-only categories (F8–F11) are counted from `rag diff` flips, not sampled:
+
+| Run | F10 exact-term, BM25 rank ≤5 / dense 6–33 | F11 gold demoted by fusion (lost vs dense) |
+|---|---|---|
+| EXP-0014 (RRF) | 9 recovered of 9 | 38 (22 with gold absent from BM25's top 100) |
+| EXP-0016 (α=0.4) | — (14 gained, not read one by one) | 40 |
+| EXP-0017 (α=0.6) | 7 recovered | 16 (8 absent from BM25) |
+| EXP-0018 (α=0.8) | 3 recovered | 4 (all rank 5 → 6) |
 
 "Not swept" means the category was found by reading a sample, not counted over the run.

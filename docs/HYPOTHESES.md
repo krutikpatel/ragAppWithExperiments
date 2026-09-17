@@ -224,7 +224,15 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   wrong, the interesting number is how many of the gained questions were ones
   neither half answered alone.
 - **Tested by:** `rag compare promoted <run>` on `dev` for each of the five runs.
-- **Resolution:** pending.
+- **Resolution:** **confirmed.** RRF p = 0.0012 (negative), α=0.2 p = 0.0001 (negative),
+  α=0.4 p = 0.0006 (negative), α=0.6 p = 0.72, α=0.8 p = 0.75 — no hybrid clears the
+  bar. The reasoning was half right: the gains from the lexical side were 6–14
+  questions at every setting (RRF 14, α=0.6 13, α=0.8 6), and 5 of RRF's 14 were
+  questions neither half answered alone — the "unless" clause happened, but on five
+  questions. What the hypothesis did not anticipate was the size of the *losses* at
+  low α and under RRF (38–57), which made three of the five runs significantly
+  negative rather than null. `run_20260917_174747_7c9f`, `…_181731_627b`,
+  `…_183840_42f5`, `…_184010_ae88`, `…_184123_a6e3`.
 
 ## H-011 — The alpha curve rises with the dense weight and its ends bracket the two controls
 - **Date written:** 2026-09-17, before any Axis 3 run
@@ -238,7 +246,13 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   lexical signal is complementary on some questions rather than just weaker.
 - **Tested by:** the four weighted runs' strict recall@5, plus `rag compare` between
   adjacent alphas for whether adjacent points differ at all.
-- **Resolution:** pending.
+- **Resolution:** **confirmed** on every clause. 0.495 → 0.590 → 0.705 → 0.730,
+  monotone; α=0.2 is above BM25 (0.410, +0.085, p = 0.0001) and below dense (0.720);
+  α=0.8 is +0.010 from dense, inside the 0.03 bound. Adjacent steps: +0.095
+  (p = 0.0001), +0.115 (p = 0.0002), +0.025 (p = 0.36) — the curve flattens between
+  0.6 and 0.8. No peak in the middle: the lexical signal is weaker, not complementary,
+  at the document level on this split. `run_20260917_181731_627b`, `…_183840_42f5`,
+  `…_184010_ae88`, `…_184123_a6e3`.
 
 ## H-012 — Under RRF, BM25-only documents reach the five-document context on fewer than one question in ten
 - **Date written:** 2026-09-17, before any Axis 3 run

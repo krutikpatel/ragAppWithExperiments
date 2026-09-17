@@ -284,6 +284,46 @@ EXP-0012). So four fifths of every candidate's apparent gain on the large split 
 absence of an instruction that is worth six points on real questions. The prefix
 stayed; the axis closed with the control unchanged and $1.17 spent.
 
+### Retrieval method: RRF, then a four-point alpha curve (EXP-0014 to EXP-0018)
+
+The Phase 1 handover had said this corpus favours lexical matching — enterprise
+knowledge-base text full of exact product names — and the dense-versus-BM25 run had
+narrowed that to nine questions BM25 won and seventy it lost (EXP-0005). The
+retrieval-method axis asked whether fusing the two rankings could keep the nine
+without giving back the seventy. It is the cheapest axis in the program: no
+re-index, no model calls, $0.00008 a run.
+
+I built one hybrid retriever with two fusion rules and fixed their definitions before
+running anything (DEC-056): Reciprocal Rank Fusion at the paper's k = 60, and a
+weighted sum of min-max-normalised scores with `alpha` on the dense side, swept at
+0.2 / 0.4 / 0.6 / 0.8 and not refined afterwards. I also wrote down what I expected
+(H-010 to H-012): no hybrid would clear the paired test, the curve would rise with
+the dense weight, and BM25-only documents would rarely reach the context.
+
+RRF lost twelve points of strict recall@5 (0.720 → 0.600, p = 0.0012; EXP-0014). The
+reason was legible in the ranks: 22 of the 38 questions it lost had a gold document
+that BM25 did not return in its top hundred at all, and under RRF a document in one
+list scores below almost anything in both. RRF is a consensus rule; it rewards
+agreement, and on this corpus the two retrievers agree on about a fifth of their
+candidates. It never lost a question BM25 had (38 gained, 0 lost against the sparse
+control), which is the shape of a technique for adding dense to a lexical system, not
+the other way round.
+
+The alpha curve was monotone: 0.495, 0.590, 0.705, 0.730 against dense's 0.720
+(EXP-0015 to EXP-0018). Its low end sat just above BM25, the middle two points
+reproduced RRF (α = 0.4 and RRF agree on 190 of 200 questions), and the top two were
+inside noise — α = 0.8 was six questions gained, four lost, p = 0.75, and `rag
+promote` refused it. At that weight the lexical half could not introduce a document
+dense had not already returned; every gain was a re-ordering of dense's ranks six to
+nine, and every loss was a rank-five document nudged to six. The multi-document slice
+did not move at any point.
+
+So the handover's premise was right about the corpus and wrong about what it buys:
+exact product names make BM25 a strong competitor on a dozen individual questions and
+a weak retriever overall, and the fusion weight large enough to recover the dozen is
+the weight that starts losing the seventy. I recorded the axis as five negatives and
+nulls, kept the dense control, and spent under a cent.
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control
@@ -296,11 +336,15 @@ latency:
 | Chunking 512/0 → 600/100 (BM25) | 0.405 → 0.410 | +0.005 (1 question) | 0 | — | $0 | EXP-0003 vs EXP-0001 |
 | Whole documents instead of 512-word chunks (BM25) | 0.405 → 0.410 | +0.005 | 0 | — | $0 | EXP-0002 vs EXP-0001 |
 | Five distinct documents instead of five chunks | 0.410 → 0.410 | 0 (identical by construction) | 0 | — | $0 | EXP-0004 vs EXP-0003 |
+| Hybrid dense + BM25, weighted α=0.8 (best of five fusion settings) | 0.720 → 0.730 | +0.010 vs dense control (6 / 4; CI [−0.020, +0.040], p = 0.75) | — | 635 ms → 625 ms | $0 extra | EXP-0018 vs EXP-0005 |
+| Hybrid dense + BM25, RRF k=60 | 0.720 → 0.600 | **−0.120** vs dense control (14 / 38; p = 0.0012) | — | — | $0 extra | EXP-0014 vs EXP-0005 |
 
 One thing moved: the retriever. Everything on the chunking axis was within one
-question, and the document-level walk changed what a generator sees on 62 of 200
-questions without changing a retrieval number. No generation technique has been
-compared yet — the Tier 2 rows are the control, not a treatment.
+question, the document-level walk changed what a generator sees on 62 of 200
+questions without changing a retrieval number, the embedding axis kept its control
+(EXP-0008 to EXP-0013), and the retrieval-method axis ranged from a null to a
+twelve-point loss (EXP-0014 to EXP-0018). No generation technique has been compared
+yet — the Tier 2 rows are the control, not a treatment.
 
 ## 6. What did not work, and what that suggests
 
@@ -326,6 +370,16 @@ dense won every slice by 0.175 to 0.371 and lost nine individual questions. What
 survived of the premise is those nine — short questions carrying one exact product
 term. Whether a hybrid recovers them without losing the seventy is exactly the kind of
 question that gets a run, not a guess (OQ-001's family).
+
+**Hybrid retrieval, both ways.** The run answered it: RRF recovered fourteen questions
+and lost thirty-eight (−0.120, p = 0.0012; EXP-0014), and the weighted curve never
+separated from dense at any α (best +0.010, p = 0.75; EXP-0018). What that suggests
+is a property of the corpus rather than of fusion: when one retriever is thirty points
+ahead of the other, the questions the weaker one wins are few and the questions it
+misses outright are many, and any fusion rule that lets the weaker list veto — RRF by
+construction, weighted fusion at α ≤ 0.4 — pays for the vetoes. The lexical signal
+on this corpus is worth a re-order inside dense's top ten, not a second opinion on what
+belongs there.
 
 **Two instruments, before any technique.** The citation parser dropped a citation
 shape the model uses (MIS-016) and the refusal detector could not read a curly

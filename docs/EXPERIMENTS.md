@@ -25,6 +25,10 @@ produced one.
 | EXP-0013 | `run_20260917_071034_7a2d` | 2026-09-17 | embedding | **control truncated to 1024-d** (`dimensions: 1024`, DeepInfra honours it), on `dev_large`: Δ +0.0002 vs EXP-0008, p=1.0 (23/22); strict@1 −0.005 (p=0.004). Index 33.7 MB, same $0.031 build | 0.973 | 0.973 | 0.925 | 0.905 (n=6,221) | — | 3989 | 0.0000004 | VALID | [→](experiments/EXP-0013.md) |
 | EXP-0013 | `run_20260917_085730_9ea7` | 2026-09-17 | embedding | same, on **`dev`** vs promoted (0.720): **Δ −0.015, CI [−0.050, +0.015], p=0.55** (4 gained / 7 lost); nDCG −0.001; multi-doc unchanged (1/1). Same width as bge-m3, 0.705 vs its 0.560. **No measurable difference; 4096-d stays** | 0.705 | 0.800 | 0.630 | 0.575 (n=160) | — | 489 | 0.0000004 | VALID | [→](experiments/EXP-0013.md) |
 | EXP-0014 | `run_20260917_174747_7c9f` | 2026-09-17 | retrieval_method | **hybrid RRF (k=60)**: dense control + EXP-0004 BM25, each top-100, fused by reciprocal rank (DEC-056); dev. vs promoted (0.720): **Δ −0.120, CI [−0.190, −0.055], p=0.0012** (14 gained / **38 lost**; 22 of the lost have gold absent from BM25's top-100 — RRF penalises single-list documents); multi-doc unchanged (5/6). vs BM25 (0.410): +0.190, 38/0. Context docs from both lists 999 / dense-only 0 / BM25-only 1; candidate Jaccard 0.196. **Negative; not promoted** | **0.600** | 0.705 | 0.541 | 0.476 (n=160) | — | 18740 (DeepInfra slow today, see EXP file) | 0.0000004 | VALID | [→](experiments/EXP-0014.md) |
+| EXP-0015 | `run_20260917_181731_627b` | 2026-09-17 | retrieval_method | **hybrid weighted α=0.2** (dense weight; min-max per list, DEC-056); dev. vs promoted (0.720): **Δ −0.225, CI [−0.300, −0.150], p=0.0001** (12 / 57); every slice down; multi-doc 0.250 (3/7, p=0.35). vs BM25: +0.085 (17/0). Context BM25-only 198 / dense-only 0. **Negative** | **0.495** | 0.580 | 0.448 | 0.398 (n=160) | — | 16676 (DeepInfra slow) | 0.0000004 | VALID | [→](experiments/EXP-0015.md) |
+| EXP-0016 | `run_20260917_183840_42f5` | 2026-09-17 | retrieval_method | **hybrid weighted α=0.4**; dev. vs promoted: **Δ −0.130, CI [−0.200, −0.060], p=0.0006** (14 / 40); multi-doc 0.325 (5/6). vs α=0.2: +0.095 (p=0.0001). **vs RRF: −0.010, p=0.76 (190 of 200 same outcome) — RRF ≈ α=0.4 here.** Context dense-only 12 / BM25-only 103. **Negative** | **0.590** | 0.690 | 0.523 | 0.454 (n=160) | — | 1038 | 0.0000004 | VALID | [→](experiments/EXP-0016.md) |
+| EXP-0017 | `run_20260917_184010_ae88` | 2026-09-17 | retrieval_method | **hybrid weighted α=0.6**; dev. vs promoted: **Δ −0.015, CI [−0.070, +0.040], p=0.72** (13 / 16); multi-doc 0.400 (6/4, p=0.75); nDCG −0.011 (p=0.54). vs α=0.4: +0.115 (p=0.0002). Losses are dense's rank 1–5 gold pushed to 6–10 where BM25 missed it. Context dense-only 105 / BM25-only 9. **No measurable difference** | 0.705 | 0.800 | 0.620 | 0.534 (n=160) | — | 589 | 0.0000004 | VALID | [→](experiments/EXP-0017.md) |
+| EXP-0018 | `run_20260917_184123_a6e3` | 2026-09-17 | retrieval_method | **hybrid weighted α=0.8**; dev. vs promoted: **Δ +0.010, CI [−0.020, +0.040], p=0.75** (6 / 4; 190 unchanged); single-doc identical (3/3); multi-doc 0.400 (3/1, p=0.62); nDCG +0.011 (p=0.32, 110 tied). Losses all rank 5→6. Context dense-only 207 / **BM25-only 0**. `rag promote --dry-run`: NOT PROMOTED. **No measurable difference; not promoted** | 0.730 | 0.820 | 0.642 | 0.565 (n=160) | — | 625 | 0.0000004 | VALID | [→](experiments/EXP-0018.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -109,6 +113,56 @@ What the axis established, in order of how much it changes later axes:
 5. **The multi-document slice did not move for any candidate** (0.225–0.375 on n=40, all
    p ≥ 0.12). The organizing question is untouched by the embedding axis.
 
+## Axis 3 scorecard — retrieval method (P2-09, EXP-0014–0018)
+
+Five experiments against the promoted control (dense, `qwen3-embedding-8b`), all on
+`dev` (the only split this axis may use, P2-04 / DEC-055), Tier 1, same index, same
+BM25 as the sparse control (EXP-0004). Fusion definitions in DEC-056. Every delta is a
+paired test (DEC-047, seed 20260915). Total actual spend for the axis: **$0.0004** over
+5 runs (200 query embeddings each).
+
+| EXP | Fusion | strict R@5 (Δ vs dense, 95% CI, p) | gained / lost | multi-doc R@5 (n=40) | nDCG@10 (Δ, p) | vs BM25 (0.410) | context docs dense-only / BM25-only | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| 0004 | BM25 only (control) | 0.410 | | 0.175 | 0.379 | — | | sparse control |
+| 0015 | weighted α=0.2 | 0.495 (−0.225, [−0.300, −0.150], 0.0001) | 12 / 57 | 0.250 | 0.448 (−0.183, 0.0001) | +0.085 (17 / 0) | 0 / 198 | negative |
+| 0016 | weighted α=0.4 | 0.590 (−0.130, [−0.200, −0.060], 0.0006) | 14 / 40 | 0.325 | 0.523 (−0.108, 0.0001) | +0.180 (36 / 0) | 12 / 103 | negative |
+| 0014 | RRF k=60 | 0.600 (−0.120, [−0.190, −0.055], 0.0012) | 14 / 38 | 0.325 | 0.541 (−0.090, 0.0005) | +0.190 (38 / 0) | 0 / 1 | negative |
+| 0017 | weighted α=0.6 | 0.705 (−0.015, [−0.070, +0.040], 0.72) | 13 / 16 | 0.400 | 0.620 (−0.011, 0.54) | +0.295 (61 / 2) | 105 / 9 | no measurable difference |
+| 0018 | weighted α=0.8 | 0.730 (+0.010, [−0.020, +0.040], 0.75) | 6 / 4 | 0.400 | 0.642 (+0.011, 0.32) | +0.320 (70 / 6) | 207 / 0 | no measurable difference; not promoted |
+| 0005 | dense only (control) | 0.720 (be04) | | 0.350 | 0.631 | +0.310 | | promoted control |
+
+Adjacent points on the curve: 0.2→0.4 **+0.095** (p = 0.0001); 0.4→0.6 **+0.115**
+(p = 0.0002); 0.6→0.8 +0.025 (p = 0.36). RRF vs α=0.4: −0.010 (p = 0.76, 190 of 200
+identical outcomes). Collapse ratio 1.10–1.12 mean, p90 1.2–1.4, for every point —
+fusion did not change how many chunks fold into one article.
+
+What the axis established:
+1. **No retrieval-method change beats dense on `dev`.** The curve is monotone in the
+   dense weight and the best point (α=0.8, +0.010, p = 0.75) is ten flipped questions
+   with a net of one. The chosen α, if one had to be chosen, is 0.8 with a 95% CI on
+   its delta of [−0.020, +0.040] — a CI that contains zero, so nothing is chosen and
+   the control stays.
+2. **Every hybrid loses nothing against BM25 and the lexical half never wins a slice.**
+   H-001's "serious opponent" (nine BM25-alone wins on `dev`) is real but small: at
+   most 13–14 questions gain from lexical signal at any fusion setting, and 5–6 of
+   those are questions neither half answered alone. Against that, RRF and α ≤ 0.4
+   lose 38–57 questions whose gold document BM25 does not return at all (22 of RRF's
+   38 losses had the gold absent from BM25's top 100).
+3. **RRF is a consensus rule, and on this corpus it costs 12 points** (EXP-0014). A
+   document in one list only can score at most 1/61 under RRF; anything at ranks (5, 8)
+   in both lists beats it. 999 of RRF's 1,000 context documents came from the
+   intersection of the two top-100 lists, which overlap by a Jaccard of 0.196. RRF at
+   k=60 behaved like weighted fusion at α≈0.4 (EXP-0016).
+4. **The multi-document slice did not move at any point** (0.250–0.400 on n=40, all
+   p ≥ 0.35). The organizing question is untouched by the retrieval-method axis, as it
+   was by the embedding axis.
+5. **The corpus-character claim from the Phase 1 handover is settled in the direction
+   it did not expect**: exact product names (*Wix Payments*, *iCal*, *og:image*) make
+   BM25 a strong single-question competitor — a rank-1 hit on *"add a full PDF to my
+   portfolio site"* where dense had rank 9 — but not a strong retriever. Lexical
+   matching here is worth a re-order inside dense's top ten on a dozen questions and
+   nothing more.
+
 ## Negative results (P2-17)
 
 Standing section, populated as Phase 2 runs. Each entry: what was tried, the measured
@@ -154,6 +208,24 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   register at 8,218 vectors. **Decision: 4096-d retained (no reason to change a
   control for a null); the null itself is the finding — width is not what separated
   bge-m3 (0.560 at 1024-d) from the control (0.705 at 1024-d).**
+- **EXP-0014 — hybrid retrieval by Reciprocal Rank Fusion (k = 60).** `dev` strict
+  recall@5 0.720 → 0.600, Δ −0.120, 95% CI [−0.190, −0.055], p = 0.0012 (14 gained /
+  38 lost); nDCG@10 −0.090 (p = 0.0005); multi-document unchanged (5 / 6). 22 of the
+  38 lost questions had their gold document absent from BM25's top 100, and RRF
+  scores a single-list document below almost anything in both lists. Cost either way:
+  $0.00008 per run, no re-index. **Decision: control retained. Finding: RRF is a
+  consensus rule; it is the right tool for adding dense to a lexical system (38 / 0
+  over BM25) and the wrong one for adding lexical signal to dense on this corpus.**
+- **EXP-0015–0018 — weighted score fusion at α = 0.2 / 0.4 / 0.6 / 0.8 (dense weight).**
+  `dev` strict recall@5 0.495 / 0.590 / 0.705 / 0.730 against dense 0.720: the curve is
+  monotone in the dense weight, its lower end sits 0.085 above BM25 and its upper end
+  +0.010 above dense (95% CI [−0.020, +0.040], p = 0.75; 6 gained / 4 lost, 190
+  unchanged). The paired test cannot separate α=0.6 or α=0.8 from the control, and
+  the grid is not refined further (DEC-056, P2-09). Cost: nothing either way.
+  **Decision: control retained; `rag promote` refuses α=0.8. The α-curve is the
+  finding: on this corpus the value of the lexical half is a re-ordering of dense's
+  ranks 6–9 on about a dozen questions, and any weight large enough to introduce a
+  document dense did not have costs more than it recovers.**
 
 ## Phase 1 scorecard — the controls (P1-08)
 
