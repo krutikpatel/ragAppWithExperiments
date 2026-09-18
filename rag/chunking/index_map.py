@@ -39,6 +39,26 @@ class ChunkIndex:
     def doc_ids(self) -> set[str]:
         return {c.doc_id for c in self.chunks}
 
+    @property
+    def chunk_text(self) -> dict[str, str]:
+        """What the retriever indexes."""
+        return {c.chunk_id: c.text for c in self.chunks}
+
+    @property
+    def context_text(self) -> dict[str, str]:
+        """What the generator sees per chunk (P2-07); equals `chunk_text` unless the
+        chunker expands the context."""
+        return {c.chunk_id: c.context for c in self.chunks}
+
+    def profile(self, docs: dict[str, str]) -> dict[str, Any]:
+        """The chunking characterisation P2-07 reports for every config: how many
+        chunks, how long, how many articles fit in one, and how many procedure
+        blocks (DEC-039) no single chunk contains. Computed on `text`, the indexed
+        unit, against the document text in `docs`."""
+        from rag.chunking.profile import profile_chunks
+
+        return profile_chunks(self.chunks, docs)
+
     def __len__(self) -> int:
         return len(self.chunks)
 
@@ -46,7 +66,7 @@ class ChunkIndex:
         directory.mkdir(parents=True, exist_ok=True)
         pd.DataFrame.from_records(
             chunks_to_records(self.chunks),
-            columns=["chunk_id", "doc_id", "ordinal", "text"],
+            columns=["chunk_id", "doc_id", "ordinal", "text", "context_text"],
         ).to_parquet(directory / CHUNKS_FILE, index=False)
         meta = {
             "chunker_id": self.chunker_id,
@@ -69,6 +89,9 @@ class ChunkIndex:
                 doc_id=row.doc_id,
                 ordinal=int(row.ordinal),
                 text=row.text,
+                # Parquet reads a missing string back as None or NaN; only a real
+                # string is an expanded context.
+                context_text=(ct if isinstance(ct := getattr(row, "context_text", None), str) else None),
             )
             for row in frame.itertuples()
         ]

@@ -2021,3 +2021,102 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   from the dense control while α=0.2 sits on BM25, or the reverse — which would point
   at the normalisation rather than at the weight; or a later axis needs a third list
   in the fusion (RRF takes any number; the weighted rule is written for two).
+
+## DEC-057 — Axis 1 (chunking): four chunkers, one redefined, one dropped, and how each is costed
+- **Date:** 2026-09-18
+- **Decided by:** Krutik (options and recommendations by Claude; the three choices below were put to him in chat and taken)
+- **Status:** Active
+- **Context:** P2-07 lists five chunkers against the fixed-600/100 control:
+  sentence-window, parent-document, semantic, structure-aware on headings, and
+  late chunking. Two free checks before any code changed the list (counts from
+  2026-09-18 over all 6,221 frozen articles):
+  - **There are no headings.** 0 articles carry a markdown `#` or HTML `<h1–6>`
+    heading. The text's structure is its lines: a title line, prose lines, and
+    17,516 of 45,722 lines end in `:` — the "To do X:" procedure headers of DEC-039,
+    each followed by a line of steps. Median 4 lines per article, p90 21.
+  - **A third of sentence boundaries are glued**: 34,778 of 112,219 `[.?!]`
+    boundaries have no space after them ("…account.Before you begin:…"), in 83% of
+    articles. A splitter that needs "period, space, capital" would miss them.
+  - **Late chunking has no hosted path.** OpenRouter's `/embeddings/models` lists 33
+    models, none from Jina; `/embeddings` returns one pooled vector per input,
+    `encoding_format` is validated to `float | base64` (HTTP 400 otherwise), and
+    `late_chunking: true` / `return_token_embeddings: true` are silently dropped
+    (same shape, same 9 tokens billed — the OQ-025 pattern). Four probe calls,
+    $0.0000004. Token-level embeddings, which late chunking needs, would require
+    the local `sentence-transformers` backend with a different model — changing the
+    embedding model and the chunker in one run, which no Axis 1 comparison could
+    use.
+- **Options considered:**
+  1. **Late chunking:** run it locally with a small model as a labelled two-axis
+     probe — rejected (not comparable to anything, and "nothing runs on local
+     hardware" is the Phase 2 rule); **drop it and record it as unavailable hosted,
+     next to ColBERT in HYPOTHESES.md — chosen.**
+  2. **Structure-aware:** drop it (no headings) — rejected; **redefine it on the
+     line structure — chosen**: cut only at line boundaries; a `:`-terminated line
+     is bound to the line after it, the binding chains when a steps line itself ends
+     in `:` (it carries the next header), and lines opening with a DEC-039 step verb
+     stay with their procedure; pack units to ≤600 words; a single unit over 600
+     words is cut at 600. Measured on the corpus: 8,689 chunks, 79.0% of articles in
+     one chunk (same as the control), **41 procedure blocks cut of 5,936 — all 41
+     inside a unit longer than 600 words**. The control cuts 0 (its 100-word overlap
+     covers every block ≤100 words); 600/0 cuts 160.
+  3. **Semantic chunking's boundary detector:** a cheaper model for that one job —
+     rejected (a new model needs its own DEC and starts a family); **the same
+     `qwen3-embedding-8b` on DeepInfra — chosen**, so no new model enters the
+     project. Rule: consecutive-sentence cosine distance, boundary where the
+     distance exceeds the article's own 95th percentile (LangChain's breakpoint
+     rule), groups capped at 600 words. 195,822 sentences to embed (170 articles
+     under three sentences are skipped: one distance cannot beat a percentile).
+     Distances are cached per article text under `indexes/sentence_distances/`, so
+     the chunks are reproducible from the cache; a cold recomputation could move a
+     boundary because hosted vectors are not byte-deterministic (OQ-023) — recorded
+     here, not hidden.
+  4. **Sentence-window unit:** one sentence with a ±3 window (the LlamaIndex default)
+     — chosen as the canonical form; measured **196,133 index rows** (median 12 words),
+     a ~3.2 GB float32 index, 3,065 embedding calls; context mean 80 words. 3,263 of
+     5,936 procedure blocks do not fit in a 7-sentence window. The alternative (a
+     3-sentence unit, ~1.1 GB) was offered; the size is an engineering cost, not a
+     quality claim, and the run decides the rest.
+  5. **Parent-document:** 600-word parents (the control's size, so the generator's
+     context size is held constant) with 150-word children, no overlap at either
+     level. Measured: 18,884 children, 44.7% of articles in one child; 1,237 blocks
+     cut at the child level, **150 at the parent (context) level**.
+- **Decision:** Axis 1 is **four** experiments, EXP-0019 sentence-window, EXP-0020
+  parent-document, EXP-0021 semantic, EXP-0022 structure — each a one-dimension diff
+  against `promoted.yaml` (`chunker` + `chunker_params`), `dev` decides and
+  `dev_large` is the direction check (DEC-055), Tier 1, same embedder. Mechanics
+  that came with it, all under test:
+  - `Chunk.context_text` (P2-07): what the generator sees, distinct from `text`,
+    what the retriever indexes. `None` means the same. The runner hands the
+    generator and the citation renderer `index.context_text`; the retriever and
+    BM25 see `index.chunk_text`. The parquet map persists both.
+  - A chunker registry (`build_chunker`, `chunker_class`) — `config.chunker` was a
+    field the runner never read before this; it hard-coded the fixed chunker.
+  - **Gated pre-spend:** `Chunker.embedding_params` declares what a chunker embeds
+    before any chunk exists; the runner estimates it from the corpus word count and
+    runs the $2 gate *before* building the chunker's output, then chunks. A test
+    proves the embedder is not called when the gate fires.
+  - **Chunking profile on every run row** (`chunker_meta`, and
+    `metrics_json.chunking_profile`): chunk count, words per chunk, context words,
+    articles in one chunk, DEC-039 procedure blocks cut on the indexed text and on
+    the context. It reproduces the corpus profile's numbers for the control.
+  - Sentence splitting (`sentences-v1`) breaks on newlines, `[.?!]`+space, and
+    `[.?!]` followed directly by a capital. No abbreviation list; a heuristic,
+    shared by every sentence-based chunker so their units agree. **Side-effect,
+    recorded:** sentence-based chunkers put a space at glued boundaries in the text
+    they emit ("too. Before"); the fixed and structure chunkers leave the text as is.
+  - The dense index build streams into a preallocated float32 matrix in groups of
+    2,048 texts; the previous list-then-convert path would have needed ~19 GB of
+    temporaries for the sentence-window index.
+- **Evidence:** No measured retrieval data; the counts above are corpus
+  characterisation, not results. Cost estimates from `--estimate-only`: $0.033,
+  $0.033, $0.063 (semantic: $0.030 sentence pass + $0.030 index), $0.033 — ≈$0.16
+  for the four `dev_large` builds, plus ~$0.0001 per `dev` run.
+- **Consequences:** Late chunking and ColBERT are both "not available hosted" and
+  stay in HYPOTHESES.md as future work. The Axis 1 index cache grows by ~3.9 GB
+  (gitignored). The per-axis cap warning (5) will fire on the sixth distinct
+  config hash — the dev/dev_large pairs count separately by hash, as in Axis 2.
+- **Revisit if:** a hosted endpoint starts returning token-level embeddings (probe
+  it again, don't assume — MIS-005); or the sentence-window index's size or build
+  time proves to be the thing that decides whether the technique is usable, in
+  which case the 3-sentence unit gets its own run rather than a guess.

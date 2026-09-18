@@ -412,3 +412,14 @@ of RRF over a stemmed BM25 on `dev` (new sparse control first, then the fusion) 
 by paired test against EXP-0014. Not queued: the axis is closed and the result would
 be a new comparison family for the sparse side.
 **Status:** open.
+
+## OQ-030 — Can late chunking run through OpenRouter's embeddings endpoint?
+Late chunking embeds a whole article and pools per-chunk vectors from the token
+embeddings, so it needs token-level output. **Answered 2026-09-18 by four probe
+calls ($0.0000004):** no. `/embeddings/models` lists 33 models, none from Jina;
+`/embeddings` returns one pooled vector per input; `encoding_format` accepts only
+`float | base64` (HTTP 400 otherwise); `late_chunking: true` and
+`return_token_embeddings: true` are silently ignored — identical shape and identical
+9 billed tokens. A local run would change the embedding model too (two axes in one
+run). **Status: answered — dropped from Axis 1 (DEC-057); re-probe before assuming
+it stays unavailable (MIS-005).**

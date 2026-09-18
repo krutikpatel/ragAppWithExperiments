@@ -10,11 +10,12 @@ import json
 import subprocess
 import warnings
 from dataclasses import dataclass
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
 from rag.assembly import ConcatAssembler
-from rag.chunking.base import FixedTokenChunker
+from rag.chunking.base import Chunker, build_chunker, chunker_class
 from rag.chunking.index_map import ChunkIndex
 from rag.corpus.loader import load_corpus
 from rag.dataset.loader import load_split
@@ -96,9 +97,13 @@ def check_test_split_guard(
     print("    this opening will be appended to docs/DECISIONS.md.\n")
 
 
-def build_index(config: RunConfig) -> tuple[ChunkIndex, dict[str, str]]:
+def build_index(config: RunConfig, chunker: Chunker | None = None) -> tuple[ChunkIndex, dict[str, str]]:
+    """Chunk the frozen corpus with the configured chunker (P2-07: named in
+    `config.chunker`, built through the chunker registry). Returns the index and
+    the text the retriever indexes; the generator's per-chunk context is
+    `index.context_text`."""
     corpus = load_corpus()
-    chunker = FixedTokenChunker(**config.chunker_params)
+    chunker = chunker or build_chunker(config.chunker, **config.chunker_params)
     chunks = chunker.split_corpus(list(zip(corpus.frame["id"], corpus.frame["indexed_text"])))
     index = ChunkIndex(
         chunks=chunks,
@@ -107,7 +112,7 @@ def build_index(config: RunConfig) -> tuple[ChunkIndex, dict[str, str]]:
         corpus_hash=corpus.corpus_hash,
         normalization_version=corpus.normalization_version,
     )
-    return index, {chunk.chunk_id: chunk.text for chunk in chunks}
+    return index, index.chunk_text
 
 
 def run(
@@ -199,7 +204,6 @@ def _run(
         )
 
     slices = build_slices(frame)
-    index, chunk_text = build_index(config)
     judge_meta = (
         judge_provenance(_judge_config(config)) if config.eval_tier is EvalTier.TIER_2 else {}
     )
@@ -207,14 +211,47 @@ def _run(
     # P2-06 — the whole-run estimate, printed with what drives it, gated at $2.
     # Full-corpus embedding for an uncached index is the dominant cost in this
     # project, so the index build is estimated before anything is spent.
+    #
+    # P2-07: a chunker may itself embed the corpus before any chunk exists (the
+    # semantic chunker embeds every sentence to find its boundaries). That is a
+    # pre-spend, so it is estimated from the corpus text and gated *before* the
+    # chunker runs — otherwise the gate would fire after the money was spent.
+    # Chunkers that embed nothing are chunked first and the index estimate uses
+    # the exact indexed word count, as before.
+    chunker = build_chunker(config.chunker, **config.chunker_params)
+    chunker_embeds = chunker_class(config.chunker).embedding_params(config.chunker_params)
+    corpus_docs = dict(zip(load_corpus().frame["id"], load_corpus().frame["indexed_text"]))
+    corpus_words = sum(len(t.split()) for t in corpus_docs.values())
+    chunker_estimate: dict[str, Any] = {}
+    if chunker_embeds is not None:
+        chunker_estimate = estimate_index_cost(
+            retriever=config.chunker,
+            retriever_params=chunker_embeds,
+            corpus_words=corpus_words,
+            index_exists=_chunker_cache_exists(chunker),
+            n_questions=0,
+            pricing=pricing,
+        )
+    if chunker_embeds is None:
+        index, chunk_text = build_index(config, chunker)
+        indexed_words = sum(len(text.split()) for text in chunk_text.values())
+    else:
+        index, chunk_text = None, None
+        # Every chunker in this axis that embeds has no overlap, so its indexed
+        # words equal the corpus words; that is the estimate's basis.
+        indexed_words = corpus_words
     index_estimate = estimate_index_cost(
         retriever=config.retriever,
         retriever_params=retriever_class(config.retriever).embedding_params(config.retriever_params),
-        corpus_words=sum(len(text.split()) for text in chunk_text.values()),
-        index_exists=_dense_index_exists(config, index),
+        corpus_words=indexed_words,
+        index_exists=_dense_index_exists(config, chunker_id=chunker.chunker_id),
         n_questions=len(frame),
         pricing=pricing,
     )
+    if chunker_estimate.get("index_usd"):
+        index_estimate["chunker_embedding_usd"] = chunker_estimate["index_usd"]
+        index_estimate["chunker_source"] = f"{config.chunker}: {chunker_estimate['source']}"
+        index_estimate["index_usd"] = round(index_estimate.get("index_usd", 0.0) + chunker_estimate["index_usd"], 4)
     run_estimate = estimate_run_cost(tier2=cost_estimate or None, index=index_estimate)
     run_estimate["index"] = index_estimate
     print(format_run_estimate(run_estimate, pricing_version=pricing.pricing_version))
@@ -228,6 +265,9 @@ def _run(
             + ". The run has not started and nothing was recorded. Get approval, record it in "
             "docs/DECISIONS.md, and re-run with --approve-cost '<DEC-NNN or reason>' (P2-06)."
         )
+    if index is None:
+        index, chunk_text = build_index(config, chunker)
+    chunking_profile = index.profile(corpus_docs)
     if config.axis and not config.harness_smoke_test:
         n_axis = len(store.axis_experiments(config.axis))
         if n_axis >= 5 and config.config_hash not in store.axis_experiments(config.axis):
@@ -269,6 +309,8 @@ def _run(
             "eval_subsample_id": subsample.subsample_id,
             "doc_pooling": config.doc_pooling,
             "chunker_id": index.chunker_id,
+            "chunker_meta": json.dumps({"chunker": config.chunker, "params": index.chunker_params,
+                                        "profile": chunking_profile, **chunker.provenance()}, default=str),
             "retriever": config.retriever,
             "top_k": config.top_k,
             "seed": config.seed,
@@ -312,7 +354,7 @@ def _run(
     try:
         row = _execute(
             config, run_id, frame, index, chunk_text, slices, store, reason, cost_estimate,
-            generation_cache, pricing,
+            generation_cache, pricing, chunking_profile,
         )
     except Exception as exc:
         # An abandoned run is recorded as VOID rather than left out. Silent gaps in
@@ -362,7 +404,12 @@ def _judge_config(config: RunConfig) -> JudgeConfig:
 
 
 def _cost_estimate(config: RunConfig, frame, pricing: PricingTable) -> dict:
-    context_words = config.top_k * int(config.chunker_params.get("chunk_size", 600))
+    # The generator's context is top_k chunks of whatever the chunker hands it; a
+    # chunker without `chunk_size` (P2-07) is estimated at the control's 600 words.
+    context_words = config.top_k * int(
+        config.chunker_params.get("chunk_size") or config.chunker_params.get("parent_size")
+        or config.chunker_params.get("max_words") or 600
+    )
     n_judged = int((frame["answer"].fillna("").str.strip() != "").sum()) if "answer" in frame else len(frame)
     return estimate_tier2_cost(
         n_questions=len(frame),
@@ -375,13 +422,19 @@ def _cost_estimate(config: RunConfig, frame, pricing: PricingTable) -> dict:
     )
 
 
-def _dense_index_exists(config: RunConfig, index: ChunkIndex) -> bool:
+def _chunker_cache_exists(chunker: Chunker) -> bool:
+    """Whether a chunker that embeds (semantic) already has its sentence distances
+    on disk for this embedder — True for chunkers that embed nothing."""
+    path = getattr(chunker, "cache_path", None)
+    return True if path is None else Path(path).exists()
+
+
+def _dense_index_exists(config: RunConfig, *, chunker_id: str) -> bool:
     """Whether the dense index this config needs is already on disk — the difference
     between a ~$0.03 run and a full-corpus embed (P2-06). True for retrievers that
     embed nothing; a retriever that wraps a dense one (hybrid) is asked for its
-    embedder settings rather than matched by name."""
-    from pathlib import Path
-
+    embedder settings rather than matched by name. Takes the chunker id rather than
+    a built index so it can run before the chunker has (P2-07)."""
     from rag.embedding.base import EmbedderConfig, build_embedder
     from rag.paths import INDEXES_DIR
     from rag.retrieval.dense import VECTORS_FILE, index_key
@@ -400,10 +453,11 @@ def _dense_index_exists(config: RunConfig, index: ChunkIndex) -> bool:
             dimensions=params.get("dimensions"),
         ),
     )
+    corpus = load_corpus()
     key = index_key(
-        corpus_hash=index.corpus_hash,
-        normalization_version=index.normalization_version,
-        chunker_id=index.chunker_id,
+        corpus_hash=corpus.corpus_hash,
+        normalization_version=corpus.normalization_version,
+        chunker_id=chunker_id,
         model_id=embedder.model_id,
         revision=embedder.pinned_identity,
         prefix_convention=embedder.prefix.name,
@@ -451,6 +505,7 @@ def _execute(
     cost_estimate: dict[str, Any],
     generation_cache: GenerationCache,
     pricing: PricingTable,
+    chunking_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     retriever = build_retriever(
         config.retriever,
@@ -462,6 +517,9 @@ def _execute(
         **config.retriever_params,
     )
     store.update_run(run_id, retriever_meta=json.dumps(retriever.provenance(), default=str))
+    # P2-07: the generator sees each chunk's context (`context_text`), which the
+    # "retrieve small, expand" chunkers make larger than the indexed text.
+    context_text = index.context_text
 
     import time
 
@@ -506,6 +564,7 @@ def _execute(
             }
         )
     aggregate.update(_selection_summary(per_question))
+    aggregate["chunking_profile"] = chunking_profile
 
     # Tier 1 — retrieval only. Questions with no gold document are not scorable
     # here and are excluded from qrels (DEC-009); the unanswerable split therefore
@@ -525,7 +584,7 @@ def _execute(
 
     generated: dict[str, Any] = {}
     if config.eval_tier is EvalTier.TIER_2:
-        generated = _tier2(config, rows, results_by_question, chunk_text, per_question)
+        generated = _tier2(config, rows, results_by_question, context_text, per_question)
         judge_failures = generated.pop("__judge_failures__", [])
         aggregate["judge_failures"] = len(judge_failures)
         aggregate["judge_failure_detail"] = judge_failures

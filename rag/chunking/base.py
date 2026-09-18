@@ -20,7 +20,17 @@ class Chunk:
     chunk_id: str
     doc_id: str
     ordinal: int
+    # What the retriever indexes and scores.
     text: str
+    # What the generator sees when this chunk is selected (P2-07). None means the
+    # same as `text` — true for every chunker before the "retrieve small, expand
+    # context" family (sentence-window, parent-document), which is the whole point
+    # of those techniques and so is a field, not a lookup done elsewhere.
+    context_text: str | None = None
+
+    @property
+    def context(self) -> str:
+        return self.text if self.context_text is None else self.context_text
 
 
 class Chunker(ABC):
@@ -42,12 +52,26 @@ class Chunker(ABC):
     def split(self, doc_id: str, text: str) -> list[Chunk]:
         """Split one document. Implementations must produce contiguous ordinals."""
 
-    def make_chunk(self, doc_id: str, ordinal: int, text: str) -> Chunk:
+    @classmethod
+    def embedding_params(cls, chunker_params: dict[str, Any]) -> dict[str, Any] | None:
+        """Embedder settings this chunker would spend on *before* any chunk exists
+        (the semantic chunker embeds every sentence to find boundaries), or None.
+        The runner estimates and gates that spend from this (P2-06, P2-07)."""
+        return None
+
+    def provenance(self) -> dict[str, Any]:
+        """What the chunker did, recorded on the run row under `chunker_meta`."""
+        return {}
+
+    def make_chunk(
+        self, doc_id: str, ordinal: int, text: str, context_text: str | None = None
+    ) -> Chunk:
         return Chunk(
             chunk_id=short_id(self.chunker_id, doc_id, str(ordinal)),
             doc_id=doc_id,
             ordinal=ordinal,
             text=text,
+            context_text=None if context_text is None or context_text == text else context_text,
         )
 
     def split_corpus(self, docs: list[tuple[str, str]]) -> list[Chunk]:
@@ -57,6 +81,56 @@ class Chunker(ABC):
         return chunks
 
 
+# --- registry (P2-07) ----------------------------------------------------------
+# The runner names a chunker in `config.chunker`; it does not import one. Same seam
+# as the retriever registry: a technique is registered here, not wired into run.py.
+
+_CHUNKERS: dict[str, type[Chunker]] = {}
+_BUILTINS_LOADED = False
+
+
+def register_chunker(name: str):
+    def decorator(cls: type[Chunker]) -> type[Chunker]:
+        if name in _CHUNKERS:
+            raise ValueError(f"chunker {name!r} is already registered")
+        cls.name = name
+        _CHUNKERS[name] = cls
+        return cls
+
+    return decorator
+
+
+def _ensure_builtins() -> None:
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
+        return
+    _BUILTINS_LOADED = True
+    import rag.chunking.parent_document  # noqa: F401
+    import rag.chunking.semantic  # noqa: F401
+    import rag.chunking.sentence_window  # noqa: F401
+    import rag.chunking.structure  # noqa: F401
+
+
+def build_chunker(name: str, **params: Any) -> Chunker:
+    _ensure_builtins()
+    if name not in _CHUNKERS:
+        raise KeyError(f"unknown chunker {name!r}; registered: {sorted(_CHUNKERS)}")
+    return _CHUNKERS[name](**params)
+
+
+def chunker_class(name: str) -> type[Chunker]:
+    _ensure_builtins()
+    if name not in _CHUNKERS:
+        raise KeyError(f"unknown chunker {name!r}; registered: {sorted(_CHUNKERS)}")
+    return _CHUNKERS[name]
+
+
+def registered_chunkers() -> list[str]:
+    _ensure_builtins()
+    return sorted(_CHUNKERS)
+
+
+@register_chunker("fixed_token")
 class FixedTokenChunker(Chunker):
     """Fixed-width chunks over whitespace tokens.
 

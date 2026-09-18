@@ -405,8 +405,23 @@ rag/
                     loader.py (reads frozen splits — NO benchmark import; the
                     runner's only dataset dependency), splits.py (builds them),
                     unanswerable.py (the authored refusal set)
-  chunking/         base.py (Chunker, Chunk, FixedTokenChunker),
-                    index_map.py (ChunkIndex — persists chunk_id -> doc_id)
+  chunking/         base.py (Chunker, Chunk with `text` = what is indexed and
+                    `context_text` = what the generator sees, FixedTokenChunker, and
+                    the chunker registry — `config.chunker` names one, P2-07),
+                    index_map.py (ChunkIndex — persists chunk_id -> doc_id and both
+                    texts; `.profile()` = the chunking characterisation on every run
+                    row), sentences.py (sentences-v1: newline / `[.?!]`+space /
+                    `[.?!]`+capital — a third of the corpus's boundaries are glued),
+                    profile.py (chunks, words, one-chunk share, DEC-039 procedure
+                    blocks cut on indexed text and on context, for ANY chunker),
+                    sentence_window.py (1 sentence indexed, ±3 context; 196k rows),
+                    parent_document.py (150-word children, 600-word parent context),
+                    semantic.py (95th-percentile consecutive-sentence distance cuts;
+                    embeds every sentence FIRST — a gated pre-spend via
+                    `Chunker.embedding_params`; distances cached under
+                    indexes/sentence_distances/), structure.py (line-boundary cuts,
+                    `:`-lines bound to their steps; the corpus has NO headings).
+                    Late chunking is not available hosted (OQ-030). All DEC-057.
   retrieval/        base.py (Retriever, RetrievalResult — ranking for scoring plus a
                     DocSelection context of top_k DISTINCT documents, P1-03),
                     pooling.py (doc_pooling; select_distinct_docs + collapse ratio),
@@ -472,12 +487,17 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     baseline_dense_tier2.yaml adds generation + judge (P1-07 run 2,
                     and `rag ask`'s default); exp_0004_bm25_distinct_docs.yaml is the
                     sparse control; exp_0014..0018_hybrid_*_dev.yaml are Axis 3
-                    (RRF, then weighted α 0.2/0.4/0.6/0.8; dev only, DEC-056).
+                    (RRF, then weighted α 0.2/0.4/0.6/0.8; dev only, DEC-056);
+                    exp_0019..0022_{sentence_window,parent_document,semantic,
+                    structure}_{dev_large,dev}.yaml are Axis 1 (DEC-057; dev_large
+                    builds the index, dev decides).
                     smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml
                     and tier2_smoke.yaml are harness smoke tests, not experiments.
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
-                    chunker_id, model_id, revision, prefix_convention)
+                    chunker_id, model_id, revision, prefix_convention).
+                    sentence_distances/<embedder key>.json is the semantic chunker's
+                    cache of consecutive-sentence distances per article text (P2-07)
 results/            runs.sqlite — the results store; generation_cache.sqlite — the
                     in-pipeline LLM cache (P2-03). Both GITIGNORED.
   corpus_profile/   <key>.json written by `rag corpus profile`; the EXPERIMENTS.md

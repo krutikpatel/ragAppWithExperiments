@@ -271,3 +271,65 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   1,000 context documents came from the intersection). Mean candidate Jaccard:
   **0.196, not above 0.3** — the two halves' top-100 lists share about a fifth of
   their chunks. `run_20260917_174747_7c9f`.
+
+## H-013 — No chunker beats the control on `dev` strict recall@5 at p < 0.05
+- **Date written:** 2026-09-18, before any Axis 1 run
+- **Source:** Claude.
+- **Hypothesis:** none of EXP-0019–0022 clears DEC-055's bar against `promoted` on
+  `dev`. Reasoning from measured data: 79.0% of articles fit in one 600-word chunk
+  (corpus profile), the collapse ratio is 1.1 (EXP-0005), and two chunking changes
+  under BM25 each moved one question (EXP-0002/0003). For four fifths of the corpus
+  the chunker has nothing to change; the multi-document slice was called "a ranking
+  problem, not a granularity problem" in NARRATIVE §6, and this axis tests that
+  sentence directly. If wrong, the gain will be concentrated in the long fifth of
+  the corpus, which the per-question flips can show.
+- **Tested by:** `rag compare promoted <dev run>` for each of the four.
+- **Resolution:** pending.
+
+## H-014 — Sentence-window raises the collapse ratio the most and multi-document strict recall the least
+- **Date written:** 2026-09-18, before EXP-0019 ran
+- **Source:** Claude.
+- **Hypothesis:** EXP-0019's collapse ratio (mean) is the highest of the axis and
+  above 2.0; its multi-document strict recall@5 is no higher than the control's
+  0.350. Reasoning: 196k one-sentence rows means many sentences of one article
+  rank near each other; the DEC-040 walk then scans several chunks per document
+  found, which is what the collapse ratio counts, and the 50-chunk pool can be
+  exhausted before five distinct articles are found on multi-article questions.
+  This is the confound P2-07 names (small-to-big overlaps with the document walk)
+  turned into a number.
+- **Tested by:** `collapse_ratio_mean`, `pool_exhaustion_rate` and the
+  `gold_docs:multi` slice on EXP-0019's `dev` run vs `be04`.
+- **Resolution:** pending.
+
+## H-015 — Structure chunking is within noise of the control everywhere
+- **Date written:** 2026-09-18, before EXP-0022 ran
+- **Source:** Claude.
+- **Hypothesis:** |Δ| ≤ 0.02 on `dev` strict recall@5 (p > 0.05), and `dev_large`
+  within ±0.005. Reasoning: 8,689 chunks vs 8,218, the same 79.0% of articles in one
+  chunk, and the only articles whose cuts move are the long fifth. It cuts 41
+  procedure blocks where the control cuts 0, so if anything moves it is the
+  procedural questions, and the story wants that number reported either way.
+- **Tested by:** EXP-0022 vs `promoted` on `dev`; vs EXP-0008 on `dev_large`.
+- **Resolution:** pending.
+
+## H-016 — Semantic chunking produces more, shorter chunks than the control and does not change recall
+- **Date written:** 2026-09-18, before EXP-0021 ran
+- **Source:** Claude.
+- **Hypothesis:** the 95th-percentile rule yields between 9,000 and 14,000 chunks
+  (one to two boundaries in most multi-sentence articles); `dev` strict recall@5
+  within ±0.03 of the control (p > 0.05). Reasoning: with a median of 11 sentences
+  per article the 95th percentile of ten distances is usually the single largest
+  one, so most articles get one cut; a one-cut article yields two chunks that
+  both still map to the same document under max pooling. The number of chunks is
+  the part I am least sure of and is why it is written down.
+- **Tested by:** `chunking_profile.n_chunks` on the EXP-0021 run row; `rag compare`
+  on `dev`.
+- **Resolution:** pending.
+
+## Not available hosted — recorded as future work, not as experiments
+- **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
+  `/embeddings` returns one pooled vector per input and drops `late_chunking` /
+  `return_token_embeddings` silently (probed 2026-09-18, DEC-057). Would need the
+  local backend and a different model — a two-axis change. Not run.
+- **ColBERT late interaction** (P2-10): multi-vector index, not served by a rerank
+  endpoint. Not run.

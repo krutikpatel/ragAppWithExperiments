@@ -1,0 +1,30 @@
+# EXP-0020 — Axis 1 (chunking, P2-07): parent-document / small-to-big chunking (index 150-word children, context the 600-word parent).
+#
+# Diff against configs/promoted.yaml (the dense control, fixed-600/100): the chunker
+# only. Same embedder (qwen3-embedding-8b on DeepInfra), same document-level top_k 5
+# over a 50-chunk pool (DEC-040). A new chunker is a new index key: the dev_large run
+# builds it (full-corpus embed, ~$0.03), the dev run reuses it.
+#
+# Index unit: 150-word children, four per full 600-word parent; no overlap at either level. Context: the parent, so the generator sees the same size as the control.
+#
+# Split policy (DEC-055): dev decides; dev_large is the single-document direction
+# check. Pre-registered expectations: docs/HYPOTHESES.md H-013..H-016. DEC-057.
+name: EXP-0020 parent-document / small-to-big chunking (index 150-word children, context the 600-word parent) — qwen3-embedding-8b (DeepInfra), top-5 distinct docs, pool 50, Tier 1, dev_large
+axis: chunking
+split: dev_large
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: parent_document
+chunker_params:
+  parent_size: 600
+  child_size: 150
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

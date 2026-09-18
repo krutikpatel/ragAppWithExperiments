@@ -1,0 +1,29 @@
+# EXP-0022 — Axis 1 (chunking, P2-07): structure-aware chunking (cut only at line boundaries; a 'To do X:' line stays with its steps; max 600 words).
+#
+# Diff against configs/promoted.yaml (the dense control, fixed-600/100): the chunker
+# only. Same embedder (qwen3-embedding-8b on DeepInfra), same document-level top_k 5
+# over a 50-chunk pool (DEC-040). A new chunker is a new index key: the dev_large run
+# builds it (full-corpus embed, ~$0.03), the dev run reuses it.
+#
+# Redefined for this corpus (no headings exist — 0 of 6,221 articles): the text's own line structure, header lines bound to the line after them. Reports DEC-039 procedure blocks cut = 0 by construction for blocks that fit in 600 words.
+#
+# Split policy (DEC-055): dev decides; dev_large is the single-document direction
+# check. Pre-registered expectations: docs/HYPOTHESES.md H-013..H-016. DEC-057.
+name: EXP-0022 structure-aware chunking (cut only at line boundaries; a 'To do X:' line stays with its steps; max 600 words) — qwen3-embedding-8b (DeepInfra), top-5 distinct docs, pool 50, Tier 1, dev_large
+axis: chunking
+split: dev_large
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: structure
+chunker_params:
+  max_words: 600
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

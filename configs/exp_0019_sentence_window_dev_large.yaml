@@ -1,0 +1,29 @@
+# EXP-0019 — Axis 1 (chunking, P2-07): sentence-window chunking (index one sentence, context ±3 sentences).
+#
+# Diff against configs/promoted.yaml (the dense control, fixed-600/100): the chunker
+# only. Same embedder (qwen3-embedding-8b on DeepInfra), same document-level top_k 5
+# over a 50-chunk pool (DEC-040). A new chunker is a new index key: the dev_large run
+# builds it (full-corpus embed, ~$0.03), the dev run reuses it.
+#
+# Index unit: one sentence (splitter sentences-v1, glued-boundary aware). Context: the sentence plus 3 on each side. Measured: 196,133 index rows (median 12 words) at 4096-d — a ~3.2 GB index, the largest in the project; 3,263 of 5,936 procedure blocks do not fit in a 7-sentence window (DEC-057).
+#
+# Split policy (DEC-055): dev decides; dev_large is the single-document direction
+# check. Pre-registered expectations: docs/HYPOTHESES.md H-013..H-016. DEC-057.
+name: EXP-0019 sentence-window chunking (index one sentence, context ±3 sentences) — qwen3-embedding-8b (DeepInfra), top-5 distinct docs, pool 50, Tier 1, dev_large
+axis: chunking
+split: dev_large
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: sentence_window
+chunker_params:
+  window: 3
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

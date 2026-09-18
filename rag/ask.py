@@ -74,7 +74,10 @@ def answer_question(
         "ask", question, top_k=config.retrieval_depth, k_docs=config.top_k, candidate_pool=config.candidate_pool
     )
     context_chunks = result.context_chunks
-    context = ConcatAssembler(max_tokens=config.context_max_tokens).assemble(context_chunks, chunk_text)
+    # The generator sees each chunk's context, which the P2-07 "retrieve small,
+    # expand" chunkers make larger than the indexed text.
+    context_text = index.context_text
+    context = ConcatAssembler(max_tokens=config.context_max_tokens).assemble(context_chunks, context_text)
 
     generator = OpenRouterGenerator(
         GeneratorConfig(
@@ -99,7 +102,7 @@ def answer_question(
     return AskResult(
         question=question,
         answer=answer,
-        citations=render_citations(answer.cited_doc_ids, context_chunks, chunk_text, corpus),
+        citations=render_citations(answer.cited_doc_ids, context_chunks, context_text, corpus),
         context_doc_ids=[c.doc_id for c in context_chunks],
         collapse_ratio=result.context.collapse_ratio if result.context else None,
         gold_doc_ids=gold,

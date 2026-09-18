@@ -138,11 +138,27 @@ class DenseRetriever(Retriever):
     def _chunk_ids_hash(self) -> str:
         return short_id(*self.chunk_ids, length=16)
 
+    # Texts embedded per call to the embedder while building. The embedder returns
+    # Python lists, which cost ~24 bytes a float: the whole corpus at once was 0.8 GB
+    # of temporaries for 8,218 chunks and would be ~19 GB for the 196k sentence-window
+    # rows (P2-07). Each group is converted to float32 and written into the
+    # preallocated matrix, so peak memory is the matrix plus one group.
+    BUILD_GROUP = 2048
+
     def _build(self, chunk_text: dict[str, str]) -> tuple[np.ndarray, dict[str, Any]]:
         started = time.perf_counter()
         texts = [chunk_text[cid] for cid in self.chunk_ids]
-        rows = self.embedder.embed_texts(texts, input_type="passage")
-        vectors = np.asarray(rows, dtype=np.float32)
+        vectors: np.ndarray | None = None
+        for start in range(0, len(texts), self.BUILD_GROUP):
+            rows = np.asarray(
+                self.embedder.embed_texts(texts[start : start + self.BUILD_GROUP], input_type="passage"),
+                dtype=np.float32,
+            )
+            if vectors is None:
+                vectors = np.empty((len(texts), rows.shape[1]), dtype=np.float32)
+            vectors[start : start + rows.shape[0]] = rows
+        if vectors is None:
+            vectors = np.empty((0, 0), dtype=np.float32)
         vectors = _normalize(vectors)
         build_seconds = time.perf_counter() - started
 

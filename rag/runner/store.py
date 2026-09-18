@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS runs (
     slices_json           TEXT,
     notes                 TEXT,
     retriever_meta        TEXT,
+    chunker_meta          TEXT,
     pipeline_nondeterministic INTEGER,
     pipeline_llm_json     TEXT,
     axis                  TEXT,
