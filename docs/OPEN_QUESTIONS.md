@@ -423,3 +423,18 @@ calls ($0.0000004):** no. `/embeddings/models` lists 33 models, none from Jina;
 9 billed tokens. A local run would change the embedding model too (two axes in one
 run). **Status: answered — dropped from Axis 1 (DEC-057); re-probe before assuming
 it stays unavailable (MIS-005).**
+
+## OQ-031 — How much of a chunking delta is re-embedding noise?
+Every chunker in Axis 1 is a fresh embedding pass over the corpus, and EXP-0012 found
+only 59% of vectors byte-identical when the same text was embedded twice on DeepInfra.
+The control's measured run-to-run spread (0.005, DEC-046) was taken on a *cached*
+index, so it excludes that. EXP-0022 lost 17 questions on `dev`, and for 8 of them the
+gold article is a single chunk under both chunkers — identical words, only line breaks
+and the re-embed differ. Without a floor, a −0.055 cannot be split into "cut placement"
+and "same text, new vectors".
+**Decided by:** rebuild the control's index from scratch (same config, `index_dir`
+pointed at a fresh directory, ~$0.03) and run `dev`; the flip count against `be04` is
+the re-embedding floor for this axis. Two rebuilds would give a spread. Also decides
+whether the structure chunker should join lines with spaces to remove the
+whitespace difference on single-chunk articles.
+**Status:** open — proposed to Krutik with the Axis 1 re-runs.

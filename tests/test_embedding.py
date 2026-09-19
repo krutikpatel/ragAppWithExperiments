@@ -208,3 +208,57 @@ def test_dense_retriever_refuses_to_build_without_provenance(tmp_path):
     index, text = _index()
     with pytest.raises(ValueError, match="provenance"):
         DenseRetriever(index.chunk_to_doc, text, embedder=FakeEmbedder(EmbedderConfig(model="intfloat/e5-base-v2")))
+
+
+# --- MIS-024: rate limiting gets its own retry budget ------------------------------
+
+def test_429_waits_for_retry_after_and_outlasts_the_ordinary_backoff(monkeypatch):
+    """Four 429s in a row, then success: the ordinary 4-attempt budget would have
+    given up; the rate-limit budget waits (Retry-After honoured) and finishes."""
+    import httpx
+
+    from rag.embedding.base import OpenRouterEmbedder
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    sleeps: list[float] = []
+    monkeypatch.setattr("rag.embedding.base.time.sleep", lambda s: sleeps.append(s))
+    responses = iter([429, 429, 429, 429, 200])
+
+    def fake_post(url, headers, json, timeout):
+        status = next(responses)
+        req = httpx.Request("POST", url)
+        if status == 429:
+            return httpx.Response(429, headers={"Retry-After": "7"}, request=req, json={"error": "slow down"})
+        return httpx.Response(
+            200, request=req,
+            json={"data": [{"embedding": [1.0, 0.0], "index": i} for i, _ in enumerate(json["input"])], "usage": {"prompt_tokens": 3, "cost": 0.0},
+                  "provider": "DeepInfra"},
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    embedder = OpenRouterEmbedder(EmbedderConfig(model="qwen/qwen3-embedding-8b", provider="DeepInfra", max_attempts=2))
+    vectors = embedder.embed_texts(["a", "b"], input_type="passage")
+    assert len(vectors) == 2
+    assert sleeps == [7.0, 7.0, 7.0, 7.0], "Retry-After seconds honoured on every 429"
+    assert embedder.usage.rate_limited == 4 and embedder.usage.retries == 4
+
+
+def test_429_without_retry_after_backs_off_from_fifteen_seconds_and_gives_up_eventually(monkeypatch):
+    import httpx
+
+    from rag.embedding.base import OpenRouterEmbedder
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    sleeps: list[float] = []
+    monkeypatch.setattr("rag.embedding.base.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(
+        httpx, "post",
+        lambda url, headers, json, timeout: httpx.Response(429, request=httpx.Request("POST", url), json={}),
+    )
+    embedder = OpenRouterEmbedder(EmbedderConfig(
+        model="qwen/qwen3-embedding-8b", provider="DeepInfra", max_attempts=2, rate_limit_attempts=3,
+    ))
+    with pytest.raises(RuntimeError, match="rate-limited"):
+        embedder.embed_texts(["a"], input_type="passage")
+    assert sleeps[:3] == [15.0, 30.0, 60.0]
+    assert embedder.usage.rate_limited == 3

@@ -101,6 +101,15 @@ Derived from the prevention rules below. Run through it and say in chat that you
     and read the error body.** OpenRouter applies some endpoints' context length to
     a batch's *total* tokens and then drops the pinned provider; the 404 body's
     `routing_funnel` says so, and our embedder was discarding it. (MIS-023)
+31. **A rate limit (HTTP 429) outlasts an ordinary retry schedule — give it its own
+    budget, honour `Retry-After`, and record the count.** 2 / 4 / 8 s expires inside
+    a per-minute window; two index builds died that way, one 42 minutes in. Batch
+    long builds so the slowest is last, and never let two builds share a rate
+    window. (MIS-024)
+32. **A chunking comparison is also a re-embedding comparison.** Every chunker is a
+    fresh embed, and 59% of vectors change on re-embedding the same text
+    (EXP-0012). Measure the control-rebuild floor before calling a chunking delta
+    smaller than it (OQ-031). (EXP-0022)
 
 ---
 
@@ -698,3 +707,36 @@ Derived from the prevention rules below. Run through it and say in chat that you
   real chunks at the configured batch size and read the response; raise every
   non-transient provider error with its body.
 - **Added to preflight:** yes (item 30)
+
+## MIS-024 — Two index builds died on DeepInfra rate limiting because 429 was retried like a blip
+- **Date:** 2026-09-19
+- **Severity:** Medium — EXP-0019 (sentence-window) VOID twice, EXP-0021 (semantic)
+  failed before its run row existed; ~$0.02–0.03 of embedding calls lost; two
+  experiments of the axis still unrun.
+- **What happened:** The four Axis 1 configs ran back to back, each building an index.
+  During the first build DeepInfra began returning 429 (16 retries in EXP-0022's
+  build). The semantic chunker's sentence pass (195,822 sentences, batch 256) hit
+  429s that outlasted the embedder's 4 attempts at 2 / 4 / 8 s and raised after 4,505
+  of ~6,050 articles were cached. The sentence-window build (3,065 calls) raised
+  ~42 minutes in; its `dev` run then tried to rebuild and hit 429 immediately.
+- **How it was caught:** The batch's summary showed `HTTPStatusError 429` for the last
+  four runs; the results store had two VOID rows and no row for the semantic runs.
+- **Root cause:** 429 sat in the same retry set as 5xx and timeouts. A rate limit is
+  not transient on the 2–14 s scale; it is a per-minute (or longer) quota, and the
+  provider's `Retry-After` header — when sent — was ignored. Running four builds
+  consecutively also kept the quota saturated, so each run inherited the previous
+  one's limit.
+- **Impact:** EXP-0019 needs a full re-run ($0.03); EXP-0021's sentence pass resumes
+  from its cache (1,500 articles left, ~$0.01) then needs its index ($0.03). The
+  partial sentence-window embeddings were not saved, because the dense index is
+  written whole at the end.
+- **Fix applied:** `OpenRouterEmbedder` gives 429 its own budget: up to 8 rate-limited
+  attempts, waiting `Retry-After` seconds when the provider sends a number, else
+  15 s doubling to a 300 s cap, on top of the ordinary attempts; `usage.rate_limited`
+  is recorded so a slow build reads as rate limiting, not latency. Pinned by two
+  tests (tests/test_embedding.py).
+- **Prevention rule:** Rate limits get a schedule of their own and a counter on the
+  run row. Do not chain long index builds without a gap. The dense index builder
+  should checkpoint groups to disk so a failed build keeps what it paid for —
+  **not done yet**, filed as a follow-up in the EXP-0019 re-run.
+- **Added to preflight:** yes (item 31).

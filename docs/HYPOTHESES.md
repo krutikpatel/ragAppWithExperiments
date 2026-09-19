@@ -310,7 +310,12 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   procedure blocks where the control cuts 0, so if anything moves it is the
   procedural questions, and the story wants that number reported either way.
 - **Tested by:** EXP-0022 vs `promoted` on `dev`; vs EXP-0008 on `dev_large`.
-- **Resolution:** pending.
+- **Resolution:** **wrong on both splits.** `dev` Δ −0.055 (p = 0.033; 6 / 17), outside
+  the ±0.02 bound; `dev_large` +0.0088 (p = 0.0002), outside ±0.005 — and the two
+  disagree in direction. The reasoning missed two things: half the `dev` losses are
+  on single-chunk articles whose words did not change (line breaks + a fresh embed
+  did, OQ-031), and the `dev_large` gain is once more the `feature_request` slice
+  (54 / 0). `run_20260918_235010_d53e`, `run_20260919_014505_4c6e`.
 
 ## H-016 — Semantic chunking produces more, shorter chunks than the control and does not change recall
 - **Date written:** 2026-09-18, before EXP-0021 ran

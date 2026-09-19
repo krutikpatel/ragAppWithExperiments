@@ -122,6 +122,14 @@ class EmbedderConfig:
     provider: str = ""
     max_attempts: int = 4
     backoff_s: float = 2.0
+    # 429 (rate limited) is not a blip: the window is per minute or longer, and
+    # 2 / 4 / 8 s of backoff expires inside it (MIS-024 killed two index builds).
+    # A 429 gets its own budget: `Retry-After` when the provider sends one, else
+    # `rate_limit_backoff_s` doubling per rate-limited attempt, up to
+    # `rate_limit_attempts` of them, on top of the ordinary attempts.
+    rate_limit_attempts: int = 8
+    rate_limit_backoff_s: float = 15.0
+    rate_limit_max_wait_s: float = 300.0
     # openrouter only. Ask the provider for a truncated output (Matryoshka /
     # `dimensions` in the request; OQ-025 showed it passes through). None = the
     # model's native width. Part of the index key; the response length is asserted
@@ -186,6 +194,9 @@ class EmbedUsage:
 
     calls: int = 0
     retries: int = 0
+    # How many of those retries were 429s (MIS-024): recorded so a slow build
+    # can be read as rate limiting rather than as provider latency.
+    rate_limited: int = 0
     prompt_tokens: int = 0
     cost_usd: float = 0.0
     providers_seen: list[str] = field(default_factory=list)
@@ -231,7 +242,10 @@ class OpenRouterEmbedder(Embedder):
                 "OPENROUTER_API_KEY is not set. It lives in .env at the repo root."
             )
         last_error: Exception | None = None
-        for attempt in range(1, self.config.max_attempts + 1):
+        rate_limited = 0
+        attempt = 0
+        while attempt < self.config.max_attempts + rate_limited:
+            attempt += 1
             try:
                 response = httpx.post(
                     OPENROUTER_EMBEDDINGS_URL,
@@ -262,13 +276,29 @@ class OpenRouterEmbedder(Embedder):
                         f"{exc.response.text[:500]}"
                     ) from exc
                 last_error = exc
+                if exc.response.status_code == 429 and rate_limited < self.config.rate_limit_attempts:
+                    rate_limited += 1
+                    self.usage.retries += 1
+                    self.usage.rate_limited += 1
+                    time.sleep(self._rate_limit_wait(exc.response.headers.get("Retry-After"), rate_limited))
+                    continue
             self.usage.retries += 1
-            if attempt < self.config.max_attempts:
-                time.sleep(self.config.backoff_s * (2 ** (attempt - 1)))
+            if attempt < self.config.max_attempts + rate_limited:
+                time.sleep(self.config.backoff_s * (2 ** (min(attempt, 6) - 1)))
         raise RuntimeError(
-            f"{self.config.model}: {self.config.max_attempts} attempts failed; "
+            f"{self.config.model}: {attempt} attempts failed ({rate_limited} rate-limited); "
             f"last error {type(last_error).__name__}: {last_error}"
         ) from last_error
+
+    def _rate_limit_wait(self, retry_after: str | None, nth: int) -> float:
+        """Seconds to wait after the nth consecutive 429: the provider's Retry-After
+        when it is a number of seconds, else 15 s doubling, capped."""
+        if retry_after:
+            try:
+                return min(float(retry_after), self.config.rate_limit_max_wait_s)
+            except ValueError:
+                pass  # an HTTP-date; fall through to the schedule
+        return min(self.config.rate_limit_backoff_s * (2 ** (nth - 1)), self.config.rate_limit_max_wait_s)
 
     def _parse(self, payload: dict[str, Any], expected: int, attempt: int) -> list[list[float]]:
         # Assert the response holds what was asked for, at the point of the call
