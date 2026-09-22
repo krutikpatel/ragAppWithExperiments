@@ -1,0 +1,29 @@
+# EXP-0023 — the control, re-embedded (OQ-031): the re-embedding floor for Axis 1.
+#
+# Identical to configs/promoted.yaml except `index_dir`, which points at a fresh
+# directory so the cached control index cannot be reused and the same 8,218 chunks
+# are embedded again by the same model on the same provider. Nothing about the
+# configuration that determines a vector changes; only the vectors do, because
+# hosted embeddings are not byte-deterministic (EXP-0012: 59% identical on re-embed).
+# The flip count against `promoted` (be04) on dev is the floor every chunking delta
+# in Axis 1 is read against. Estimated: ~$0.03 index + $0.0001 queries.
+name: EXP-0023 control re-embedded — qwen3-embedding-8b (DeepInfra), fixed-600/100, top-5 distinct docs, pool 50, Tier 1, dev (OQ-031 floor)
+axis: control
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+  index_dir: indexes/rebuild_control_1
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
