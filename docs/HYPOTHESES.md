@@ -284,7 +284,15 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   sentence directly. If wrong, the gain will be concentrated in the long fifth of
   the corpus, which the per-question flips can show.
 - **Tested by:** `rag compare promoted <dev run>` for each of the four.
-- **Resolution:** pending.
+- **Resolution:** **confirmed.** `dev` strict recall@5: parent-document 0.695
+  (p = 0.46), semantic 0.675 (p = 0.078), structure 0.665 (p = 0.033), sentence-window
+  0.530 (p = 0.0001) against the control's 0.720. None beats it; two are negative. The
+  stated reasoning was wrong in its mechanism, though: I expected a flat curve because
+  79% of articles fit in one control chunk, but three of the four chunkers re-cut
+  almost everything (semantic left 2.9% of articles whole, sentence-window 0.5%), so
+  the axis was never testing "chunk width on the long fifth" — it was testing much
+  finer chunking against coarse, and finer lost monotonically. `run_20260919_014505_4c6e`,
+  `run_20260919_030111_72ea`, `run_20260922_083410_9f8a`, `run_20260923_042438_c9b1`.
 
 ## H-014 — Sentence-window raises the collapse ratio the most and multi-document strict recall the least
 - **Date written:** 2026-09-18, before EXP-0019 ran
@@ -299,7 +307,15 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   turned into a number.
 - **Tested by:** `collapse_ratio_mean`, `pool_exhaustion_rate` and the
   `gold_docs:multi` slice on EXP-0019's `dev` run vs `be04`.
-- **Resolution:** pending.
+- **Resolution:** **half right.** Highest collapse of the axis: yes — 1.314 on `dev`
+  and 1.490 on `dev_large` (p90 2.2), against the control's 1.106. **Above 2.0: no**,
+  and the reason is instructive: the 50-chunk pool caps the walk, and the gold article
+  usually has only one or two sentences in that pool, so there is little to collapse.
+  Multi-document strict recall was no higher than the control (0.250 vs 0.350, 3 / 7),
+  as stated, but within noise on n = 40 — and the overall loss (−0.190) dwarfs it, so
+  the multi-document clause was right for the wrong reason: the ranking got worse
+  everywhere, not specifically on multi-article questions. Pool exhaustion stayed 0.
+  `run_20260923_042438_c9b1`, `run_20260922_084139_aaf1`.
 
 ## H-015 — Structure chunking is within noise of the control everywhere
 - **Date written:** 2026-09-18, before EXP-0022 ran
@@ -329,7 +345,16 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   the part I am least sure of and is why it is written down.
 - **Tested by:** `chunking_profile.n_chunks` on the EXP-0021 run row; `rag compare`
   on `dev`.
-- **Resolution:** pending.
+- **Resolution:** **wrong on the chunk count, right on recall.** 19,296 chunks, not
+  9,000–14,000 — and the number that exposes the error is the one I did not predict:
+  **only 2.9% of articles stayed whole** (the control leaves 79.0%). My reasoning
+  assumed "the 95th percentile of ten distances is usually the single largest one, so
+  most articles get one cut"; what I missed is that the rule is per article, so every
+  article with three or more sentences gets at least one cut no matter how coherent it
+  is, and the median article has eleven. Recall: −0.045 on `dev`, inside the stated
+  ±0.03? No — just outside, at p = 0.078, which the tool calls no measurable
+  difference. Counted as wrong on the count, inconclusive on the bound.
+  `run_20260922_083410_9f8a`, `run_20260922_061430_500f`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

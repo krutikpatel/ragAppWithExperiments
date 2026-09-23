@@ -35,6 +35,11 @@ produced one.
 | EXP-0020 | `run_20260919_030111_72ea` | 2026-09-19 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.025, CI [−0.075, +0.025], p=0.46** (12 / 17); multi-doc 0.350 (3/3); nDCG −0.014 (p=0.42). **Collapse 1.106 → 1.315 (p90 1.4 → 1.8)** — first Phase 2 config to move it; no exhaustion. Gains are the F10 exact-term set. **No measurable difference; not promoted** | 0.695 | 0.800 | 0.617 | 0.556 (n=160) | — | 1361 | 0.0000004 | VALID | [→](experiments/EXP-0020.md) |
 | EXP-0019 | `run_20260919_042347_e7dd` | 2026-09-19 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large` — index build (196,133 rows) died on DeepInfra **HTTP 429 after 4 retries** ~42 min in; partial embeddings lost. See MIS-024 | — | — | — | — | — | — | — | VOID (MIS-024) | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260919_050519_c444` | 2026-09-19 | chunking | same, `dev` — no index on disk, rebuild attempted, immediate 429. See MIS-024 | — | — | — | — | — | — | — | VOID (MIS-024) | [→](experiments/EXP-0019.md) |
+| EXP-0023 | `run_20260922_052729_e550` | 2026-09-22 | control | **the control re-embedded** into a fresh index dir (OQ-031): same config, same 8,218 chunks, new vectors. vs promoted (0.720): **Δ −0.010, CI [−0.025, 0.000], p=0.49 — 0 gained / 2 lost**, both rank 5→6; multi-doc 0 flips; nDCG@10 unchanged to 4 dp. **This is the re-embedding floor every Axis 1 delta is read against.** Index $0.031, 623 s | 0.710 | 0.810 | 0.631 | 0.561 (n=160) | — | 6097 | 0.0000004 | VALID | [→](experiments/EXP-0023.md) |
+| EXP-0021 | `run_20260922_061430_500f` | 2026-09-22 | chunking | **semantic chunking** (95th-percentile consecutive-sentence distance, ≤600 words) on `dev_large`: **19,296 chunks, only 2.9% of articles whole** (control 79.0%), mean 123 words, 3,482 procedure blocks cut. vs EXP-0008: **−0.0104, CI [−0.015, −0.006], p=0.0001** (52/117); @1 −0.036. Sentence pass $0.008 (50,852 embedded, 4,505 from cache) + index $0.031, 1,180 s | 0.963 | 0.963 | 0.906 | 0.883 (n=6,221) | — | 4296 | 0.0000004 | VALID | [→](experiments/EXP-0021.md) |
+| EXP-0021 | `run_20260922_083410_9f8a` | 2026-09-22 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.045, CI [−0.090, 0.000], p=0.078** (6 / 15); multi-doc 0.300 (1/3); nDCG −0.034; collapse 1.238. Losses look like evidence dilution — golds with 2–7 chunks in the pool whose best 123-word piece loses to other articles' best. **No measurable difference; not promoted.** H-016 wrong on chunk count | 0.675 | 0.780 | 0.596 | 0.527 (n=160) | — | 7097 | 0.0000004 | VALID | [→](experiments/EXP-0021.md) |
+| EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
+| EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
 Status values: `RUNNING`, `VALID`, `VOID`, `SUPERSEDED`.
 
@@ -169,6 +174,65 @@ What the axis established:
    matching here is worth a re-order inside dense's top ten on a dozen questions and
    nothing more.
 
+## Axis 1 scorecard — chunking (P2-07, EXP-0019–0023)
+
+Four chunkers against the promoted control (fixed 600 words / 100 overlap), plus a
+control rebuild that measures the floor. `dev` decides (DEC-055); `dev_large` is the
+single-document direction check. Every delta is a paired test (DEC-047, seed 20260915).
+Definitions and the two scope changes (late chunking dropped, structure-aware
+redefined) are DEC-057. Total actual spend for the axis: **$0.161** over 9 runs
+(2 VOID on rate limiting, MIS-024), of which $0.128 is index builds.
+
+| EXP | Chunker | chunks | articles whole | proc. blocks cut (indexed / context) | `dev` strict R@5 (Δ, CI, p) | flips (+/−) | `dev` multi-doc | `dev` nDCG@10 | `dev` collapse | `dev_large` Δ | index | Verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| — | **control** fixed 600/100 | 8,218 | 79.0% | 0 / 0 | 0.720 | — | 0.350 | 0.631 | 1.106 | 0.973 | 135 MB | promoted |
+| 0023 | control, **re-embedded** | 8,218 | 79.0% | 0 / 0 | 0.710 (−0.010, [−0.025, 0.000], **0.49**) | 0 / 2 | 0.350 (0/0) | 0.631 | 1.107 | — | 135 MB | **the floor** |
+| 0020 | parent-document (150 → 600) | 18,884 | 44.7% | 1,237 / 150 | 0.695 (−0.025, [−0.075, +0.025], 0.46) | 12 / 17 | 0.350 (3/3) | 0.617 | 1.315 | −0.007 (p=0.0002) | 309 MB | no measurable difference |
+| 0021 | semantic (95th pct) | 19,296 | 2.9% | 3,482 / 3,482 | 0.675 (−0.045, [−0.090, 0.000], 0.078) | 6 / 15 | 0.300 (1/3) | 0.596 | 1.238 | −0.010 (p=0.0001) | 316 MB | no measurable difference |
+| 0022 | structure (line boundaries) | 8,689 | 79.0% | 41 / 41 | 0.665 (−0.055, [−0.100, −0.010], **0.033**) | 6 / 17 | 0.300 (0/2) | 0.624 | 1.111 | **+0.009** (p=0.0002) | 142 MB | negative on `dev`; splits disagree |
+| 0019 | sentence-window (1, ±3) | **196,133** | 0.5% | 5,936 / 3,263 | **0.530 (−0.190, [−0.260, −0.120], 0.0001)** | 10 / **48** | 0.250 (3/7) | 0.485 | 1.314 | −0.072 (p=0.0001) | **3,213 MB** | negative, both splits |
+
+What the axis established:
+
+1. **No chunker beats fixed 600/100 on `dev`.** Two are indistinguishable from it, two
+   are worse, and the best of the four (parent-document, −0.025) is still negative.
+   **H-013 confirmed.** The control was not tuned into this position — it was chosen in
+   DEC-038 before any of these chunkers existed.
+2. **The re-embedding floor is 2 questions of 200** (EXP-0023), so the churn in these
+   runs is real and not an artifact of rebuilding the index. It also corrects a caution
+   written into EXP-0022 before the floor existed.
+3. **Finer chunks cost recall on this corpus, monotonically in how fine they are.**
+   Ordered by mean indexed length: 309 words → 0.720, 124 → 0.695, 123 → 0.675,
+   12 → 0.530. Max pooling takes one chunk as a document's score, so splitting an
+   article spreads its evidence and weakens every piece. The losses are dominated by
+   golds that sit at rank 1–5 under the control and slide past the boundary, with a
+   tail that falls out of the top 100 entirely.
+4. **What finer chunks do buy is the exact-term question** — the same 6–10 questions
+   gained by every config, and the same family BM25 wins (F10): *"add a full PDF to my
+   portfolio site"* (control rank 9 → 1 or 2 under three of the four chunkers),
+   *"header background to black when scrolling"*, *"grid gallery"*. Worth about ten
+   questions; the control's coarse chunks are worth about forty.
+5. **The flat curve the story predicted for single-document questions did not appear,
+   because no chunker left the articles alone.** 79.0% of articles fit in one control
+   chunk, but semantic left only 2.9% whole and sentence-window 0.5%. Flatness would
+   have required a chunker that mostly agrees with the control; only structure-aware
+   does (same 79.0%, same 4,915 articles), and it is the one that landed within a few
+   points — and part of its −0.055 is a whitespace side-effect (OQ-032), not where it cut.
+6. **The document-level walk (DEC-040) does not rescue a worse ranking.** Collapse rose
+   with chunk fineness (1.11 → 1.24 → 1.31 → 1.49 on `dev_large`) and the pool was never
+   exhausted, so the walk did exactly what it was built to do — and the deltas are still
+   negative. This is the P2-07 confound, measured: small-to-big overlaps with the walk,
+   and the overlap is not where the loss comes from.
+7. **Procedure blocks: the control's overlap already protects them.** Fixed 600/100 cuts
+   0 of 5,936; every alternative cuts more (41, 1,237, 3,482, 5,936). The story asked for
+   "fixed chunking split N procedures, heading-aware reduced it to M, and multi-hop
+   recall moved X"; measured, the sentence reads the other way round, and multi-hop
+   recall did not move at significance under any chunker (0.250–0.350 on n=40, all
+   p ≥ 0.34).
+8. **`dev_large` disagreed with `dev` again** (structure: +0.009 vs −0.055), and again the
+   `dev_large` gain was concentrated in the `feature_request` slice. Three axes in, the
+   synthetic split has not once changed a decision correctly (DEC-055).
+
 ## Negative results (P2-17)
 
 Standing section, populated as Phase 2 runs. Each entry: what was tried, the measured
@@ -232,6 +296,41 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   finding: on this corpus the value of the lexical half is a re-ordering of dense's
   ranks 6–9 on about a dozen questions, and any weight large enough to introduce a
   document dense did not have costs more than it recovers.**
+- **EXP-0019 — sentence-window chunking (1 sentence indexed, ±3 sentences of context).**
+  `dev` strict recall@5 0.720 → 0.530, Δ −0.190, 95% CI [−0.260, −0.120], p = 0.0001
+  (10 gained / 48 lost); nDCG@10 −0.146; `dev_large` −0.072 (p = 0.0001) — both splits
+  agree, the only Axis 1 config where they do. What it cost to find out: a 196,133-row
+  index, 3,213 MB, 2.8 hours to build, $0.034, against the control's 8,218 rows and
+  135 MB. **Decision: control retained. Finding: a 12-word median index row cannot
+  represent a help article on this corpus — 21 of the 48 lost questions fell past rank
+  10 and one left the top 100 entirely. The ±3-sentence context still cut 3,263 of
+  5,936 procedure blocks, so the window would have to be chosen against the
+  procedure-length distribution rather than taken from a library default.**
+- **EXP-0020 — parent-document / small-to-big (150-word children indexed, 600-word
+  parent as context).** `dev` Δ −0.025, CI [−0.075, +0.025], p = 0.46 (12 / 17);
+  `dev_large` −0.007 (p = 0.0002). Collapse 1.106 → 1.315. **Decision: control
+  retained. Finding: the technique's usual lift is partly priced into the baseline
+  already (DEC-040's document-level walk), and what remains is evidence dilution under
+  max pooling — several lost golds had 3–6 children in the candidate pool while their
+  best child ranked below other articles' best.**
+- **EXP-0021 — semantic chunking (95th-percentile consecutive-sentence distance).**
+  `dev` Δ −0.045, CI [−0.090, 0.000], p = 0.078 (6 / 15); `dev_large` −0.010
+  (p = 0.0001). Cost: the only chunker that pays twice — $0.008 for the sentence pass
+  (plus ~$0.02 lost to MIS-024) on top of a $0.031 index. **Decision: control retained.
+  Finding: a per-article percentile rule cuts a coherent short article as readily as a
+  rambling long one — 19,296 chunks, only 2.9% of articles left whole — so on this
+  corpus "semantic chunking" is a much finer chunker, not a smarter one.**
+- **EXP-0022 — structure-aware chunking on the corpus's line structure.** `dev` Δ −0.055
+  (p = 0.033, 6 / 17); `dev_large` **+0.009** (p = 0.0002, entirely `feature_request`).
+  **Decision: control retained; the splits disagree, so the `dev_large` gain cannot
+  promote (DEC-055). Finding: keeping procedures intact was already delivered by the
+  control's 100-word overlap (0 blocks cut vs this chunker's 41), so the premise of the
+  technique does not apply to a corpus whose chunker already overlaps.**
+- **EXP-0023 — the control, re-embedded (not a technique; the axis's measuring stick).**
+  Same config, new vectors: 2 questions of 200 flip, both rank 5 → 6, nDCG@10 unchanged
+  to four decimals. **Decision: none — this is the floor the four chunkers above are read
+  against, and it is what lets EXP-0020's and EXP-0021's 21–29 flips be called churn
+  rather than noise.**
 
 ## Phase 1 scorecard — the controls (P1-08)
 

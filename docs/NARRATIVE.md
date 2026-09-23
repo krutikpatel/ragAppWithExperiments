@@ -324,6 +324,61 @@ a weak retriever overall, and the fusion weight large enough to recover the doze
 the weight that starts losing the seventy. I recorded the axis as five negatives and
 nulls, kept the dense control, and spent under a cent.
 
+### Chunking: four ways to cut, and a fifth run that measured the ruler (EXP-0019 to EXP-0023)
+
+This was the axis I expected to be boring. The corpus profile said 79% of articles fit
+inside a single 600-word chunk, so for four fifths of the corpus a chunker has nothing
+to change, and two chunk-size changes under BM25 had each moved exactly one question
+(EXP-0002, EXP-0003). I wrote that expectation down (H-013) and it held — but not for
+the reason I gave.
+
+Two free checks before any code: the frozen text has **no headings at all** (0 of 6,221
+articles), and a third of its sentence boundaries are glued together with no space
+("…your account.Before you begin:…"). So "structure-aware splitting on headings" had
+nothing to split on, and any sentence-based chunker needed a splitter that knows
+"account.Before" is two sentences. I redefined structure-aware on the corpus's own line
+structure — cut at line ends, never between a "To do X:" header and its steps — and put
+that, plus dropping late chunking (no hosted endpoint returns the token-level
+embeddings it needs), to Krutik as a scope change (DEC-057).
+
+Then the results. Nothing beat fixed 600/100. Ordered by how finely each chunker cuts:
+parent-document 0.695, semantic 0.675, structure 0.665, sentence-window 0.530, against
+the control's 0.720. The two coarse ones are inside the noise; structure-aware is a
+five-point loss (p = 0.033); sentence-window is a nineteen-point loss (p = 0.0001) and
+the largest negative in Phase 2 — for a 196,133-row index that took 2.8 hours to build
+and 3.2 GB to store, against the control's 8,218 rows and 135 MB.
+
+The mechanism is the same in every case and it is not about chunk size as such. A
+document's score is the best of its chunks (the pooling rule fixed in Phase 0), so
+cutting an article into pieces makes each piece weaker while rival articles keep one
+strong piece. Over and over the candidate pool held several chunks of the right
+article — the retriever had it — and still ranked it sixth: *"remove the ribbon from one
+plan"* had seven chunks of one gold and four of the other in the pool and fell from
+ranks 1,3 to 1,7. That is filed as a failure category of its own (F12). What finer
+chunks *do* buy is the exact-term question — *"add a full PDF to my portfolio site"*
+went from rank 9 to 1 under three of the four chunkers — the same dozen questions BM25
+won in Phase 1 and fusion recovered in Axis 3. Ten questions gained, forty lost.
+
+The fifth run is the one I would keep if I could keep only one. Every chunker rebuilds
+the index, and re-embedding the same text on a hosted provider does not return the same
+vectors — an earlier probe had found only 59% byte-identical. So I ran the control
+again with a single change: write the index to a new directory, forcing a fresh embed of
+the identical chunks. **Two questions of 200 flipped**, both from rank 5 to rank 6, with
+zero multi-document flips and nDCG unchanged to four decimals (EXP-0023). That number
+is what makes the rest of the axis readable: a 21-flip config is churn, a 48-flip config
+is a real loss, and a caution I had written into the structure-aware writeup — that
+maybe half its losses were just re-embedding noise — was wrong and is corrected there.
+Measuring your own instrument costs three cents and it is the difference between a
+result and a guess.
+
+Two things also went wrong and are worth stating. The provider began rate-limiting us
+mid-batch; our retry waited 2, 4, then 8 seconds, which is nothing against a per-minute
+quota, and two experiments died — one of them 42 minutes into a build (MIS-024). The
+bookkeeping held: both attempts are VOID rows in the ledger rather than gaps, and the
+semantic chunker's boundary cache meant its re-run embedded 50,852 sentences instead of
+196,000. The fix gives rate limits their own schedule and honours the provider's
+`Retry-After`.
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control
@@ -338,23 +393,33 @@ latency:
 | Five distinct documents instead of five chunks | 0.410 → 0.410 | 0 (identical by construction) | 0 | — | $0 | EXP-0004 vs EXP-0003 |
 | Hybrid dense + BM25, weighted α=0.8 (best of five fusion settings) | 0.720 → 0.730 | +0.010 vs dense control (6 / 4; CI [−0.020, +0.040], p = 0.75) | — | 635 ms → 625 ms | $0 extra | EXP-0018 vs EXP-0005 |
 | Hybrid dense + BM25, RRF k=60 | 0.720 → 0.600 | **−0.120** vs dense control (14 / 38; p = 0.0012) | — | — | $0 extra | EXP-0014 vs EXP-0005 |
+| Parent-document chunking (150-word children, 600-word parents) | 0.720 → 0.695 | −0.025 vs dense control (12 / 17; p = 0.46) | floor: 2 questions | — | $0.031 index | EXP-0020 vs EXP-0005 |
+| Semantic chunking (95th-percentile boundaries) | 0.720 → 0.675 | −0.045 (6 / 15; p = 0.078) | floor: 2 questions | — | $0.008 + $0.031 | EXP-0021 vs EXP-0005 |
+| Structure-aware chunking (line boundaries) | 0.720 → 0.665 | −0.055 (6 / 17; p = 0.033) | floor: 2 questions | — | $0.031 index | EXP-0022 vs EXP-0005 |
+| Sentence-window chunking (1 sentence, ±3) | 0.720 → **0.530** | **−0.190** (10 / 48; p = 0.0001) | floor: 2 questions | — | $0.034, 2.8 h, 3.2 GB | EXP-0019 vs EXP-0005 |
 
 One thing moved: the retriever. Everything on the chunking axis was within one
 question, the document-level walk changed what a generator sees on 62 of 200
 questions without changing a retrieval number, the embedding axis kept its control
-(EXP-0008 to EXP-0013), and the retrieval-method axis ranged from a null to a
-twelve-point loss (EXP-0014 to EXP-0018). No generation technique has been compared
-yet — the Tier 2 rows are the control, not a treatment.
+(EXP-0008 to EXP-0013), the retrieval-method axis ranged from a null to a twelve-point
+loss (EXP-0014 to EXP-0018), and the chunking axis from a null to a nineteen-point loss
+(EXP-0019 to EXP-0022) against a measured two-question noise floor (EXP-0023). No
+generation technique has been compared yet — the Tier 2 rows are the control, not a
+treatment.
 
 ## 6. What did not work, and what that suggests
 
-**Chunk size, twice.** Whole documents (EXP-0002) and 600/100 (EXP-0003) each moved BM25
+**Chunking, six times now.** Whole documents (EXP-0002) and 600/100 (EXP-0003) each moved BM25
 by one question against 512/0. The corpus profile explains the flatness before any
 sweep is run: four fifths of the articles fit in a single chunk at any of those
 settings, so the chunker only touches the long fifth, and those articles moved in both
-directions. A Phase 2 chunk-size sweep on this corpus will be a flat line on
-single-document questions unless it changes something other than width; I know that
-now rather than after the sweep (OQ-003).
+directions. The Phase 2 sweep then tested four real chunkers and none beat 600/100
+(EXP-0019 to EXP-0022): what I got wrong in advance was assuming the curve would be
+*flat* because most articles fit in one chunk — three of the four chunkers re-cut nearly
+every article (semantic left 2.9% whole, sentence-window 0.5%), so the axis measured
+fine-versus-coarse rather than width-on-the-long-fifth, and finer lost every time.
+Pooling is why: a document scores as its best chunk, so splitting an article dilutes it
+(F12).
 
 **The premise that chunks collapse into documents.** The handover expected a naive
 top-five-chunk retriever to be capped by adjacent chunks of one article; the measured

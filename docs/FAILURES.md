@@ -171,6 +171,34 @@ they stay in the top five except for four rank-5 → rank-6 cases (EXP-0018).
 | EXP-0017 (α=0.6) | "Im interested in finding a Wix Partner to help redesign and update my existing website." | dense 3; BM25 absent | fused rank 6 | α=0.8 |
 | EXP-0018 (α=0.8) | "How to make the published changes draft?" | dense 5; BM25 65 | fused rank 6 | — (also F9) |
 
+### F12 — Gold article's evidence split across chunks; its best piece loses to another article's best
+A failure of the **rejected** Axis 1 chunkers, recorded because the mechanism explains
+the whole axis. Document score is the max over the article's chunks (DEC-040 pooling),
+so cutting an article into three or thirty pieces makes every piece weaker while rival
+articles keep one strong piece. The candidate pool then holds several chunks of the
+gold article — the retriever "sees" it — and still ranks it below five other documents.
+Stage: `retrieval` (pooling/granularity interaction). Worse the finer the chunks:
+mean indexed length 309 words → 0.720 strict recall@5, 124 → 0.695, 123 → 0.675,
+12 → 0.530 on `dev`.
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0021 (semantic) | "How do I remove the ribbon from one plan on the plan card list?" | golds at control ranks 1, 3 | ranks 1, 7 — with 7 and 4 chunks of the two golds in the 50-chunk pool | the control's coarse chunks |
+| EXP-0020 (parent-doc) | "Is domain privacy included in the price of purchasing the domain…" | control rank 1 | rank 8, with 5 children of the gold in the pool | the control |
+| EXP-0019 (sentence-window) | "I need to know how to prevent an item in my CMS collection from being published" | control rank 4 | rank 70; **0** gold sentences in the pool | the control |
+| EXP-0019 (sentence-window) | "How to make the published changes draft?" | control rank 5 | absent from the top 100 | the control |
+
+### F13 — Rank-5 gold slips to rank 6 on a pure re-embed (the floor)
+Not a technique failure: the measured cost of embedding the same text again on a hosted
+provider. Two questions of 200, both single-gold, both exactly on the boundary
+(EXP-0023). Stage: `retrieval`. Recorded so that no future axis attributes two flips to
+a technique.
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0023 | "how to see my website ip address" | rank 5 under `be04` | rank 6 after re-embedding the identical corpus | — (irreducible; ~1 point of strict recall@5) |
+| EXP-0023 | "how to cancel a payment for a Wix Premium plan" | rank 5 | rank 6 | — |
+
 ## Counts by run
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
@@ -186,5 +214,15 @@ Retrieval-only categories (F8–F11) are counted from `rag diff` flips, not samp
 | EXP-0016 (α=0.4) | — (14 gained, not read one by one) | 40 |
 | EXP-0017 (α=0.6) | 7 recovered | 16 (8 absent from BM25) |
 | EXP-0018 (α=0.8) | 3 recovered | 4 (all rank 5 → 6) |
+
+Axis 1 (chunking), same method:
+
+| Run | F10 exact-term questions recovered | F12 gold diluted across chunks (lost vs control) |
+|---|---|---|
+| EXP-0020 (parent-document) | 4 of the 12 gains | 17 |
+| EXP-0021 (semantic) | 4 of the 6 gains | 15 |
+| EXP-0022 (structure) | 3 of the 6 gains | 17 |
+| EXP-0019 (sentence-window) | 6 of the 10 gains | 48 (21 past rank 10; 1 out of the top 100) |
+| EXP-0023 (control re-embed) | — | 2 (F13, the floor) |
 
 "Not swept" means the category was found by reading a sample, not counted over the run.

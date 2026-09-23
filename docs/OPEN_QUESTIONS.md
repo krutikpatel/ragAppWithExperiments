@@ -437,4 +437,28 @@ pointed at a fresh directory, ~$0.03) and run `dev`; the flip count against `be0
 the re-embedding floor for this axis. Two rebuilds would give a spread. Also decides
 whether the structure chunker should join lines with spaces to remove the
 whitespace difference on single-chunk articles.
-**Status:** open — proposed to Krutik with the Axis 1 re-runs.
+**Answered 2026-09-22 by EXP-0023 (`run_20260922_052729_e550`, $0.031).** The floor is
+**2 questions of 200**: re-embedding the identical control corpus scored 0.710 vs 0.720
+(Δ −0.010, p = 0.49), lost two questions and gained none, both moving rank 5 → 6, with
+**zero** multi-document flips and nDCG@10 unchanged to four decimals. So Axis 1's
+churn (21–58 flips per config) is the chunking, not the rebuild. It also corrected the
+caution in EXP-0022. One rebuild gives the order of magnitude, not a spread; a second
+would give the spread if a future axis needs it.
+**Status:** answered by EXP-0023.
+
+## OQ-032 — Does the structure chunker's −0.055 survive joining lines with spaces?
+The structure chunker preserves the article's line breaks inside a chunk; the control
+joins the same words with spaces. For the 4,915 articles that are a single chunk under
+both, the words are identical and only **29** of the texts are byte-identical — so
+`\n` versus ` ` is the only difference the embedder sees, and 8 of EXP-0022's 17 lost
+questions are on such articles. The re-embedding floor is 2 questions (EXP-0023), so
+whitespace is a candidate explanation for part of the −0.055 and cut placement for the
+rest. This is an implementation side-effect, not the technique.
+**Decided by:** one variant of `configs/exp_0022_structure_dev.yaml` that joins units
+with a space instead of a newline (a one-line change in `StructureChunker.split`, a new
+`chunker_id`, so a fresh index at ~$0.03) run on `dev`; `rag compare` against EXP-0022
+and against `promoted`. If it lands within the 2-question floor of the control, the
+line breaks were the story and cut placement did nothing; if it stays near 0.665, cut
+placement was the story.
+**Status:** open — not queued; Axis 1 is closed and this is a follow-up, not a fifth
+chunker.
