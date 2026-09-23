@@ -2120,3 +2120,93 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   it again, don't assume — MIS-005); or the sentence-window index's size or build
   time proves to be the thing that decides whether the technique is usable, in
   which case the 3-sentence unit gets its own run rather than a guess.
+
+## DEC-058 — Axis 5 reranking: candidates are documents, cost comes from the response, and `dev` decides
+- **Date:** 2026-09-22
+- **Decided by:** Claude (mechanism only; the **model choice is DEC-059 and is
+  Krutik's** — nothing here picks a reranker)
+- **Status:** Active
+- **Context:** P2-10 adds a reranker between retrieval and the generator. Four
+  things had to be settled before any run, and none of them is a model choice.
+- **Options considered:**
+  1. Make the reranker a retriever that wraps another one, as the hybrid does —
+     rejected: it would make every Axis 5 config a change to the `retrieval`
+     dimension, so `rag promote` could never tell reranking apart from a retriever
+     swap, and the P2-05 one-dimension check would be meaningless for the axis.
+  2. Make the reranker its own config dimension (`reranker`, `reranker_params`,
+     `rerank_candidates`), applied by the runner — chosen.
+- **Decision:** four rules.
+  1. **`rerank_candidates` counts distinct documents, not chunks** (P1-03, DEC-040).
+     The reranker sees every ranked chunk of the top n documents, so "50 -> 5" means
+     the same thing under every chunker. Keeping a document's several chunks in the
+     candidate set is deliberate: it is the only way a cross-encoder *can*
+     re-concentrate the context onto one article, which is the behaviour P2-10 asks
+     to be measured.
+  2. **Everything downstream is recomputed from the reranked ranking** — pooling,
+     the distinct-document walk, the collapse ratio, pool exhaustion and every
+     metric. A post-rerank collapse ratio is the number on the run row.
+  3. **Rerank cost is read from the provider's response, never from a price table**
+     (MIS-025). The measured rates live in a hand-maintained `rerank:` block in
+     `configs/pricing.yaml`; an absent entry is UNAVAILABLE and fails the gate.
+  4. **`dev` decides, and `dev_large` is bought only for a winner.** DEC-055 already
+     makes `dev` the deciding split. Reranking is billed per query, so the
+     `dev_large` direction check costs 31x the `dev` run ($6.22 vs $0.20 for the
+     cheapest candidate). Running it for a configuration that lost on `dev` buys
+     nothing the promotion rule can use. See OQ-033.
+- **Evidence:** measured — the three rerank models' per-query cost and latency on
+  real 50-document calls (MIS-025). The rest is judgment on experimental validity;
+  no measured data.
+- **Consequences:** Axis 5 configs are one-dimension diffs against `promoted.yaml`
+  and `rag promote` handles them like any other axis. Adding the three fields would
+  have moved the `config_hash` of every run already in the ledger (MIS-019), so an
+  axis whose switch is off is excluded from the hash entirely: `promoted.yaml` still
+  hashes to `7c99bc8e9a88e878`, asserted in `tests/test_reranking.py`. Any future
+  axis added this way must follow the same rule or the ledger breaks.
+- **Revisit if:** a reranker wins on `dev` and the `dev_large` check is needed
+  (OQ-033), or a second absent-dimension axis makes the hash exclusion list long
+  enough to be worth a different mechanism.
+
+## DEC-059 — Which rerankers Axis 5 tests
+- **Date:** 2026-09-22
+- **Decided by:** _pending — Krutik. Proposed by Claude._
+- **Status:** **Proposed. Not used in any run.** No Axis 5 experiment starts until
+  this entry names a decision and Krutik has approved the spend (CLAUDE.md §9).
+- **Context:** P2-10 suggests three rerankers. All hosted rerankers go through
+  OpenRouter's `POST /api/v1/rerank`, probed 2026-09-22: the endpoint exists and
+  works. What it serves is narrower than the story assumed.
+- **What was probed** (preflight 10 — the endpoint that would provide it, not a
+  neighbouring listing):
+
+  | Model | Result |
+  |---|---|
+  | `cohere/rerank-v3.5` | served by Cohere. $0.001/query, 778 ms at 50 docs x 600 words |
+  | `cohere/rerank-4-fast` | served by Cohere (`rerank-v4.0-fast`). $0.002/query, 1,298 ms |
+  | `qwen/qwen3-reranker-8b` | served by Fireworks. $0.008125/query, 1,847 ms |
+  | `qwen/qwen3-reranker-4b` | **404 "No endpoints found"** — not served |
+  | `baai/bge-reranker-v2-m3` | **400 "does not exist"** — not on OpenRouter |
+  | `mixedbread-ai/mxbai-rerank-large-v2` | **400 "does not exist"** — not on OpenRouter |
+
+  There is no rerank model listing to browse: `/rerank/models` is a 404 and
+  `/models?category=rerank` is not a valid category, so availability is established
+  one model id at a time.
+- **Options considered:**
+  1. The story's three, substituting `qwen3-reranker-8b` for the unavailable 4B:
+     Cohere v3.5 (proprietary baseline), qwen3-8b (open-weight cross-encoder),
+     LLM-as-reranker via chat completions (a different mechanism). Estimated `dev`
+     cost $0.20 + $0.78 + $0.22 = **$1.20** for the three.
+  2. Add `cohere/rerank-4-fast` as a fourth, to separate "Cohere" from "this Cohere
+     model" — $0.40 more, and it spends one of the axis's five experiment slots that
+     P2-10 reserves for the two k -> n ratio runs.
+  3. Cohere v3.5 alone, the cheapest — rejected: one reranker cannot distinguish
+     "reranking does not help this corpus" from "this reranker does not".
+- **Decision:** _pending Krutik._ Claude's proposal is option 1, and the LLM
+  reranker needs its own model named; `openai/gpt-5-nano` is the generator already
+  chosen in DEC-017 and would keep the axis to models this project has priced, but
+  that is a model choice and so is Krutik's.
+- **Evidence:** measured availability, cost and latency above. No quality data on
+  this corpus for any of them — that is what the experiments are for.
+- **Consequences:** whichever are chosen, `configs/exp_00NN_rerank_*_dev.yaml` are
+  committed before their runs and the axis cap is 5 experiments (P2-06).
+- **Revisit if:** OpenRouter starts serving a rerank model with a materially
+  different mechanism (a multi-vector or late-interaction endpoint — see the ColBERT
+  note in HYPOTHESES.md), or a chosen reranker's provider pin changes.

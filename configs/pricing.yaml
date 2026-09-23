@@ -113,3 +113,25 @@ embeddings:
       in: 0.2
     _model:
       in: 0.2
+rerank_source: MEASURED from usage.cost on real 50-document calls, 2026-09-22 (MIS-025).
+  OpenRouter's /models/<id>/endpoints reports prompt=0, completion=0 for every rerank
+  model while the calls bill real money, so `rag pricing refresh` must never write
+  this block.
+rerank:
+  cohere/rerank-v3.5:
+    Cohere:
+      unit: search_unit
+      usd_per_unit: 0.001
+      docs_per_unit: 100
+      measured: 50 documents of 600 words = 1 search unit, $0.001, 778 ms
+  cohere/rerank-4-fast:
+    Cohere:
+      unit: search_unit
+      usd_per_unit: 0.002
+      docs_per_unit: 100
+      measured: 50 documents of 600 words = 1 search unit, $0.002, 1298 ms
+  qwen/qwen3-reranker-8b:
+    Fireworks:
+      unit: token
+      usd_per_mtok: 0.2
+      measured: 50 documents of 600 words = 40,627 tokens, $0.008125, 1847 ms

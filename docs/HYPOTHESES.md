@@ -356,6 +356,42 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   difference. Counted as wrong on the count, inconclusive on the bound.
   `run_20260922_083410_9f8a`, `run_20260922_061430_500f`.
 
+## H-017 — A cross-encoder gains more than any Phase 2 axis so far, and the gain is on `multi_doc`
+- **Date written:** 2026-09-22, before any Axis 5 run
+- **Source:** Claude.
+- **Hypothesis:** at least one of the three rerankers improves `dev` strict
+  recall@5 by **more than +0.03 at p < 0.05** over the dense control's 0.720 — the
+  first positive Axis result of Phase 2 — and the gain is larger on the `multi_doc`
+  slice than on `single_doc`. Reasoning: every Phase 2 axis so far has changed *what
+  gets indexed* and the answer has been "no measurable difference or worse" four
+  times (Axis 1) and three times (Axis 3). A reranker changes something none of them
+  touched: it reads the question against the passage instead of comparing two
+  independently-made vectors. The multi-document part of the guess is the shakier
+  half — the `multi_doc` slice is 20 questions, so it can move a lot without meaning
+  anything, and I am writing it down because it is the part I expect to be wrong.
+- **Tested by:** `rag compare promoted <run> --metric strict_recall@5` on `dev`, per
+  slice, for EXP-0024 / EXP-0025 / EXP-0026.
+- **Resolution:** _pending._
+
+## H-018 — Reranking raises the collapse ratio, and the ceiling is the retriever's recall@50
+- **Date written:** 2026-09-22, before any Axis 5 run
+- **Source:** Claude, and the P2-10 story, which asks for this explicitly:
+  *"a cross-encoder can re-concentrate results onto a single article and undo the
+  document diversity the retriever was configured to produce."*
+- **Hypothesis:** two parts.
+  1. The post-rerank collapse ratio rises above the control's 1.106 for every
+     reranker — a cross-encoder scoring each passage alone has no reason to spread
+     its top scores across articles, where the retriever's document walk was built
+     to. Parent-document chunking is the only Phase 2 config that has moved this
+     number so far (1.106 -> 1.315, EXP-0020).
+  2. No reranker exceeds the dense control's strict recall **@50 documents**,
+     because a reranker cannot retrieve — it can only promote what was already in
+     the candidate set. That number is the axis's hard ceiling and it is already on
+     the EXP-0005 run row.
+- **Tested by:** `collapse_ratio_mean` on each Axis 5 run row vs EXP-0005's; and
+  each run's strict recall@5 against the control's strict recall@20/@50.
+- **Resolution:** _pending._
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /

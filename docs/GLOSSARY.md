@@ -58,3 +58,24 @@ parsing a chunk id.
 
 **Tier 1 / Tier 2** — Tier 1 is retrieval metrics only, zero LLM calls, the default.
 Tier 2 adds generation and judge metrics and is run only on promoted configs.
+
+**Reranker** — A second, slower scorer that re-orders the candidates a retriever
+already found. It cannot add a document the retriever missed, so its best possible
+result is the retriever's recall at the candidate depth.
+
+**Cross-encoder** — The usual kind of reranker. Where the dense retriever turns the
+question and the passage into vectors *separately* and compares them, a cross-encoder
+reads the question and the passage together in one pass and outputs a relevance
+score. That is far more accurate and far too slow to run over a whole corpus, which
+is why it only ever sees a short candidate list.
+
+**LLM-as-reranker** — Instead of a purpose-built scorer, the candidates are numbered
+and a chat model is asked to put them in order. The difference from a cross-encoder
+is that the model sees every candidate at once and can compare them to each other.
+
+**`rerank_candidates`** — How many **documents** go into the reranker (not chunks).
+"50 → 5" means the top 50 articles are re-scored and the best 5 reach the generator.
+
+**Search unit** — Cohere's billing unit for reranking: one query with up to 100
+documents. It is a per-*query* charge, so a reranking experiment costs more on a
+bigger question set, unlike an index which is paid for once.

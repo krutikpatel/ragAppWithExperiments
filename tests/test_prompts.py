@@ -18,6 +18,8 @@ PINNED_HASHES = {
     "answer@v1": "sha256:cb49635996bd8e0",
     # P1-05: frozen for the whole of Phase 1. An edit here is a v2 and a new control.
     "baseline_answer@v1": "sha256:a5e9b4d936151a8",
+    # P2-10: the LLM-as-reranker's ordering prompt (Axis 5).
+    "rerank_llm@v1": "sha256:c89fb05085e9b10",
 }
 
 
@@ -113,3 +115,16 @@ def test_recorded_generated_answers_contain_no_urls():
                 if row["generated_answer"] and find_urls(row["generated_answer"]):
                     offenders.append((run["run_id"], qid, find_urls(row["generated_answer"])))
     assert offenders == [], f"URL-shaped strings in raw model output: {offenders[:5]}"
+
+
+# --- P2-10: the LLM-as-reranker prompt ----------------------------------------
+
+def test_rerank_prompt_asks_for_an_ordering_of_every_candidate():
+    """The parser tolerates prose (MIS-016), but the prompt still has to ask for the
+    thing the parser reads: bare numbers, each candidate once."""
+    rendered = load_prompt("rerank_llm", "v1").render(question="Q", candidates="[1] A\n\n[2] B", n=2)
+    flat = " ".join(rendered.split())
+    assert "[1] A" in rendered and "Q" in rendered
+    assert "Each number appears exactly once" in flat
+    assert "Output ONLY the numbers, best first" in flat
+    assert "all 2 of them" in flat

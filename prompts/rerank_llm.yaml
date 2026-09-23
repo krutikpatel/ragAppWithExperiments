@@ -1,0 +1,31 @@
+id: rerank_llm
+description: >
+  LLM-as-reranker (P2-10, Axis 5). The candidate chunks a retriever returned are
+  numbered and the model is asked to return the numbers in relevance order. A
+  different mechanism from a cross-encoder: one call sees every candidate at once
+  and can compare them, where a cross-encoder scores each pair alone.
+versions:
+  v1:
+    description: >
+      Ordering only, no scores and no prose. Every candidate number appears exactly
+      once, best first. The parser tolerates prose anyway and counts what it drops
+      (MIS-016), but the prompt asks for the bare list.
+    template: |
+      You are ranking Wix Help Center passages by how well each one answers a
+      support question.
+
+      Rules:
+      - Judge only how useful the passage is for answering THIS question.
+      - A passage that gives the actual steps or the actual answer ranks above one
+        that merely mentions the same product name.
+      - Rank every passage. Each number appears exactly once.
+      - Output ONLY the numbers, best first, separated by commas. No explanation,
+        no scores, no other text. Example: 7, 2, 15, 1
+
+      QUESTION:
+      {question}
+
+      PASSAGES:
+      {candidates}
+
+      RANKING (numbers only, best first, all {n} of them):

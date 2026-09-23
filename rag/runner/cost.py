@@ -27,6 +27,8 @@ project — embedding the whole corpus for a new index — and the $2 gate.
 
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -136,6 +138,12 @@ class PricingTable:
     pricing_version: str
     chat: dict[str, dict[str, dict[str, float]]] = field(default_factory=dict)
     embeddings: dict[str, dict[str, dict[str, float]]] = field(default_factory=dict)
+    # Rerank models are billed in the provider's own unit (Cohere's search unit,
+    # Fireworks' token) and the numbers are MEASURED from `usage.cost`, never
+    # fetched: OpenRouter lists every rerank model at 0 while the calls bill real
+    # money (MIS-025). `refresh_pricing` copies this block through untouched.
+    rerank: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
+    rerank_source: str = ""
     source: str = ""
     path: Path | None = None
 
@@ -153,6 +161,8 @@ class PricingTable:
             pricing_version=str(doc.get("pricing_version", "")),
             chat=doc.get("chat", {}) or {},
             embeddings=doc.get("embeddings", {}) or {},
+            rerank=doc.get("rerank", {}) or {},
+            rerank_source=doc.get("rerank_source", ""),
             source=doc.get("source", ""),
             path=path,
         )
@@ -174,6 +184,10 @@ class PricingTable:
             "available": sorted(p for p in entry if p != "_model"),
         }
 
+    def rerank_price(self, model: str, provider: str) -> dict[str, Any] | None:
+        """The measured billing rule for one pinned rerank model, or None."""
+        return (self.rerank.get(model) or {}).get(provider)
+
     def save(self, path: Path | None = None) -> Path:
         import yaml
 
@@ -190,8 +204,10 @@ class PricingTable:
             {
                 "pricing_version": self.pricing_version,
                 "source": self.source,
+                "rerank_source": self.rerank_source,
                 "chat": self.chat,
                 "embeddings": self.embeddings,
+                "rerank": self.rerank,
             },
             sort_keys=False,
         )
@@ -216,6 +232,10 @@ def refresh_pricing(path: Path = PRICING_PATH) -> PricingTable:
         pricing_version=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         chat=chat,
         embeddings=embeddings,
+        # Copied through, never re-fetched: the listing would overwrite measured
+        # prices with the zeros it reports for rerank models (MIS-025).
+        rerank=current.rerank,
+        rerank_source=current.rerank_source,
         source="OpenRouter /api/v1/models (model-level) and /api/v1/models/<id>/endpoints (per provider)",
         path=path,
     )
@@ -383,11 +403,75 @@ def estimate_index_cost(
     return estimate
 
 
+def estimate_rerank_cost(
+    *,
+    reranker: str,
+    estimate_params: dict[str, Any] | None,
+    n_questions: int,
+    candidate_docs: int,
+    candidate_words: int,
+    pricing: PricingTable,
+) -> dict[str, Any]:
+    """What a reranker will bill for a whole run, before it starts (P2-06).
+
+    Reranking is charged **per query**, not per corpus, so unlike an index build it
+    scales with the split: the same configuration is $0.20 on `dev` and $6.22 on
+    `dev_large`. `candidate_words` is the mean words per candidate chunk, measured
+    from the chunk index rather than assumed.
+
+    Cohere bills a search unit per query (documents beyond `docs_per_unit` add
+    another); Fireworks bills tokens. Both rates are measured, not listed (MIS-025).
+    An LLM reranker is priced from the chat table like any other in-pipeline call.
+    """
+    if not reranker or not estimate_params:
+        return {"rerank_usd": 0.0, "source": "no reranker"}
+    model = estimate_params.get("model", "")
+    kind = estimate_params.get("kind")
+    estimate: dict[str, Any] = {"reranker": reranker, "model": model, "n_questions": n_questions,
+                               "candidate_docs": candidate_docs}
+    if kind == "chat":
+        price = pricing.price("chat", model)
+        if not price:
+            estimate["price_unavailable"] = f"{model} not in chat pricing {pricing.pricing_version}"
+            return estimate
+        words = estimate_params.get("candidate_words") or candidate_words
+        tokens_in = int(n_questions * candidate_docs * words * WORDS_TO_TOKENS)
+        # The model answers with a list of numbers: a few tokens per candidate.
+        tokens_out = n_questions * max(4 * candidate_docs, 32)
+        estimate["rerank_usd"] = round(tokens_in / 1e6 * price["in"] + tokens_out / 1e6 * price["out"], 4)
+        estimate["source"] = (
+            f"LLM reranker: {tokens_in:,} in / {tokens_out:,} out at "
+            f"${price['in']}/${price['out']} per Mtok"
+        )
+        return estimate
+    provider = estimate_params.get("provider", "")
+    rule = pricing.rerank_price(model, provider)
+    if not rule:
+        estimate["price_unavailable"] = (
+            f"{model} ({provider or 'unpinned'}) not in the measured rerank table "
+            f"({pricing.pricing_version}). OpenRouter lists rerank models at $0 and bills "
+            "real money, so an absent entry is unknown, never free (MIS-025)."
+        )
+        return estimate
+    if rule.get("unit") == "search_unit":
+        units = n_questions * max(1, math.ceil(candidate_docs / int(rule.get("docs_per_unit", 100))))
+        estimate["rerank_usd"] = round(units * float(rule["usd_per_unit"]), 4)
+        estimate["search_units"] = units
+        estimate["source"] = f"measured ${rule['usd_per_unit']}/search unit x {units:,} units"
+        return estimate
+    tokens = int(n_questions * candidate_docs * candidate_words * WORDS_TO_TOKENS)
+    estimate["rerank_usd"] = round(tokens / 1e6 * float(rule["usd_per_mtok"]), 4)
+    estimate["tokens"] = tokens
+    estimate["source"] = f"measured ${rule['usd_per_mtok']}/Mtok x {tokens:,} tokens"
+    return estimate
+
+
 def estimate_run_cost(
     *,
     tier2: dict[str, Any] | None,
     index: dict[str, Any],
     pipeline_llm_usd: float = 0.0,
+    rerank: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Total pre-run estimate with the breakdown of what drives it."""
     parts: dict[str, float] = {}
@@ -403,6 +487,11 @@ def estimate_run_cost(
             parts["judge"] = tier2["judge_usd"]
         else:
             unavailable.append(tier2.get("judge_price_unavailable", "generator or judge price unavailable"))
+    if rerank:
+        if "rerank_usd" in rerank:
+            parts["rerank"] = rerank["rerank_usd"]
+        elif "price_unavailable" in rerank:
+            unavailable.append(rerank["price_unavailable"])
     if pipeline_llm_usd:
         parts["pipeline_llm"] = pipeline_llm_usd
     total = round(sum(parts.values()), 4)
@@ -438,6 +527,7 @@ def format_run_estimate(estimate: dict[str, Any], *, pricing_version: str) -> st
 def actual_run_cost(
     *,
     retriever_meta: dict[str, Any],
+    reranker_meta: dict[str, Any] | None = None,
     generator_tokens_in: int,
     generator_tokens_out: int,
     generator_model: str,
@@ -471,6 +561,12 @@ def actual_run_cost(
                 generator_tokens_in / 1e6 * price["in"] + generator_tokens_out / 1e6 * price["out"], 5
             )
             measured.append("generator")
+    rerank_usage = (reranker_meta or {}).get("usage") or {}
+    if rerank_usage.get("cost_usd"):
+        # Provider-reported, straight off `usage.cost`; no table is consulted
+        # because no table is trustworthy for rerank models (MIS-025).
+        parts["rerank"] = round(float(rerank_usage["cost_usd"]), 6)
+        measured.append("rerank")
     if judge_estimate_usd is not None:
         parts["judge"] = judge_estimate_usd
         estimated.append("judge")

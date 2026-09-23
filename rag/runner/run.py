@@ -34,13 +34,14 @@ from rag.runner.cost import (
     PricingTable,
     actual_run_cost,
     estimate_index_cost,
+    estimate_rerank_cost,
     estimate_run_cost,
     estimate_tier2_cost,
     format_estimate,
     format_run_estimate,
 )
 from rag.runner.promoted import check_split_policy, config_diff, load_promoted
-from rag.runner.registry import build_retriever, retriever_class
+from rag.runner.registry import build_reranker, build_retriever, reranker_class, retriever_class
 from rag.runner.store import ResultsStore
 from rag.runner.subsample import build_subsample
 
@@ -252,8 +253,26 @@ def _run(
         index_estimate["chunker_embedding_usd"] = chunker_estimate["index_usd"]
         index_estimate["chunker_source"] = f"{config.chunker}: {chunker_estimate['source']}"
         index_estimate["index_usd"] = round(index_estimate.get("index_usd", 0.0) + chunker_estimate["index_usd"], 4)
-    run_estimate = estimate_run_cost(tier2=cost_estimate or None, index=index_estimate)
+    # P2-10: reranking is billed **per query**, so unlike an index build it scales
+    # with the split — the same config is cents on `dev` and dollars on `dev_large`.
+    # It is estimated here, before the gate, from measured provider rates (MIS-025).
+    rerank_estimate = estimate_rerank_cost(
+        reranker=config.reranker,
+        estimate_params=(
+            reranker_class(config.reranker).estimate_params(config.reranker_params)
+            if config.reranker else None
+        ),
+        n_questions=len(frame),
+        candidate_docs=config.rerank_candidates,
+        candidate_words=_mean_candidate_words(config, chunk_text),
+        pricing=pricing,
+    )
+    run_estimate = estimate_run_cost(
+        tier2=cost_estimate or None, index=index_estimate, rerank=rerank_estimate
+    )
     run_estimate["index"] = index_estimate
+    if config.reranker:
+        run_estimate["rerank"] = rerank_estimate
     print(format_run_estimate(run_estimate, pricing_version=pricing.pricing_version))
     _print_running_totals(store)
     if estimate_only:
@@ -312,6 +331,7 @@ def _run(
             "chunker_meta": json.dumps({"chunker": config.chunker, "params": index.chunker_params,
                                         "profile": chunking_profile, **chunker.provenance()}, default=str),
             "retriever": config.retriever,
+            "reranker": config.reranker or None,
             "top_k": config.top_k,
             "seed": config.seed,
             "generator_model": config.generator_model,
@@ -422,6 +442,16 @@ def _cost_estimate(config: RunConfig, frame, pricing: PricingTable) -> dict:
     )
 
 
+def _mean_candidate_words(config: RunConfig, chunk_text: dict[str, str] | None) -> int:
+    """Mean words per indexed chunk, for the rerank estimate — measured off the
+    chunk index when it exists, else the chunker's configured size, which is an
+    over-estimate and so errs towards firing the gate rather than missing it."""
+    if chunk_text:
+        return max(1, round(sum(len(t.split()) for t in chunk_text.values()) / len(chunk_text)))
+    params = config.chunker_params
+    return int(params.get("chunk_size") or params.get("parent_size") or params.get("max_words") or 600)
+
+
 def _chunker_cache_exists(chunker: Chunker) -> bool:
     """Whether a chunker that embeds (semantic) already has its sentence distances
     on disk for this embedder — True for chunkers that embed nothing."""
@@ -517,6 +547,21 @@ def _execute(
         **config.retriever_params,
     )
     store.update_run(run_id, retriever_meta=json.dumps(retriever.provenance(), default=str))
+    # P2-10, Axis 5. The reranker is the runner's, not the retriever's: it re-orders
+    # a candidate set that any retriever produced, and pooling, the distinct-document
+    # walk and every metric are then recomputed from the reranked ranking.
+    reranker = (
+        build_reranker(
+            config.reranker,
+            chunk_text=chunk_text,
+            generation_cache=generation_cache,
+            **config.reranker_params,
+        )
+        if config.reranker
+        else None
+    )
+    if reranker is not None:
+        store.update_run(run_id, reranker_meta=json.dumps(reranker.provenance(), default=str))
     # P2-07: the generator sees each chunk's context (`context_text`), which the
     # "retrieve small, expand" chunkers make larger than the indexed text.
     context_text = index.context_text
@@ -526,6 +571,8 @@ def _execute(
     rows = frame.to_dict("records")
     results = []
     retrieval_latency_ms: dict[str, int] = {}
+    rerank_latency_ms: dict[str, int] = {}
+    rerank_records: dict[str, dict[str, Any]] = {}
     for row in rows:
         started = time.perf_counter()
         result = retriever.retrieve(
@@ -536,6 +583,22 @@ def _execute(
             candidate_pool=config.candidate_pool,
         )
         retrieval_latency_ms[row["question_id"]] = int((time.perf_counter() - started) * 1000)
+        if reranker is not None:
+            from rag.reranking.base import rerank_result
+
+            started = time.perf_counter()
+            result, record = rerank_result(
+                result,
+                reranker,
+                query=row["question"],
+                chunk_to_doc=index.chunk_to_doc,
+                n_docs=config.rerank_candidates,
+                k_docs=config.top_k,
+                candidate_pool=config.candidate_pool,
+                doc_pooling=config.doc_pooling,
+            )
+            rerank_latency_ms[row["question_id"]] = int((time.perf_counter() - started) * 1000)
+            rerank_records[row["question_id"]] = record
         results.append(result)
     results_by_question = {result.question_id: result for result in results}
     # Re-record after the queries so a hosted embedder's usage covers the whole run.
@@ -563,6 +626,13 @@ def _execute(
                 "gold_in_context": (float(gold <= set(selection.doc_ids)) if gold else None),
             }
         )
+    for question_id, record in rerank_records.items():
+        per_question[question_id].update(record)
+    if reranker is not None:
+        store.update_run(run_id, reranker_meta=json.dumps(reranker.provenance(), default=str))
+        aggregate["reranker"] = config.reranker
+        aggregate["rerank_candidates"] = config.rerank_candidates
+        aggregate["rerank_profile"] = reranker.provenance()
     aggregate.update(_selection_summary(per_question))
     aggregate["chunking_profile"] = chunking_profile
 
@@ -605,7 +675,9 @@ def _execute(
     # per query is exactly zero in Tier 1 — no LLM is called — and in Tier 2 is the
     # pre-run estimate divided by questions, labelled as such.
     latencies = sorted(
-        retrieval_latency_ms[qid] + generated.get(qid, {}).get("latency_ms", 0)
+        retrieval_latency_ms[qid]
+        + rerank_latency_ms.get(qid, 0)
+        + generated.get(qid, {}).get("latency_ms", 0)
         for qid in retrieval_latency_ms
     )
     aggregate["p95_latency_ms"] = latencies[int(0.95 * (len(latencies) - 1))] if latencies else None
@@ -616,13 +688,14 @@ def _execute(
     # Tier 1 makes no LLM calls, but a hosted embedder charges for query vectors;
     # that is exact (provider-reported) and the one-time index build is recorded
     # separately in retriever_meta rather than folded into a per-query figure.
-    query_cost = retriever.query_cost_usd()
+    query_cost = retriever.query_cost_usd() + (reranker.query_cost_usd() if reranker else 0.0)
     if config.eval_tier is EvalTier.TIER_1:
         # 8 places: a query embedding costs ~$0.0000004 and would round to zero at 6.
         aggregate["cost_per_query_usd"] = round(query_cost / len(rows), 8) if rows else 0.0
         aggregate["cost_per_query_source"] = (
             "exact: Tier 1 makes no LLM calls" if query_cost == 0
-            else "exact: provider-reported query embedding cost; index build cost in retriever_meta"
+            else "exact: provider-reported per-query cost (embeddings and/or rerank); "
+                 "index build cost in retriever_meta"
         )
     elif "total_usd" in cost_estimate and rows:
         aggregate["cost_per_query_usd"] = round((cost_estimate["total_usd"] + query_cost) / len(rows), 5)
@@ -634,7 +707,7 @@ def _execute(
     # P2-03 — a pipeline that called an LLM is not deterministic unless the
     # generation cache served every call. The hit rate goes on the row; a repeat of
     # an identical config with a hit rate under 100% is flagged, not averaged away.
-    pipeline_llm = getattr(retriever, "pipeline_llm", None)
+    pipeline_llm = getattr(retriever, "pipeline_llm", None) or getattr(reranker, "pipeline_llm", None)
     if pipeline_llm is not None:
         stats = pipeline_llm.stats()
         store.update_run(run_id, pipeline_nondeterministic=1, pipeline_llm_json=json.dumps(stats))
@@ -659,6 +732,7 @@ def _execute(
     # P2-06 — what the run actually cost, against the estimate.
     actual = actual_run_cost(
         retriever_meta=retriever.provenance(),
+        reranker_meta=reranker.provenance() if reranker else None,
         generator_tokens_in=sum(g.get("tokens_in", 0) for g in generated.values()),
         generator_tokens_out=sum(g.get("tokens_out", 0) for g in generated.values()),
         generator_model=config.generator_model,
@@ -699,6 +773,7 @@ def _execute(
                 "cited_doc_ids": json.dumps(generated.get(row["question_id"], {}).get("cited", [])),
                 "latency_ms": generated.get(row["question_id"], {}).get("latency_ms", 0),
                 "retrieval_latency_ms": retrieval_latency_ms[row["question_id"]],
+                "rerank_latency_ms": rerank_latency_ms.get(row["question_id"]),
                 "tokens_in": generated.get(row["question_id"], {}).get("tokens_in", 0),
                 "tokens_out": generated.get(row["question_id"], {}).get("tokens_out", 0),
                 "cost_usd": None,

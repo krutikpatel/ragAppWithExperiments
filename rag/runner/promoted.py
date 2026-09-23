@@ -31,6 +31,7 @@ PROMOTION_EMPTY_ROW = (
 DIMENSIONS = {
     "chunking": ("chunker", "chunker_params"),
     "retrieval": ("retriever", "retriever_params"),
+    "reranking": ("reranker", "reranker_params", "rerank_candidates"),
     "assembly": ("top_k", "candidate_pool", "retrieval_depth", "doc_pooling", "context_max_tokens"),
     "generation": (
         "generator_model", "generator_prompt", "generator_max_tokens", "generator_reasoning_effort",

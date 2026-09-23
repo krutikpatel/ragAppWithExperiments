@@ -1,0 +1,21 @@
+# Harness smoke test — NOT an experiment.
+#
+# Exercises the P2-10 rerank path end to end with an in-process reranker that just
+# reverses the candidate order: document-level candidate selection, splicing,
+# re-pooling, the recomputed collapse ratio and the run row. Zero cost, zero
+# network. Its numbers are meaningless and must never reach docs/EXPERIMENTS.md.
+name: harness smoke test (toy_reverse reranker)
+split: dev
+eval_tier: tier1
+retriever: toy_overlap
+chunker: fixed_token
+chunker_params:
+  chunk_size: 512
+  overlap: 0
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+reranker: toy_reverse
+rerank_candidates: 20
+doc_pooling: max
+harness_smoke_test: true

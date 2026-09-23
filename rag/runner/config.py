@@ -84,6 +84,15 @@ class RunConfig:
     candidate_pool: int = 50
     doc_pooling: str = DEFAULT_POOLING
 
+    # Axis 5 (P2-10). Empty means no reranking, which is the absence of the
+    # dimension rather than a setting of it — see `_identity_payload`.
+    # `rerank_candidates` is a count of **distinct documents** (P1-03, DEC-040): the
+    # reranker sees every ranked chunk of the top n documents, so "50 -> 5" means
+    # 50 candidate documents in and `top_k` documents out, whatever the chunker did.
+    reranker: str = ""
+    reranker_params: dict[str, Any] = field(default_factory=dict)
+    rerank_candidates: int = 50
+
     # Tier 2 only. Empty by default: model choice is Krutik's call, not a default
     # this file gets to make. See CLAUDE.md section 10.
     generator_model: str = ""
@@ -157,6 +166,17 @@ class RunConfig:
                     "family. Same-family judging carries self-preference bias; P0-07 "
                     "requires different families. Pick a judge from another provider."
                 )
+        if self.reranker and self.rerank_candidates < self.top_k:
+            raise ValueError(
+                f"rerank_candidates ({self.rerank_candidates}) must be at least top_k "
+                f"({self.top_k}): fewer candidate documents than the context needs"
+            )
+        if self.reranker and self.retrieval_depth < self.rerank_candidates:
+            raise ValueError(
+                f"retrieval_depth ({self.retrieval_depth}) must be at least rerank_candidates "
+                f"({self.rerank_candidates}): the reranker cannot see documents that were "
+                "never ranked — it re-orders a candidate set, it does not retrieve"
+            )
         if self.eval_subsample_size < 1:
             raise ValueError("eval_subsample_size must be at least 1")
         if "@" not in self.generator_prompt:
@@ -189,6 +209,23 @@ class RunConfig:
         data["eval_tier"] = self.eval_tier.value
         return data
 
+    # An axis whose fields are all at their "off" value is an absent dimension, not
+    # a setting of one, so it contributes nothing to a hash. Without this, adding
+    # Axis 5's three fields would have moved the config_hash of every run in the
+    # ledger, including the controls' and promoted.yaml's, for configurations whose
+    # numbers cannot have changed — exactly the trap MIS-019 records. Verified in
+    # tests/test_reranking.py: promoted.yaml still hashes to 7c99bc8e9a88e878.
+    _ABSENT_DIMENSIONS = (("reranker", ("reranker", "reranker_params", "rerank_candidates")),)
+
+    @classmethod
+    def _identity_payload(cls, data: dict[str, Any]) -> dict[str, Any]:
+        payload = {k: v for k, v in data.items() if k not in ("name", "axis")}
+        for switch, keys in cls._ABSENT_DIMENSIONS:
+            if not data.get(switch):
+                for key in keys:
+                    payload.pop(key, None)
+        return payload
+
     @property
     def config_hash(self) -> str:
         """Stable over field order; changes when anything that moves a number moves.
@@ -196,8 +233,7 @@ class RunConfig:
         `name` and `axis` are excluded: relabelling a run does not change its
         numbers, and two runs of the same configuration should collide here on purpose.
         """
-        payload = {k: v for k, v in self.as_dict().items() if k not in ("name", "axis")}
-        return short_id(canonical_json(payload), length=16)
+        return short_id(canonical_json(self._identity_payload(self.as_dict())), length=16)
 
     def with_(self, **changes: Any) -> RunConfig:
         return replace(self, **changes)
@@ -209,6 +245,7 @@ class RunConfig:
     TIER1_FIELDS = (
         "split", "eval_tier", "retriever", "retriever_params", "chunker", "chunker_params",
         "retrieval_depth", "top_k", "candidate_pool", "doc_pooling", "seed", "harness_smoke_test",
+        "reranker", "reranker_params", "rerank_candidates",
     )
 
     @property
@@ -222,9 +259,9 @@ class RunConfig:
         """
         data = self.as_dict()
         if self.eval_tier is EvalTier.TIER_1:
-            payload = {k: data[k] for k in self.TIER1_FIELDS}
+            payload = self._identity_payload({k: data[k] for k in self.TIER1_FIELDS})
         else:
-            payload = {k: v for k, v in data.items() if k not in ("name", "axis")}
+            payload = self._identity_payload(data)
         return short_id(canonical_json(payload), length=16)
 
 

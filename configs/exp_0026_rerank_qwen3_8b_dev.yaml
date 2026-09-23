@@ -1,0 +1,34 @@
+# EXP-0026 — Axis 5 reranking: qwen/qwen3-reranker-8b open-weight cross-encoder, 50 candidate docs -> top-5
+#
+# Axis 5, P2-10. A one-dimension diff against configs/promoted.yaml: the dense
+# control, plus a reranker. `rerank_candidates` is **50 distinct documents**
+# (P1-03, DEC-040), so the reranker sees every ranked chunk of the top 50 articles
+# and `top_k` = 5 documents reach the generator. Collapse ratio and pool
+# exhaustion are recomputed from the reranked ranking.
+#
+# Split: `dev` decides (DEC-055). Reranking is billed per query, so a `dev_large`
+# check costs 31x this run and is only worth buying for a winner.
+name: "EXP-0026 — Axis 5 reranking: qwen/qwen3-reranker-8b open-weight cross-encoder, 50 candidate docs -> top-5"
+axis: reranking
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+reranker: openrouter
+reranker_params:
+  model: qwen/qwen3-reranker-8b
+  provider: Fireworks
+rerank_candidates: 50
+doc_pooling: max
+seed: 1

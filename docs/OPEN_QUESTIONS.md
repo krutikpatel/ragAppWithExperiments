@@ -462,3 +462,29 @@ line breaks were the story and cut placement did nothing; if it stays near 0.665
 placement was the story.
 **Status:** open — not queued; Axis 1 is closed and this is a follow-up, not a fifth
 chunker.
+
+## OQ-033 — Is the `dev_large` direction check worth buying for a reranking winner?
+DEC-055 asks every retrieval axis for a `dev_large` check that agrees in direction
+before `rag promote` will move the pointer. For every earlier axis that check was
+nearly free: the index was already built and the queries cost $0.000002 each. Axis 5
+is the first axis billed **per query**, so the same check costs 31x the deciding run
+— $6.22 for the cheapest reranker, $26 for `qwen3-reranker-8b`, against $0.20 and
+$0.78 on `dev`. And `dev_large` has no multi-document questions at all (MIS-021),
+which is the slice a reranker is most likely to move.
+**Decided by:** whether any reranker wins on `dev` at p < 0.05. If one does, the
+check is bought for that one config only and the cost goes to Krutik first (DEC-053).
+If none does, the check is never run and the axis closes on `dev` as a negative
+result — nothing `dev_large` could say would promote a configuration that lost.
+**Status:** open — resolved by the Axis 5 `dev` runs.
+
+## OQ-034 — Does a reranker's gain survive the context the generator actually sees?
+Axis 5 is decided on Tier 1, where a reranker is scored on the document ranking. But
+a reranker's stated purpose is precision in the **top 5**, which is exactly what
+Tier 2's faithfulness and citation precision read. The dense control has a Tier 2
+run (EXP-0006, citation precision 0.550, MDD 0.08) and no Axis 2, 3 or 1 config ever
+earned one, because none of them won.
+**Decided by:** a Tier 2 `dev` sub100 run of the winning reranker against EXP-0006,
+citation precision and step coverage, each against its MDD (DEC-048). ~$0.09 of
+generation and judge on top of the reranker's own per-query cost.
+**Status:** open — conditional on Axis 5 producing a winner, and on the judge still
+being the DEC-018 placeholder, whose scores may not reach EXPERIMENTS.md.

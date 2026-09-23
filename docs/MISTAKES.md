@@ -110,6 +110,16 @@ Derived from the prevention rules below. Run through it and say in chat that you
     fresh embed, and 59% of vectors change on re-embedding the same text
     (EXP-0012). Measure the control-rebuild floor before calling a chunking delta
     smaller than it (OQ-031). (EXP-0022)
+33. **A price of zero for a paid product is an absent field, not a free product.**
+    OpenRouter lists every rerank model at `prompt: "0"` and bills real money per
+    call. Before costing a new endpoint, send one real call and read `usage`; where
+    the billing unit is one the price table cannot express (Cohere's search unit),
+    the table gets a hand-measured block and the refresher is told to skip it.
+    (MIS-025)
+34. **Reranking is billed per query, so its cost scales with the split, not with
+    the corpus.** An index build is a one-off; a reranker charges again for every
+    question. The same Axis 5 config is $0.20 on `dev` and $6.22 on `dev_large`.
+    Estimate against the split you are about to run, never against the last one.
 
 ---
 
@@ -740,3 +750,46 @@ Derived from the prevention rules below. Run through it and say in chat that you
   should checkpoint groups to disk so a failed build keeps what it paid for —
   **not done yet**, filed as a follow-up in the EXP-0019 re-run.
 - **Added to preflight:** yes (item 31).
+
+## MIS-025 — Took OpenRouter's rerank prices from the listing, which says every rerank model is free
+- **Date:** 2026-09-22
+- **Severity:** Medium — caught before any experiment ran; no results affected. Had
+  it gone unchecked, the $2 gate would have read every Axis 5 run as $0.00 and the
+  `dev_large` sweep the story suggests (~$50) would have started without approval.
+- **What happened:** P2-10's story says "Cohere rerank models were listed at $0 on
+  OpenRouter at launch, which if still true makes this axis nearly free". It is
+  still true, and it is still wrong. `GET /models/<id>/endpoints` reports
+  `pricing: {prompt: "0", completion: "0"}` for `cohere/rerank-v3.5`,
+  `cohere/rerank-4-fast` and `qwen/qwen3-reranker-8b` alike. `rag pricing refresh`
+  reads exactly that field, so the pricing table would have been populated with
+  zeros for all three.
+- **How it was caught:** sending one real call through the endpoint before writing
+  the estimator (preflight 30) and reading the response body. Every call returns a
+  `usage` block that bills real money:
+
+  | Model | 50 documents x 600 words | latency |
+  |---|---|---|
+  | `cohere/rerank-v3.5` | 1 search unit, **$0.001** | 778 ms |
+  | `cohere/rerank-4-fast` | 1 search unit, **$0.002** | 1,298 ms |
+  | `qwen/qwen3-reranker-8b` | 40,627 tokens, **$0.008125** | 1,847 ms |
+
+- **Root cause:** the rerank endpoint bills in units the `/models` schema has no
+  field for — Cohere charges a *search unit* per query, not tokens — so the
+  token-price fields are zero because they do not apply, not because the model is
+  free. A price schema that cannot express a product's billing unit reports the
+  absence as zero.
+- **Impact:** none to results. The measured rates are what the estimator uses:
+  $0.20 / $0.40 / $0.78 for a 200-question `dev` run, and $6.22 / $12.44 / $26 on
+  `dev_large` — the difference between "nearly free" and an axis that needs
+  approval for every run.
+- **Fix applied:** `configs/pricing.yaml` gained a hand-maintained `rerank:` block
+  whose numbers come from `usage.cost` on real calls, with the measurement recorded
+  beside each rate. `refresh_pricing` copies the block through untouched rather than
+  re-fetching it (a test asserts this). `OpenRouterReranker` records cost from the
+  response, never from the table, and `estimate_rerank_cost` treats an absent entry
+  as UNAVAILABLE, which fails the gate.
+- **Prevention rule:** a price field of zero for a paid product is an absent field,
+  not a free product. Before costing a new endpoint, send one real call and read
+  `usage`; if the billing unit is not one the price table can express, the table
+  gets a new block and the refresher is told to leave it alone.
+- **Added to preflight:** yes (item 33)

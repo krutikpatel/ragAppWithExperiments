@@ -466,12 +466,23 @@ rag/
                     and openrouter. `dimensions` asks a hosted model for truncated
                     output, is asserted on the response, and joins the index key
                     (P2-08 run 5)
-  reranking/        base.py — Reranker interface ONLY; a test fails if an
-                    implementation appears without a story
+  reranking/        base.py — the Reranker interface, `candidate_prefix` (P1-03:
+                    `rerank_candidates` counts DISTINCT DOCUMENTS and the reranker sees
+                    every ranked chunk of them), `apply_rerank` (reranked head spliced
+                    above an untouched tail) and `rerank_result` (re-pools and re-walks,
+                    so the collapse ratio on the row is the POST-rerank one). A test
+                    still fails if a concrete reranker appears in base.py itself.
+                    openrouter.py — hosted cross-encoders via POST /api/v1/rerank,
+                    provider-pinned, cost read from `usage.cost` and NEVER from the price
+                    table (MIS-025); llm.py — LLM-as-reranker through PipelineLLM
+                    (temperature 0, cached, hit rate counted), whose output parser drops
+                    invented and repeated candidate numbers and counts both; toy.py —
+                    smoke tests only. All DEC-058
 
-prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0)
-                    and baseline_answer.yaml (the Phase 1 control, DEC-042: numbered
-                    steps, English, [doc:<id>] on every claim, NO URLs) — Ragas owns
+prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0),
+                    baseline_answer.yaml (the Phase 1 control, DEC-042: numbered
+                    steps, English, [doc:<id>] on every claim, NO URLs) and
+                    rerank_llm.yaml (P2-10's ordering prompt) — Ragas owns
                     the judge prompts. Never inline a prompt in Python. Content hashes
                     are pinned in tests/test_prompts.py, so an edit without a version
                     bump fails the suite. The runner asserts the generator's prompt_ref
@@ -490,9 +501,12 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     (RRF, then weighted α 0.2/0.4/0.6/0.8; dev only, DEC-056);
                     exp_0019..0022_{sentence_window,parent_document,semantic,
                     structure}_{dev_large,dev}.yaml are Axis 1 (DEC-057; dev_large
-                    builds the index, dev decides).
-                    smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml
-                    and tier2_smoke.yaml are harness smoke tests, not experiments.
+                    builds the index, dev decides); exp_0024..0026_rerank_*_dev.yaml
+                    are Axis 5 (DEC-058/059; dev only — reranking bills per query, so
+                    dev_large costs 31x and is bought only for a winner, OQ-033).
+                    smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml,
+                    smoke_p2_10_rerank.yaml and tier2_smoke.yaml are harness smoke
+                    tests, not experiments.
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
                     chunker_id, model_id, revision, prefix_convention).
@@ -610,6 +624,14 @@ Rules that outlive any particular library:
   deltas; `rag/eval/noise_floor.py` (DEC-048) for judged ones, with "no MDD measured"
   when the run's judge/generator/prompt match no measured family. Any LLM call inside
   retrieval goes through `PipelineLLM` (DEC-049) or it is a bug.
+- **A reranker cannot retrieve; it re-orders a candidate set.** `rerank_candidates`
+  counts distinct documents, the reranker sees every ranked chunk of them (so it
+  *can* re-concentrate the context, which is the thing to measure), and pooling, the
+  document walk and the collapse ratio are recomputed from the reranked ranking. A
+  reranker's ceiling is the retriever's recall at the candidate depth. (DEC-058)
+- **Reranking is billed per query, so its cost scales with the split.** An index
+  build is a one-off; a reranker charges again for every question — the same config
+  is $0.20 on `dev` and $6.22 on `dev_large`. (MIS-025, OQ-033)
 - **`top_k` is distinct documents, not chunks** (DEC-040). The walk scans at most
   `candidate_pool` (50) ranked chunks; one chunk per document reaches the generator;
   the collapse ratio and exhaustion are recorded per question. The frozen text has **no list markers**:
@@ -624,7 +646,7 @@ Rules that outlive any particular library:
 | Judge (Ragas LLM) | `openai/gpt-oss-120b` — **PLACEHOLDER** | DEC-030, DEC-034 | $0.037/$0.170 per Mtok, 131k ctx. Open-weights, so treated as family `openai-oss`, distinct from the generator's `openai` — a judgment call, see DEC-030 and OQ-014. Judge calls pin `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Real rate is Cerebras' $0.350/$0.750, not the model-level $0.037/$0.170**: measured **~$0.84 per 100-question Tier 2 run** (DEC-035 corrects DEC-034's $0.48). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
 | Embedding (Ragas `answer_relevance`) | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Embedding (dense retrieval) | `qwen/qwen3-embedding-8b` **pinned to DeepInfra** | DEC-041 | Same model as the Ragas embedder; Krutik chose hosted over the handover's local option. **Provider is part of the index key**: DeepInfra and Nebius return different vectors for the same input. Index: 8,218 × 4096 float32 = 134.6 MB, ~20 min and $0.031 to build (EXP-0005), cached under `indexes/`. Queries cost ~$0.0000004 each and are **not byte-deterministic** — three runs ranged 0.005 on strict recall@5 (OQ-023). `qwen3` prefix: instruct prefix on queries, none on passages. |
-| Reranker | _not chosen_ | — | Phase 1 at the earliest; interface only in Phase 0. |
+| Reranker | _not chosen — DEC-059 is pending Krutik_ | — | The rerank endpoint is `POST /api/v1/rerank` and there is no listing to browse (`/rerank/models` 404s; rerank is not a `/models` category), so availability is probed one id at a time. **Served** (measured 2026-09-22, 50 docs x 600 words): `cohere/rerank-v3.5` @Cohere $0.001/query 778 ms; `cohere/rerank-4-fast` @Cohere $0.002/query 1,298 ms; `qwen/qwen3-reranker-8b` @Fireworks $0.008125/query 1,847 ms. **Not served:** `qwen3-reranker-4b` (404), `baai/bge-reranker-v2-m3` and `mxbai-rerank-large-v2` (400, not on OpenRouter). **OpenRouter lists all of them at $0 and bills real money — cost comes from the response's `usage.cost`, never the table (MIS-025).** |
 
 An empty row is the honest state, not an omission to paper over. The benchmark's gold
 `article_ids` pay for every retrieval metric plus citation precision/recall and step
