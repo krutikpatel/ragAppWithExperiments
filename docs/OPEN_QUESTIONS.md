@@ -488,3 +488,16 @@ citation precision and step coverage, each against its MDD (DEC-048). ~$0.09 of
 generation and judge on top of the reranker's own per-query cost.
 **Status:** open — conditional on Axis 5 producing a winner, and on the judge still
 being the DEC-018 placeholder, whose scores may not reach EXPERIMENTS.md.
+
+## OQ-035 — Is Axis 5's result about reranking, or about Cohere?
+DEC-059 opens Axis 5 with one reranker, `cohere/rerank-v3.5`. A single cross-encoder
+cannot separate "reranking does not help this corpus" from "this cross-encoder does
+not": the two open-weight and LLM-based candidates work by different mechanisms
+(`qwen/qwen3-reranker-8b` is a cross-encoder scoring each pair alone; the LLM
+reranker sees all 50 candidates together and can compare them), and either could
+move a slice Cohere leaves flat.
+**Decided by:** EXP-0026 (`qwen/qwen3-reranker-8b`, $0.78) and the LLM reranker
+($0.22), both already configured and committed, run on `dev` against `promoted` with
+`rag compare`. Both configs exist; neither has a run row, so neither is an experiment.
+**Status:** open — queued behind EXP-0024. Whatever EXP-0024 says, the Negative
+Results or scorecard entry names this limit rather than generalising past it.

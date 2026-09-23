@@ -2168,9 +2168,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 
 ## DEC-059 — Which rerankers Axis 5 tests
 - **Date:** 2026-09-22
-- **Decided by:** _pending — Krutik. Proposed by Claude._
-- **Status:** **Proposed. Not used in any run.** No Axis 5 experiment starts until
-  this entry names a decision and Krutik has approved the spend (CLAUDE.md §9).
+- **Decided by:** Krutik (proposed by Claude)
+- **Status:** Active
 - **Context:** P2-10 suggests three rerankers. All hosted rerankers go through
   OpenRouter's `POST /api/v1/rerank`, probed 2026-09-22: the endpoint exists and
   works. What it serves is narrower than the story assumed.
@@ -2199,14 +2198,23 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
      P2-10 reserves for the two k -> n ratio runs.
   3. Cohere v3.5 alone, the cheapest — rejected: one reranker cannot distinguish
      "reranking does not help this corpus" from "this reranker does not".
-- **Decision:** _pending Krutik._ Claude's proposal is option 1, and the LLM
-  reranker needs its own model named; `openai/gpt-5-nano` is the generator already
-  chosen in DEC-017 and would keep the axis to models this project has priced, but
-  that is a model choice and so is Krutik's.
+- **Decision:** **`cohere/rerank-v3.5`, pinned to Cohere, alone** (2026-09-22).
+  Krutik chose one reranker rather than Claude's proposed three. The axis opens as a
+  single experiment, `configs/exp_0024_rerank_cohere_v35_dev.yaml` on `dev`, $0.20.
+  Claude flagged the cost of that narrowness at the time and it is recorded here
+  rather than argued: **a negative result from one reranker cannot distinguish "a
+  cross-encoder does not help on this corpus" from "this cross-encoder does not".**
+  If EXP-0024 is negative, that limit is what the Negative Results entry says, and
+  `qwen/qwen3-reranker-8b` ($0.78) and the LLM reranker ($0.22) stay queued in
+  OPEN_QUESTIONS rather than being treated as answered.
+  `configs/exp_0025_rerank_cohere_4fast_dev.yaml` and `exp_0026_rerank_qwen3_8b_dev.yaml`
+  are committed but unrun; they are not experiments until they have a run row.
 - **Evidence:** measured availability, cost and latency above. No quality data on
   this corpus for any of them — that is what the experiments are for.
-- **Consequences:** whichever are chosen, `configs/exp_00NN_rerank_*_dev.yaml` are
-  committed before their runs and the axis cap is 5 experiments (P2-06).
+- **Consequences:** Axis 5 spends 1 of its 5 experiment slots, leaving room for the
+  two k -> n ratio runs P2-10 asks for (20 -> 5 and a wider setting) on the winner,
+  and for a second reranker if the first result warrants one. `dev_large` is bought
+  only for a winner (DEC-058 rule 4, OQ-033).
 - **Revisit if:** OpenRouter starts serving a rerank model with a materially
   different mechanism (a multi-vector or late-interaction endpoint — see the ColBERT
   note in HYPOTHESES.md), or a chosen reranker's provider pin changes.
