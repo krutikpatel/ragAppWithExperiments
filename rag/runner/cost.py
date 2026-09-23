@@ -78,7 +78,14 @@ WORDS_TO_TOKENS = 1.27  # measured on this corpus, DEC-029
 # has NOT been validated out of sample; the next rerank run is the validation, and
 # until then this is an estimate with a known provenance, not a law (DEC-035).
 RERANK_CALIBRATION_RUN_ID = "run_20260923_052941_4ada"
+# Search-unit billing (Cohere): what was actually billed, 234 units / 200 queries.
 RERANK_UNITS_PER_QUERY = 1.17
+# Token billing (Fireworks): a different quantity that happens to sit at nearly the
+# same number, which is exactly why it gets its own name. `rerank_candidates` counts
+# documents; a token-billed reranker is charged for every CHUNK of them the retriever
+# ranked, measured at 58.4 chunks per 50 candidate documents on EXP-0024. Do not
+# collapse these two constants because they currently agree to two decimals.
+RERANK_CHUNKS_PER_CANDIDATE_DOC = 58.4 / 50
 GENERATED_TOKENS_OUT_PER_QUESTION = 350  # measured 118-183 on smoke runs; padded
 
 
@@ -487,10 +494,16 @@ def estimate_rerank_cost(
             f"{RERANK_CALIBRATION_RUN_ID}, NOT yet validated out of sample)"
         )
         return estimate
-    tokens = int(n_questions * candidate_docs * RERANK_UNITS_PER_QUERY * candidate_words * WORDS_TO_TOKENS)
+    candidate_chunks = candidate_docs * RERANK_CHUNKS_PER_CANDIDATE_DOC
+    tokens = int(n_questions * candidate_chunks * candidate_words * WORDS_TO_TOKENS)
     estimate["rerank_usd"] = round(tokens / 1e6 * float(rule["usd_per_mtok"]), 4)
     estimate["tokens"] = tokens
-    estimate["source"] = f"measured ${rule['usd_per_mtok']}/Mtok x {tokens:,} tokens"
+    estimate["candidate_chunks"] = round(candidate_chunks, 1)
+    estimate["source"] = (
+        f"measured ${rule['usd_per_mtok']}/Mtok x {tokens:,} tokens "
+        f"({candidate_chunks:.1f} candidate chunks/query at {candidate_words} words, "
+        f"chunks-per-doc calibrated on {RERANK_CALIBRATION_RUN_ID}, NOT validated out of sample)"
+    )
     return estimate
 
 
