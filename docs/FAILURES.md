@@ -231,6 +231,25 @@ Stage: `retrieval` (recovered at `reranking`).
 | EXP-0024 | "Hoe can I restore the selection of projects for my Wix collection?" (2 golds) | ranks 6, 20 | ranks 1, 2 | reranking (EXP-0024) |
 | EXP-0024 | "I am trying to cancel my Premium subscription within the 14-day period, but I cant find the cancel feature." | rank 6 | rank 1 | reranking (EXP-0024) |
 
+### F16 — Gold is in the candidate set but no reranker ranks it into the top five
+The category the Axis 5 ceiling exposed, and the largest single bucket of remaining
+error at this depth. The dense control's strict recall@**50** is **0.985**: for 197 of
+200 `dev` questions the gold article is already inside the 50 documents a reranker is
+handed. The best reranker put it in the top five for **146**. So ~51 questions per 200
+fail with the right document retrieved, ranked somewhere in positions 6–50, and two
+different cross-encoders declined to promote it. Stage: `reranking` (documents present,
+ranking insufficient). Distinct from F8–F12, which are retrieval failures — here
+retrieval succeeded.
+
+| Run | Gold in top 50 | Gold in top 5 | Questions failing with gold in hand |
+|---|---|---|---|
+| EXP-0005 (control, no reranker) | 0.985 (197/200) | 0.720 (144/200) | 53 |
+| EXP-0024 (`rerank-v3.5`) | 0.985 | 0.665 (133/200) | 64 |
+| EXP-0025 (`rerank-4-fast`) | 0.985 | 0.730 (146/200) | 51 |
+
+No experiment has moved this by more than two questions. It is the standing target for
+P2-11, the k → n ratio runs (OQ-038) and Axis 4.
+
 ## Counts by run
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
@@ -251,11 +270,14 @@ Axis 5 (EXP-0024), counted from `rag compare` flips on strict recall@5, `dev` n=
 | Run | F14 gold demoted out of top 5 | F15 buried gold rescued into top 5 | net |
 |---|---|---|---|
 | EXP-0024 (cohere/rerank-v3.5, 50 → 5) | 28 | 17 | −11 (Δ −0.055, p = 0.139) |
+| EXP-0025 (cohere/rerank-4-fast, 50 → 5) | 22 | 24 | +2 (Δ +0.010, p = 0.887) |
 
-Counted across all 160 single-gold questions rather than only the top-5 boundary, the
-two categories are near-symmetric: the gold moved up a rank band for **40** questions
-and down for **39**. F14 and F15 are the same mechanism, and on this corpus it is a
-coin flip that costs $0.00117 and 900 ms per query to toss.
+Counted across all 160 single-gold questions rather than only the top-5 boundary, both
+rerankers are near-symmetric: v3.5 moved the gold up a rank band on **40** questions
+and down on **39**; `rerank-4-fast` up on **39** and down on **32**. F14 and F15 are
+the same mechanism, and on this corpus it is close to a coin flip that costs $0.0012
+to $0.0022 and one to four seconds per query to toss. The better of the two is better
+by throwing away less, not by finding more.
 | EXP-0018 (α=0.8) | 3 recovered | 4 (all rank 5 → 6) |
 
 Axis 1 (chunking), same method:

@@ -503,8 +503,17 @@ move a slice Cohere leaves flat.
 **Decided by:** EXP-0026 (`qwen/qwen3-reranker-8b`, $0.78) and the LLM reranker
 ($0.22), both already configured and committed, run on `dev` against `promoted` with
 `rag compare`. Both configs exist; neither has a run row, so neither is an experiment.
-**Status:** open — queued behind EXP-0024. Whatever EXP-0024 says, the Negative
-Results or scorecard entry names this limit rather than generalising past it.
+**Answered 2026-09-23 by EXP-0025: it was about Cohere, and the caution was right.**
+`cohere/rerank-4-fast` beat `cohere/rerank-v3.5` on `dev` by **+0.065, CI [+0.010,
++0.125], p = 0.039** (24 questions gained, 11 lost), and on the multi-document slice
+by +0.175 (p = 0.067) — while *neither* is distinguishable from the dense control.
+Two cross-encoders over an identical candidate set differ significantly from each
+other, so EXP-0024's null was a fact about one model. It still does not follow that
+some third reranker would win; it follows that one reranker cannot close the axis.
+`qwen/qwen3-reranker-8b` remains unrun (VOID on credits, MIS-031) and is the open
+part of this.
+**Status:** answered by EXP-0025 for the two Cohere models; open for open-weight
+and LLM rerankers.
 
 ## OQ-036 — Does the recalibrated Cohere unit multiplier hold out of sample?
 `rag/runner/cost.py` now estimates Cohere search units at **1.17 per query at 50
@@ -517,7 +526,13 @@ with the chunker — a 20 -> 5 run would test that directly.
 **Decided by:** any second Cohere rerank run — the 20 -> 5 ratio config P2-10 asks
 for, or EXP-0025 — with `cost_actual_usd` compared to `cost_estimate_usd` on the row.
 Within 10% counts as validated.
-**Status:** open, queued behind any further Axis 5 run.
+**Partially answered 2026-09-23 by EXP-0025: within 4%.** The recalibrated model
+predicted $0.4681 and the run billed **$0.4481** (224 search units against 234
+predicted) on different questions from the calibration run — inside the 10% bar this
+question set. That is one out-of-sample check at the *same* `rerank_candidates` and
+the same chunker, so the threshold behaviour the multiplier encodes is still untested:
+a 20 → 5 run would move candidate length and is the real test.
+**Status:** open — one check passed, the varying-candidate-count case untested.
 
 ## OQ-037 — Does the cross-encoder specifically rescue badly-phrased questions?
 Reading EXP-0024's 45 flipped questions, the 17 gains skew towards loose phrasing,
@@ -535,3 +550,28 @@ authored, in `data/authored/`, never derived from the run being tested — and
 strict recall@5 on that slice for EXP-0024 vs `promoted`, ≥ 0.10 separation between
 the well-formed and malformed halves. Labelling 200 questions is the cost, not compute.
 **Status:** open — a follow-up, not a sixth Axis 5 experiment.
+
+## OQ-038 — Does a wider or narrower candidate set close the 25-point ranking gap?
+The Axis 5 ceiling is measured: the dense control's strict recall@**50** is **0.985**,
+and the best reranker surfaced the gold in the top five for **0.730**. So the gold is
+in the candidate set almost always and gets ranked into the context three times in
+four. P2-10 asks for two k → n ratio runs and neither has been run; they are now the
+most interesting thing left in the axis, because they test the two opposite readings
+of that gap. If the reranker is **drowning** in candidates, 20 → 5 should beat 50 → 5.
+If it is simply not good enough at this task, the ratio will not matter and both will
+sit near the control.
+**Decided by:** `rerank_candidates` 20 and 100 against `promoted`, `cohere/rerank-4-fast`
+(the better of the two measured), `dev`, `rag compare` on strict recall@5, ≥ 0.03
+separation between the ratios. Roughly $0.20 and $0.90. **Blocked: the OpenRouter
+account has no credit (MIS-031).**
+**Status:** open, queued, blocked on account balance.
+
+## OQ-039 — Should the cost gate check the account balance, not just the estimate?
+Every cost control here is per-run: the $2 gate, the estimate, the approval, the
+running totals. None of them knows whether the account has money in it, which is how
+EXP-0026 came to be approved, estimated, gated and started before dying on HTTP 402
+(MIS-031). OpenRouter exposes `GET /api/v1/credits`.
+**Decided by:** Krutik — this changes what halts a run, so it is not a change to make
+unasked. The options are a hard halt when the balance is below the estimate, a warning
+printed beside the running totals, or nothing.
+**Status:** open — put to Krutik 2026-09-23.

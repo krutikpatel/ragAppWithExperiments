@@ -131,6 +131,18 @@ Derived from the prevention rules below. Run through it and say in chat that you
     assuming your unit is theirs**, and check the first real run's actual against its
     estimate *per run* — the three-run drift check is too coarse to catch a 17%
     error. (MIS-028)
+38. **A ceiling, floor or bound is a MEASUREMENT, not an inference from a mechanism.**
+    Before writing that something cannot be exceeded, compute the quantity that
+    bounds it — usually one query against the results store. "No reranker beats
+    0.920 here" was beaten by the next run; the real bound, recall@50 = 0.985, was
+    in `run_questions` the whole time. (MIS-029)
+39. **The runner writes to `docs/DECISIONS.md`, so it dirties the tree it measures.**
+    The second and later runs of any approved batch record `git_dirty=1` through
+    nobody's fault. Expect it, state its cause on the row, and do not read it as a
+    code change. (MIS-030)
+40. **Before a batch, check the account balance, not just the estimate.** Every cost
+    control here is per-run and none of them knows whether the account has money.
+    The failure lands on the last run in the queue. (MIS-031)
 
 ---
 
@@ -882,3 +894,103 @@ Derived from the prevention rules below. Run through it and say in chat that you
   first real run's actual against its estimate per run, not only against the
   three-run drift check, which is too coarse to catch a 17% error.
 - **Added to preflight:** yes (item 37)
+
+## MIS-029 — Called one run's number a ceiling, and the next run beat it
+- **Date:** 2026-09-23
+- **Severity:** Medium — a wrong claim reached EXPERIMENTS.md, the scorecard, the
+  negative-results entry, NARRATIVE.md and an experiment file, and was described
+  there as "the single most reusable thing the axis produced". Corrected in place
+  within one run; no decision was taken on it.
+- **What happened:** EXP-0024's strict recall@20 was 0.920 before reranking and
+  0.920 after, p = 1.000. I wrote: *"The reranker only re-orders 50 candidate
+  documents, so the recall of that candidate set is the most it can ever deliver…
+  no reranker, however good, beats 0.920 here."* EXP-0025 scored **0.940** at
+  recall@20 the same afternoon.
+- **How it was caught:** reading EXP-0025's metrics against the claim before writing
+  it up. It took one line of disbelief — 0.940 is not supposed to be possible.
+- **Root cause:** the reasoning was correct and applied to the wrong number. A
+  50-document candidate set does bound the reranker, but it bounds it at recall@**50**,
+  not recall@**20**. A gold at dense rank 21–50 is inside the candidate set and can be
+  promoted into the top 20 — EXP-0025 promoted eight. I had the right mechanism and
+  never measured the quantity it actually implies. **Measuring it takes one query
+  against data already in the store**, which is what makes this careless rather than
+  unlucky: the control's recall at every depth was sitting in `run_questions` the
+  whole time.
+- **Impact:** the corrected number is better than the wrong one. The real ceiling is
+  **strict recall@50 = 0.985** on the dense control, against which the best reranker
+  delivered 0.730@5 — so the gold is in the candidate set 98.5% of the time and gets
+  surfaced 73% of the time. That gap reframes Axis 5 from "reranking cannot help
+  because the documents are not there" (what the wrong ceiling implied) to "the
+  documents are there and two cross-encoders could not rank them" — the opposite
+  conclusion, and the more interesting one.
+- **Fix applied:** correction entries appended and `> **CORRECTED by MIS-029**` lines
+  added directly beneath the original claims in `docs/experiments/EXP-0024.md`,
+  `docs/EXPERIMENTS.md` (scorecard point 3 and the negative-results entry) and
+  `docs/NARRATIVE.md`. The original numbers stay; only the conclusion is withdrawn.
+  The measured depth curve is now recorded in the Axis 5 scorecard.
+- **Prevention rule:** a ceiling, floor or bound is a **measurement**, not an
+  inference from a mechanism. Before writing that something cannot be exceeded,
+  compute the quantity that actually bounds it — and if that takes a query against
+  the results store, run the query. A bound asserted from one run is a prediction
+  wearing a fact's clothes, which is the thing this repository exists to not do.
+- **Added to preflight:** yes (item 38)
+
+## MIS-030 — The runner dirties the working tree, so the second run of any batch records git_dirty=1
+- **Date:** 2026-09-23
+- **Severity:** Low — no numbers affected, but it makes a preflight item unsatisfiable
+  and so trains everyone to ignore a flag that matters.
+- **What happened:** the Axis 5 batch launched from a clean tree. EXP-0025 ran first
+  and, because it carried `--approve-cost`, appended its approval row to the
+  cost-approvals log in `docs/DECISIONS.md` — a tracked file. EXP-0026 started
+  seconds later, read git state, found the tree dirty and recorded `git_dirty=1`.
+- **How it was caught:** EXP-0026's row showed `git_dirty=1` when nobody had touched
+  anything, one run after MIS-027 established that a run in flight owns the tree.
+- **Root cause:** the runner writes three machine-appended tables into
+  `docs/DECISIONS.md` (promotions, cost approvals, test openings). That is the right
+  place for them — the ledger should be reviewable in a diff — but it means **the act
+  of running dirties the repository**, so MIS-027's rule cannot be honoured by any
+  batch of two approved runs, however disciplined the operator.
+- **Impact:** one row carries a flag that describes the runner's own bookkeeping
+  rather than a code change. `git diff` over EXP-0026's window touches only
+  `docs/DECISIONS.md`. EXP-0026 was VOID for an unrelated reason (MIS-031), so no
+  result rests on it.
+- **Fix applied:** none yet — this is recorded before it is fixed, deliberately, so
+  the decision is made with the cost visible rather than patched over. Three options,
+  none free: commit between runs in a batch (manual, and a commit per run contradicts
+  one-commit-per-story); have the runner record git state *before* its own writes;
+  or move the machine-appended tables out of a tracked file, which loses the diff.
+- **Prevention rule:** when a tool records provenance about the repository, it must
+  read that provenance **before** its own side effects, or it is measuring itself.
+  Until that is fixed, `git_dirty=1` on the second or later run of a batch is expected
+  and its cause must be stated on the run's row rather than assumed innocent.
+- **Added to preflight:** yes (item 39)
+
+## MIS-031 — Ran a batch without checking the account balance; the last run died on HTTP 402
+- **Date:** 2026-09-23
+- **Severity:** Low — nothing was billed for the failed run and no result was lost,
+  but an experiment that was approved did not happen and the axis is incomplete.
+- **What happened:** EXP-0026 (`qwen/qwen3-reranker-8b`, estimated $0.9168) died on
+  its first rerank call: `HTTP 402 Insufficient credits`. The OpenRouter account ran
+  out of credit partway through the Axis 5 batch, after EXP-0024 ($0.234) and
+  EXP-0025 ($0.448).
+- **How it was caught:** the provider said so, in a body the client preserved. 402 is
+  correctly absent from the retry set — a credit exhaustion is not transient, and
+  retrying it eight times with backoff would have burned four minutes to reach the
+  same answer.
+- **Root cause:** every cost control in this project is per-run. The $2 gate, the
+  estimate, the approval, the running totals — all of them answer "can this run
+  afford to start?" and none answers "does the account have money in it?". The
+  running totals printed `$2.3151 over 33 runs` immediately before the failure, which
+  is spend *we* recorded, not balance *remaining*.
+- **Impact:** one approved experiment not run. Axis 5 has two rerankers measured and
+  one owed. `cost_actual_usd` is NULL on the VOID row, correctly: the provider
+  refused the request, so there is no usage to report.
+- **Fix applied:** none in code yet. `GET /api/v1/credits` reports the balance and
+  would let the pre-run estimate be checked against money that actually exists, which
+  is a small change and a real improvement to the gate — raised with Krutik rather
+  than built unasked, since it changes what halts a run.
+- **Prevention rule:** before a batch, check the balance, not just the estimate. A
+  gate that only compares a run against a threshold cannot tell you the account is
+  empty, and the failure lands on whichever run is last in the queue — which is the
+  one you were least likely to have already validated.
+- **Added to preflight:** yes (item 40)

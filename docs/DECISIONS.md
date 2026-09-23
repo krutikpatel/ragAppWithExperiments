@@ -203,6 +203,8 @@ reference here. An entry without a matching DEC entry is a process failure.
 | 1 | 2026-09-16 | `dddcb9951da9357b` | $3.0000 (index_build) | DEC-TEST | run `run_20260916_051736_2dbd`, git `7c59851` |
 | 3 | 2026-09-23 | `f853a346cdad3e8f` | $0.2001 (rerank) | DEC-053: Krutik approved in chat 2026-09-22, $0.2001 estimate, EXP-0024 Axis 5 opening run | run `run_20260923_052903_c2ea`, git `f337ae2` |
 | 4 | 2026-09-23 | `f853a346cdad3e8f` | $0.2001 (rerank) | DEC-053: Krutik approved in chat 2026-09-22, $0.2001 estimate, EXP-0024 Axis 5 opening run | run `run_20260923_052941_4ada`, git `f337ae2` |
+| 5 | 2026-09-23 | `dad293c6d06bc518` | $0.4681 (rerank) | DEC-053: Krutik 'run the other two rerankers' 2026-09-23, $0.4681 estimate | run `run_20260923_054802_6566`, git `a62eaec` |
+| 6 | 2026-09-23 | `93e5a1d924c80c32` | $0.9168 (rerank) | DEC-053: Krutik 'run the other two rerankers' 2026-09-23, $0.9168 estimate | run `run_20260923_060805_1b9a`, git `a62eaec` |
 
 ## Test-split openings log
 
@@ -2219,9 +2221,18 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   are committed but unrun; they are not experiments until they have a run row.
 - **Evidence:** measured availability, cost and latency above. No quality data on
   this corpus for any of them — that is what the experiments are for.
-- **Consequences:** Axis 5 spends 1 of its 5 experiment slots, leaving room for the
-  two k -> n ratio runs P2-10 asks for (20 -> 5 and a wider setting) on the winner,
-  and for a second reranker if the first result warrants one. `dev_large` is bought
+- **Amended 2026-09-23, by Krutik in chat ("run the other two rerankers").** After
+  EXP-0024 came back null, Claude flagged that one reranker cannot separate "a
+  cross-encoder does not help here" from "this one does not"; Krutik then approved
+  both remaining models. EXP-0025 (`cohere/rerank-4-fast`) ran and **beat EXP-0024 at
+  p = 0.039 while itself being null against the control**, which settles that the
+  narrowness was a real cost and not a hypothetical one (OQ-035). EXP-0026
+  (`qwen/qwen3-reranker-8b`) is VOID on HTTP 402 — the account ran out of credit
+  (MIS-031) — so the open-weight contrast is still owed. Axis 5 has used **2** of its
+  5 experiment slots.
+- **Consequences:** room remains for the two k -> n ratio runs P2-10 asks for
+  (20 -> 5 and a wider setting), which OQ-038 now makes the most informative runs
+  left in the axis, plus the owed open-weight reranker. `dev_large` is bought
   only for a winner (DEC-058 rule 4, OQ-033).
 - **Revisit if:** OpenRouter starts serving a rerank model with a materially
   different mechanism (a multi-vector or late-interaction endpoint — see the ColBERT

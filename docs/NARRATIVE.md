@@ -398,11 +398,18 @@ column.
 
 What makes it interesting is where the movement went. The reranker was **better at the
 top and worse in the middle**: +0.065 at rank 1, −0.055 at rank 5, and at rank 20,
-**0.920 before and 0.920 after — p = 1.000, nine questions gained and nine lost.** That
-last number is the ceiling, measured rather than argued: a reranker re-orders 50
-candidate documents, so the recall of those 50 is the most it can ever return. It is
-not approaching the ceiling, it is sitting on it, and that bounds every future
-reranking experiment on this corpus.
+**0.920 before and 0.920 after — p = 1.000, nine questions gained and nine lost.** I called that
+last number the ceiling. It is not, and the next run proved it within the hour: a
+reranker re-orders the top **50** documents, so a gold sitting at dense rank 21–50 can
+be lifted into the top 20, and `rerank-4-fast` lifted eight, reaching 0.940. The
+ceiling is the candidate set's own recall — **strict recall@50 = 0.985** — and I had
+not measured it before generalising from one run (MIS-029).
+
+That number is worth more than the mistake cost. The gold document is already in the
+50-document candidate set for **98.5%** of questions; the best reranker put it in the
+top five for **73%**. So the remaining errors at this depth are not retrieval failures
+at all — the right article is in hand almost every time — they are ranking failures,
+and two different cross-encoders both declined to fix them.
 
 Underneath the flat aggregate there was a great deal of motion. Tracking where the
 gold document went on the 160 single-gold questions: it moved up a rank band on 40 of
@@ -456,10 +463,30 @@ documentation file while the run was starting, which stamped `git_dirty` on a ro
 cannot be un-stamped — the rule I broke was one I had quoted in the previous commit
 (MIS-027).
 
-The honest limit on all of this: **one reranker was run.** Cohere's v3.5 was the
-choice; an open-weight cross-encoder and an LLM-as-reranker were configured and not
-run. So what this axis established is that *this* cross-encoder does not help here,
-not that cross-encoders do not (OQ-035).
+So I ran a second one, and it was worth doing. `cohere/rerank-4-fast` — same
+candidate set, same 50 documents, same everything but the model — scored 0.730 where
+v3.5 scored 0.665. Against the control that is +0.010 at p = 0.887, another null.
+Against **v3.5** it is **+0.065 at p = 0.039**: significant. Two cross-encoders, an
+identical candidate set, and they disagree with each other more than either disagrees
+with doing nothing. On the multi-document slice the spread is wider still — 0.300
+against 0.475 — though on 40 questions that is a suggestion, not a result.
+
+That is the methodological point of the whole axis, and it nearly did not get made.
+Had I stopped at EXP-0024 I would have written "a cross-encoder does not help on this
+corpus" and it would have read as a finding about reranking. It was a finding about
+one model. The second run cost $0.45 and changed what the first one meant.
+
+`rerank-4-fast` is not really *better* at the task, either. Tracking the gold's rank
+band: v3.5 moved 40 up and 39 down, `4-fast` 39 up and 32 down. The gains are the
+same; `4-fast` just destroys less. Both still demoted golds out of rank 1 and both
+replaced more than two of the five context documents on nearly every question.
+
+The third reranker never ran. `qwen/qwen3-reranker-8b`, the open-weight contrast, died
+on its first call with `HTTP 402: Insufficient credits` — the account ran dry mid-batch
+(MIS-031). Every cost control in this project is per-run and none of them knows whether
+there is money in the account, which is how a run got approved, estimated, gated and
+started before hitting a wall the gate could not see. Nothing was billed and the row is
+VOID rather than missing, but the open-weight question is still open.
 
 ## 5. What actually moved the needle
 
@@ -480,6 +507,7 @@ latency:
 | Structure-aware chunking (line boundaries) | 0.720 → 0.665 | −0.055 (6 / 17; p = 0.033) | floor: 2 questions | — | $0.031 index | EXP-0022 vs EXP-0005 |
 | Sentence-window chunking (1 sentence, ±3) | 0.720 → **0.530** | **−0.190** (10 / 48; p = 0.0001) | floor: 2 questions | — | $0.034, 2.8 h, 3.2 GB | EXP-0019 vs EXP-0005 |
 | Cross-encoder reranking, 50 candidate documents → 5 (`cohere/rerank-v3.5`) | 0.720 → 0.665 | −0.055 vs dense control (17 / 28; CI [−0.120, +0.010], p = 0.139) | — | 635 ms → **2,727 ms** | **$0.00117/query** (~2,900x) | EXP-0024 vs EXP-0005 |
+| Cross-encoder reranking, same 50 → 5 (`cohere/rerank-4-fast`) | 0.720 → 0.730 | +0.010 vs dense control (24 / 22; CI [−0.055, +0.080], p = 0.887); **+0.065 vs `v3.5`, p = 0.039** | — | 635 ms → **18,774 ms** | **$0.00224/query** (~5,600x) | EXP-0025 vs EXP-0005 |
 
 One thing moved: the retriever. Everything on the chunking axis was within one
 question, the document-level walk changed what a generator sees on 62 of 200
@@ -530,20 +558,21 @@ construction, weighted fusion at α ≤ 0.4 — pays for the vetoes. The lexical
 on this corpus is worth a re-order inside dense's top ten, not a second opinion on what
 belongs there.
 
-**A reranker, which is the technique everyone reaches for next.** It produced the most
-movement of anything in Phase 2 and the least result: 40 golds moved up a rank band, 39
-moved down, 194 of 200 contexts changed, and strict recall@5 came out at −0.055,
-p = 0.139. Two things in it are worth more than the headline. First, it was **better at
+**A reranker, which is the technique everyone reaches for next — twice.** The two
+cross-encoders produced the most movement of anything in Phase 2 and the least result:
+strict recall@5 came out at −0.055 (p = 0.139) and +0.010 (p = 0.887), while roughly
+40 golds moved up a rank band and roughly 35 moved down on each run, and more than two
+of five context documents were replaced on nearly every question. Two things in it are worth more than the headline. First, it was **better at
 rank 1 and worse at rank 5** — so the mechanism does work, at a depth this system does
 not read; a one-document context would have scored it differently, and that is a live
-question for the combination phase rather than a closed one. Second, strict recall@20
-was **identical before and after, p = 1.000**, which is not a null result but a
-measurement of the ceiling: nothing that re-orders 50 candidate documents can beat
-0.920 here, so improving retrieval and improving reranking are not interchangeable
-projects. What it suggests is that on a corpus where the retriever already places the
-gold in the top five four times in five, the remaining errors are not ranking errors
-the reranker can see — they are questions whose answer is not in the candidate set at
-all. One caveat I cannot argue away: only one reranker was run (OQ-035).
+question for the combination phase rather than a closed one. Second — and this is where I got it
+wrong and had to correct it — strict recall@20 was identical before and after, and I
+read that as the ceiling. The ceiling is actually the candidate set's recall at 50
+documents, **0.985**, which I had never measured. The gold is in the candidate set
+98.5% of the time and the best reranker surfaced it in the top five 73% of the time.
+That inverts the conclusion: the remaining errors are **not** questions whose answer
+is missing from the candidate set. The answer is almost always there. It is a ranking
+problem, and two cross-encoders both failed to solve it (MIS-029).
 
 **Two instruments, before any technique.** The citation parser dropped a citation
 shape the model uses (MIS-016) and the refusal detector could not read a curly
