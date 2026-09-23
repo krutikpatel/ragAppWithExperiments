@@ -229,19 +229,37 @@ def test_config_refuses_fewer_candidates_than_the_context_needs():
 
 # --- cost: measured, never listed (MIS-025) ------------------------------------
 
-def test_rerank_cost_matches_the_measured_probe():
-    """The rates in configs/pricing.yaml come from real `usage.cost` on 50-document
-    calls, so a 200-question dev run must estimate to 200x the measured per-query
-    figure."""
-    from rag.runner.cost import PricingTable, estimate_rerank_cost
+def test_rerank_cost_reproduces_what_exp_0024_was_actually_billed():
+    """DEC-035: calibrate an estimator on a measured run. EXP-0024 billed **234**
+    search units for 200 dev questions at 50 candidate documents, not the 200 the
+    first estimate assumed — Cohere's unit tracks candidate length, not candidate
+    count. Out-of-sample validation is still owed (OQ-036)."""
+    from rag.runner.cost import RERANK_CALIBRATION_RUN_ID, PricingTable, estimate_rerank_cost
 
     pricing = PricingTable.load()
     estimate = estimate_rerank_cost(
         reranker="openrouter",
         estimate_params={"kind": "rerank_endpoint", "model": "cohere/rerank-v3.5", "provider": "Cohere"},
-        n_questions=200, candidate_docs=50, candidate_words=329, pricing=pricing,
+        n_questions=200, candidate_docs=50, candidate_words=348, pricing=pricing,
     )
-    assert estimate["rerank_usd"] == pytest.approx(0.20)
+    assert estimate["search_units"] == 234
+    assert estimate["rerank_usd"] == pytest.approx(0.234)
+    assert RERANK_CALIBRATION_RUN_ID in estimate["source"]
+    assert "NOT yet validated out of sample" in estimate["source"]
+
+
+def test_rerank_cost_scales_with_the_split_not_the_corpus():
+    """Preflight 34: a reranker charges again for every question, so the same config
+    is cents on `dev` and dollars on `dev_large`."""
+    from rag.runner.cost import PricingTable, estimate_rerank_cost
+
+    pricing = PricingTable.load()
+    params = {"kind": "rerank_endpoint", "model": "cohere/rerank-v3.5", "provider": "Cohere"}
+    dev = estimate_rerank_cost(reranker="openrouter", estimate_params=params, n_questions=200,
+                               candidate_docs=50, candidate_words=348, pricing=pricing)
+    dev_large = estimate_rerank_cost(reranker="openrouter", estimate_params=params, n_questions=6221,
+                                     candidate_docs=50, candidate_words=348, pricing=pricing)
+    assert dev_large["rerank_usd"] / dev["rerank_usd"] == pytest.approx(6221 / 200, rel=0.01)
 
 
 def test_an_unpriced_reranker_is_unknown_not_free():

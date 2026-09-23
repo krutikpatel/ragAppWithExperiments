@@ -379,6 +379,88 @@ semantic chunker's boundary cache meant its re-run embedded 50,852 sentences ins
 196,000. The fix gives rate limits their own schedule and honours the provider's
 `Retry-After`.
 
+### Reranking: the one that moved everything and changed nothing (EXP-0024)
+
+A reranker is the standard next move, and the reason it is standard is easy to state.
+The dense retriever turns the question into a vector and the article into a vector,
+separately, and compares them — it never actually reads one against the other. A
+cross-encoder does: question and passage go through the model together. That is much
+more accurate per pair and far too slow to run over 6,221 articles, so it only ever
+re-orders a short candidate list. Which also caps it: it cannot find anything the
+retriever missed.
+
+I wrote down two expectations first (H-017, H-018). The first was that this would be
+the axis that finally produced a positive result, because every technique so far had
+changed *what gets indexed* and this one changes *how the question is read*. It was
+wrong. Strict recall@5 went from 0.720 to 0.665 — down — at p = 0.139, which the
+paired test calls no measurable difference. Axis 5 joined Axes 1, 2 and 3 in the null
+column.
+
+What makes it interesting is where the movement went. The reranker was **better at the
+top and worse in the middle**: +0.065 at rank 1, −0.055 at rank 5, and at rank 20,
+**0.920 before and 0.920 after — p = 1.000, nine questions gained and nine lost.** That
+last number is the ceiling, measured rather than argued: a reranker re-orders 50
+candidate documents, so the recall of those 50 is the most it can ever return. It is
+not approaching the ceiling, it is sitting on it, and that bounds every future
+reranking experiment on this corpus.
+
+Underneath the flat aggregate there was a great deal of motion. Tracking where the
+gold document went on the 160 single-gold questions: it moved up a rank band on 40 of
+them and down on 39. The five-document context changed for 194 of 200 questions, a
+mean of 2.28 documents replaced. The null is not the reranker declining to act; it is
+a lot of acting that cancels.
+
+Reading the 45 questions that flipped is where the axis earned its keep. The rescues
+are striking — *"do I have to give my login to a website designer to work on my site"*
+went from rank 33 to rank 2, *"i cant create a new gallery in my website"* from 24 to
+1, *"Hoe can I restore the selection of projects…"* from ranks 6 and 20 to 1 and 2.
+These are questions with typos, loose phrasing, a complaint instead of a query — the
+cases where comparing two separately-made vectors does badly and actually reading the
+question helps. The losses are the mirror image and they are not near-misses: *"how to
+add more static pages to a Wix website"* fell from rank 1 to 8, *"How to make the
+published changes draft?"* from 5 to 20. Three of the six losses I read started at
+rank 1. Well-formed questions the retriever had already answered, demoted confidently
+by six to sixteen places.
+
+The tempting story is "cross-encoders rescue badly-phrased questions and disturb
+well-formed ones", and it would be a genuinely useful finding, because it says *when*
+to pay for a reranker rather than whether. But the slices that should support it do
+not: expert-written and simulated questions moved −0.040 and −0.070, both flat, both
+indistinguishable. So it stays a hypothesis with a test attached (OQ-037) instead of a
+conclusion, and the test needs 200 questions hand-labelled for phrasing *before*
+anyone looks at the result.
+
+One thing I predicted and got backwards for an instructive reason. P2-10 warns that a
+cross-encoder can re-concentrate the context onto a single article and undo the
+document diversity the retriever was configured for, and I expected exactly that. The
+collapse ratio went 1.106 to 1.113. Nothing happened — not because the reranker
+resisted, but because 79% of articles on this corpus are a single chunk, so there is
+usually no second chunk of the same article available to promote. The prediction was
+about the technique; the answer was about the documents. That keeps happening here.
+
+The cost is the part that transfers. Median latency went 298 ms to 1,194 ms and the
+per-query price from $0.0000004 to $0.00117 — roughly 2,900 times — to buy nothing
+measurable. Reranking is also the first thing in this project billed *per question*
+rather than per corpus: an index is paid for once, a reranker charges again for every
+query, so the identical configuration is $0.23 on the 200-question dev set and $7.28
+on the 6,221-question one. Which is why, when nothing won, the confirmation run on the
+larger split was simply not bought.
+
+Three smaller things went wrong and are logged. The pricing listing reports **$0 for
+every rerank model on OpenRouter** while the calls bill real money, which would have
+told the $2 spend gate this entire axis was free (MIS-025) — caught by sending one
+real call and reading the response before writing the estimator. The first attempt
+died because the shell I launched from had never loaded the API key; nothing was spent
+and the runner filed it as a VOID row rather than a gap (MIS-026). And I edited a
+documentation file while the run was starting, which stamped `git_dirty` on a row that
+cannot be un-stamped — the rule I broke was one I had quoted in the previous commit
+(MIS-027).
+
+The honest limit on all of this: **one reranker was run.** Cohere's v3.5 was the
+choice; an open-weight cross-encoder and an LLM-as-reranker were configured and not
+run. So what this axis established is that *this* cross-encoder does not help here,
+not that cross-encoders do not (OQ-035).
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control
@@ -397,15 +479,17 @@ latency:
 | Semantic chunking (95th-percentile boundaries) | 0.720 → 0.675 | −0.045 (6 / 15; p = 0.078) | floor: 2 questions | — | $0.008 + $0.031 | EXP-0021 vs EXP-0005 |
 | Structure-aware chunking (line boundaries) | 0.720 → 0.665 | −0.055 (6 / 17; p = 0.033) | floor: 2 questions | — | $0.031 index | EXP-0022 vs EXP-0005 |
 | Sentence-window chunking (1 sentence, ±3) | 0.720 → **0.530** | **−0.190** (10 / 48; p = 0.0001) | floor: 2 questions | — | $0.034, 2.8 h, 3.2 GB | EXP-0019 vs EXP-0005 |
+| Cross-encoder reranking, 50 candidate documents → 5 (`cohere/rerank-v3.5`) | 0.720 → 0.665 | −0.055 vs dense control (17 / 28; CI [−0.120, +0.010], p = 0.139) | — | 635 ms → **2,727 ms** | **$0.00117/query** (~2,900x) | EXP-0024 vs EXP-0005 |
 
 One thing moved: the retriever. Everything on the chunking axis was within one
 question, the document-level walk changed what a generator sees on 62 of 200
 questions without changing a retrieval number, the embedding axis kept its control
 (EXP-0008 to EXP-0013), the retrieval-method axis ranged from a null to a twelve-point
-loss (EXP-0014 to EXP-0018), and the chunking axis from a null to a nineteen-point loss
-(EXP-0019 to EXP-0022) against a measured two-question noise floor (EXP-0023). No
-generation technique has been compared yet — the Tier 2 rows are the control, not a
-treatment.
+loss (EXP-0014 to EXP-0018), the chunking axis from a null to a nineteen-point loss
+(EXP-0019 to EXP-0022) against a measured two-question noise floor (EXP-0023), and
+reranking produced no measurable change at any depth while multiplying latency by four
+and cost per query by roughly 2,900 (EXP-0024). No generation technique has been
+compared yet — the Tier 2 rows are the control, not a treatment.
 
 ## 6. What did not work, and what that suggests
 
@@ -445,6 +529,21 @@ misses outright are many, and any fusion rule that lets the weaker list veto —
 construction, weighted fusion at α ≤ 0.4 — pays for the vetoes. The lexical signal
 on this corpus is worth a re-order inside dense's top ten, not a second opinion on what
 belongs there.
+
+**A reranker, which is the technique everyone reaches for next.** It produced the most
+movement of anything in Phase 2 and the least result: 40 golds moved up a rank band, 39
+moved down, 194 of 200 contexts changed, and strict recall@5 came out at −0.055,
+p = 0.139. Two things in it are worth more than the headline. First, it was **better at
+rank 1 and worse at rank 5** — so the mechanism does work, at a depth this system does
+not read; a one-document context would have scored it differently, and that is a live
+question for the combination phase rather than a closed one. Second, strict recall@20
+was **identical before and after, p = 1.000**, which is not a null result but a
+measurement of the ceiling: nothing that re-orders 50 candidate documents can beat
+0.920 here, so improving retrieval and improving reranking are not interchangeable
+projects. What it suggests is that on a corpus where the retriever already places the
+gold in the top five four times in five, the remaining errors are not ranking errors
+the reranker can see — they are questions whose answer is not in the candidate set at
+all. One caveat I cannot argue away: only one reranker was run (OQ-035).
 
 **Two instruments, before any technique.** The citation parser dropped a citation
 shape the model uses (MIS-016) and the refusal detector could not read a curly

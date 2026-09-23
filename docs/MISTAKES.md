@@ -118,8 +118,19 @@ Derived from the prevention rules below. Run through it and say in chat that you
     (MIS-025)
 34. **Reranking is billed per query, so its cost scales with the split, not with
     the corpus.** An index build is a one-off; a reranker charges again for every
-    question. The same Axis 5 config is $0.20 on `dev` and $6.22 on `dev_large`.
+    question. The same Axis 5 config is $0.23 on `dev` and $7.28 on `dev_large`.
     Estimate against the split you are about to run, never against the last one.
+35. **Before a paid run from a non-interactive shell, assert the credential is in the
+    ENVIRONMENT, not that `.env` exists.** `set -a && . ./.env && set +a` — one line,
+    costs nothing; the failure costs a run. (MIS-026)
+36. **A run in flight owns the working tree.** No edit until its row is finished —
+    not documentation, not the next run's config. The runner reads git state after
+    the process starts, so an edit during the launch window lands on the row as
+    `git_dirty=1` and cannot be taken off. Bookkeeping waits. (MIS-027)
+37. **When a provider's billing unit has a capacity, find what fills it before
+    assuming your unit is theirs**, and check the first real run's actual against its
+    estimate *per run* — the three-run drift check is too coarse to catch a 17%
+    error. (MIS-028)
 
 ---
 
@@ -793,3 +804,81 @@ Derived from the prevention rules below. Run through it and say in chat that you
   `usage`; if the billing unit is not one the price table can express, the table
   gets a new block and the refresher is told to leave it alone.
 - **Added to preflight:** yes (item 33)
+
+## MIS-026 — Launched a paid run from a shell that had no API key
+- **Date:** 2026-09-23
+- **Severity:** Low — the run died before any provider call; nothing was spent.
+- **What happened:** EXP-0024's first attempt (`run_20260923_052903_c2ea`) raised
+  `OPENROUTER_API_KEY is not set` on its first query embedding. The key is in `.env`
+  at the repo root and `rag` reads it from the environment by design (CLAUDE.md §10);
+  the launching shell had never sourced it.
+- **How it was caught:** the run exited non-zero and the runner recorded it VOID with
+  the exception on the row, which is the behaviour that made it obvious rather than
+  mysterious.
+- **Root cause:** an assumption that "the key is in `.env`" means "the key is in the
+  environment". It means a human's interactive shell usually exports it and a fresh
+  non-interactive one does not.
+- **Impact:** none to results, none to spend. One VOID row in the ledger, kept.
+- **Fix applied:** the run command is `set -a && . ./.env && set +a && python -m
+  rag.cli run ...`, and EXP-0024's Reproduce block spells that out. `rag` was **not**
+  changed to load `.env` itself: reading the key from the environment is the
+  contract, and a library that quietly loads secrets from the working directory is a
+  worse default than an explicit failure.
+- **Prevention rule:** before a paid run from a non-interactive shell, assert the
+  credential is *in the environment*, not that the file exists. The check is one
+  line and it costs nothing; the failure costs a run.
+- **Added to preflight:** yes (item 35)
+
+## MIS-027 — Edited a tracked file while a run was launching, so it recorded git_dirty=1
+- **Date:** 2026-09-23
+- **Severity:** Low — the numbers are sound and the dirt was documentation, but the
+  row now carries a flag that cannot be removed, and the flag is the point.
+- **What happened:** EXP-0024 was launched from a clean tree. While it was starting,
+  `docs/EXPERIMENTS.md` was edited to record the VOID row from MIS-026. The runner
+  reads git state at the top of `_run`, after the process starts, so it saw a dirty
+  tree and recorded `git_dirty=1` against `f337ae2`.
+- **How it was caught:** the runner's own warning in the run log.
+- **Root cause:** treating preflight item 28 as "commit before you launch" when it
+  says the tree prints nothing *before a run launches* — and then not extending that
+  to the launch window itself. The rule was quoted in the commit one before this one
+  and broken in the next action.
+- **Impact:** `git diff f337ae2` over the window touches one file,
+  `docs/EXPERIMENTS.md`, and nothing under `rag/`, `configs/` or `prompts/`, so
+  `f337ae2` does describe the code that produced the numbers. The run is **not**
+  VOID: re-running to clear a docs-file timestamp would spend $0.23 to change a flag
+  and not a number. The flag stays and EXP-0024 explains it in *Anomalies*.
+- **Fix applied:** none in code. The runner already warned loudly and recorded the
+  fact; it behaved correctly.
+- **Prevention rule:** a run in flight owns the working tree. No edit — not docs, not
+  a config for the *next* run — until the run row is finished. Bookkeeping waits.
+- **Added to preflight:** yes (item 36)
+
+## MIS-028 — Costed Cohere's search unit by document count; it is billed by candidate length
+- **Date:** 2026-09-23
+- **Severity:** Low — 17% under, inside the gate. Would have mattered at `dev_large`
+  scale or nearer the $2 line.
+- **What happened:** the Axis 5 estimator read Cohere's "one search unit = one query
+  with up to 100 documents" and billed 50 candidate documents as 1 unit per query.
+  EXP-0024 estimated $0.2001 and was billed **$0.2341** — 234 units for 200 queries.
+- **How it was caught:** `cost_actual_usd` against `cost_estimate_usd` on the run
+  row. The drift check did not fire (it needs a median ratio outside 0.75–1.33 over
+  three runs); the per-run comparison did.
+- **Root cause:** two compounding errors, both from counting the wrong thing.
+  `rerank_candidates` counts *documents*, but the reranker receives every ranked
+  chunk of them — 58.4 chunks per 50 documents. Cohere then splits each into
+  ~500-token pieces, and 44% of candidate chunks exceed that: candidates average 348
+  words against the corpus-wide 309, because longer articles produce more chunks and
+  so have more chances to be retrieved. Most queries land near 84 billable pieces,
+  under the 100-per-unit line; ~34 whose candidates skew long cross it and bill twice.
+- **Impact:** $0.034 of unanticipated spend on one run. No result affected.
+- **Fix applied:** the multiplier is now what was billed — 1.17 units per query at 50
+  candidate documents, calibrated on `run_20260923_052941_4ada` and **labelled in the
+  estimator's own output as not yet validated out of sample** (DEC-035). A piece
+  model built from mean chunk length still predicts 200 units, because the effect is
+  a threshold on a per-query distribution, so a measured multiplier is the honest
+  instrument and a modelled one would be false precision.
+- **Prevention rule:** when a provider's billing unit has a capacity ("up to 100
+  documents"), find what fills it before assuming your unit is theirs. Then check the
+  first real run's actual against its estimate per run, not only against the
+  three-run drift check, which is too coarse to catch a 17% error.
+- **Added to preflight:** yes (item 37)

@@ -371,7 +371,17 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   anything, and I am writing it down because it is the part I expect to be wrong.
 - **Tested by:** `rag compare promoted <run> --metric strict_recall@5` on `dev`, per
   slice, for EXP-0024 / EXP-0025 / EXP-0026.
-- **Resolution:** _pending._
+- **Resolution:** **wrong, on both halves** — though only EXP-0024 ran, so this is
+  answered for `cohere/rerank-v3.5` and not for reranking (OQ-035). Strict recall@5
+  went **down** 0.720 → 0.665 (p = 0.139), not up by 0.03; Axis 5 joins Axes 1, 2 and
+  3 with no measurable difference. And `multi_doc` was the *worse* of the two gold
+  slices to bet on: −0.050 at p = 0.732 against `single_doc`'s −0.056, i.e. both flat
+  and neither distinguishable, exactly the "20 questions can move without meaning
+  anything" caveat I wrote down. What I did not predict is the shape that did appear:
+  **+0.065 at rank 1 and exactly 0.000 at rank 20**. My reasoning — "a reranker reads
+  the question against the passage instead of comparing two independently-made
+  vectors" — was right about the mechanism doing something, and wrong to assume that
+  something would be monotone in recall. `run_20260923_052941_4ada`.
 
 ## H-018 — Reranking raises the collapse ratio, and the ceiling is the retriever's recall@50
 - **Date written:** 2026-09-22, before any Axis 5 run
@@ -390,7 +400,20 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      the EXP-0005 run row.
 - **Tested by:** `collapse_ratio_mean` on each Axis 5 run row vs EXP-0005's; and
   each run's strict recall@5 against the control's strict recall@20/@50.
-- **Resolution:** _pending._
+- **Resolution:** **part 1 wrong, part 2 confirmed.**
+  1. The collapse ratio barely moved: **1.106 → 1.113**, p90 unchanged at 1.40, no
+     pool exhaustion. I reasoned that a cross-encoder scoring each passage alone "has
+     no reason to spread its top scores across articles"; that is true and still
+     produced nothing, because on this corpus **79% of articles are a single chunk**,
+     so there is usually no second chunk of the same article available to promote.
+     The re-concentration P2-10 warns about is a real failure mode that this corpus
+     cannot express. The prediction was about the reranker; the answer was about the
+     documents.
+  2. Confirmed, and more exactly than expected: strict recall@**20** is
+     **0.920 → 0.920, p = 1.000**, with 9 questions gained and 9 lost. The reranker
+     re-orders 50 candidate documents and cannot exceed that set's recall — the
+     ceiling is not approached, it is sitting on it.
+  `run_20260923_052941_4ada`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

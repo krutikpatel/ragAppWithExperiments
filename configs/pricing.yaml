@@ -122,13 +122,14 @@ rerank:
     Cohere:
       unit: search_unit
       usd_per_unit: 0.001
-      docs_per_unit: 100
-      measured: 50 documents of 600 words = 1 search unit, $0.001, 778 ms
+      measured: "50 documents of 600 words = 1 search unit, $0.001, 778 ms; a whole\
+        \ 200-question dev run billed 234 units for 200 queries (EXP-0024) \u2014\
+        \ units track candidate length, not candidate count"
+      units_per_query: 1.17
   cohere/rerank-4-fast:
     Cohere:
       unit: search_unit
       usd_per_unit: 0.002
-      docs_per_unit: 100
       measured: 50 documents of 600 words = 1 search unit, $0.002, 1298 ms
   qwen/qwen3-reranker-8b:
     Fireworks:

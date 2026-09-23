@@ -199,6 +199,38 @@ a technique.
 | EXP-0023 | "how to see my website ip address" | rank 5 under `be04` | rank 6 after re-embedding the identical corpus | — (irreducible; ~1 point of strict recall@5) |
 | EXP-0023 | "how to cancel a payment for a Wix Premium plan" | rank 5 | rank 6 | — |
 
+### F14 — Cross-encoder confidently demotes a gold the dense retriever had at rank 1–5
+The reranker's losses are not near-misses. On 28 questions of 200 the gold left the
+top 5 entirely, typically by 6 to 16 places, and three of the six read by hand started
+at **rank 1**. These are well-formed questions the dense retriever had already
+answered; reading the question against the passage produced a confident wrong call.
+Stage: `reranking`. The mirror image (F15) is the same mechanism getting it right.
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0024 | "how to add more static pages to a Wix website" | rank 1 | rank 8 | — |
+| EXP-0024 | "Is domain privacy included in the price of purchasing the domain and the yearly charge?" | rank 1 | rank 7 | — |
+| EXP-0024 | "How can I add a personalized name to my automated emails? I was advised to use dynamic values for this." | rank 1 | rank 7 | — |
+| EXP-0024 | "How to make the published changes draft?" | rank 5 | rank 20 | — |
+| EXP-0024 | "How can I offer free shipping for a sample option of a product while the main product does not have free shipping?" | rank 5 | rank 21 | — |
+| EXP-0024 | "Im encountering an issue with my payment settings… payouts are on hold." (2 golds) | ranks 2, 3 | ranks 2, 15 | — |
+
+### F15 — Loosely-phrased question; dense buries the gold and the cross-encoder rescues it
+The counterpart to F14 and the only thing in Axis 5 that clearly worked. Golds sitting
+at rank 6 to 33 under dense retrieval came back to rank 1 or 2. The 17 gains skew
+towards typos, non-English phrasing and complaints-rather-than-questions — the cases
+where comparing two independently-made vectors does badly. Whether that pattern is
+real or a story fitted to 45 questions is OQ-037; the `source:expertwritten` vs
+`source:simulated` slices do not separate, which argues against it.
+Stage: `retrieval` (recovered at `reranking`).
+
+| Run | Question | Expected | Got | Fixed by |
+|---|---|---|---|---|
+| EXP-0024 | "do I have to give my login to a website designer to work on my site" | rank 33 under dense | rank 2 | reranking (EXP-0024) |
+| EXP-0024 | "i cant create a new gallery in my website. it only refers to portfolio templates" | rank 24 | rank 1 | reranking (EXP-0024) |
+| EXP-0024 | "Hoe can I restore the selection of projects for my Wix collection?" (2 golds) | ranks 6, 20 | ranks 1, 2 | reranking (EXP-0024) |
+| EXP-0024 | "I am trying to cancel my Premium subscription within the 14-day period, but I cant find the cancel feature." | rank 6 | rank 1 | reranking (EXP-0024) |
+
 ## Counts by run
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
@@ -213,6 +245,17 @@ Retrieval-only categories (F8–F11) are counted from `rag diff` flips, not samp
 | EXP-0014 (RRF) | 9 recovered of 9 | 38 (22 with gold absent from BM25's top 100) |
 | EXP-0016 (α=0.4) | — (14 gained, not read one by one) | 40 |
 | EXP-0017 (α=0.6) | 7 recovered | 16 (8 absent from BM25) |
+
+Axis 5 (EXP-0024), counted from `rag compare` flips on strict recall@5, `dev` n=200:
+
+| Run | F14 gold demoted out of top 5 | F15 buried gold rescued into top 5 | net |
+|---|---|---|---|
+| EXP-0024 (cohere/rerank-v3.5, 50 → 5) | 28 | 17 | −11 (Δ −0.055, p = 0.139) |
+
+Counted across all 160 single-gold questions rather than only the top-5 boundary, the
+two categories are near-symmetric: the gold moved up a rank band for **40** questions
+and down for **39**. F14 and F15 are the same mechanism, and on this corpus it is a
+coin flip that costs $0.00117 and 900 ms per query to toss.
 | EXP-0018 (α=0.8) | 3 recovered | 4 (all rank 5 → 6) |
 
 Axis 1 (chunking), same method:

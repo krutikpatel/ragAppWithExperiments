@@ -58,6 +58,27 @@ CALIBRATION_CONTEXT_WORDS = 5 * 512
 # linearly against the calibration context; output is held at the measured figure.
 
 WORDS_TO_TOKENS = 1.27  # measured on this corpus, DEC-029
+
+# Rerank calibration, from EXP-0024 (run_20260923_052941_4ada, 200 dev questions,
+# 50 candidate documents, fixed-600/100 chunks). The first estimate assumed Cohere's
+# "one query, up to 100 documents" search unit and was **17% low**: 200 units
+# estimated, **234 billed**.
+#
+# Why, measured: `rerank_candidates` counts documents, but a document contributes
+# every chunk of it the retriever ranked — 58.4 candidate *chunks* per 50 documents.
+# Cohere then splits each into ~500-token pieces, and 44% of candidate chunks exceed
+# that (candidates average 348 words against the corpus-wide 309 — longer articles
+# have more chunks and so more chances to be retrieved). Most queries land near 84
+# billable pieces, under the 100-per-unit line; the ~34 whose candidates skew long
+# cross it and bill twice.
+#
+# That is a threshold on a per-query distribution, which no mean-based model
+# reproduces — a piece model built from the mean still predicts 200. So the
+# multiplier is simply what was billed: 234 / 200. It is calibrated on ONE run and
+# has NOT been validated out of sample; the next rerank run is the validation, and
+# until then this is an estimate with a known provenance, not a law (DEC-035).
+RERANK_CALIBRATION_RUN_ID = "run_20260923_052941_4ada"
+RERANK_UNITS_PER_QUERY = 1.17
 GENERATED_TOKENS_OUT_PER_QUESTION = 350  # measured 118-183 on smoke runs; padded
 
 
@@ -454,12 +475,19 @@ def estimate_rerank_cost(
         )
         return estimate
     if rule.get("unit") == "search_unit":
-        units = n_questions * max(1, math.ceil(candidate_docs / int(rule.get("docs_per_unit", 100))))
+        # Units track candidate *length*, not candidate count, and the relationship is
+        # a per-query threshold. The multiplier is measured, not modelled — see above.
+        units_per_query = float(rule.get("units_per_query", RERANK_UNITS_PER_QUERY))
+        units = math.ceil(n_questions * units_per_query * candidate_docs / 50)
         estimate["rerank_usd"] = round(units * float(rule["usd_per_unit"]), 4)
         estimate["search_units"] = units
-        estimate["source"] = f"measured ${rule['usd_per_unit']}/search unit x {units:,} units"
+        estimate["source"] = (
+            f"measured ${rule['usd_per_unit']}/search unit x {units:,} units "
+            f"({units_per_query} units/query at 50 candidate docs, calibrated on "
+            f"{RERANK_CALIBRATION_RUN_ID}, NOT yet validated out of sample)"
+        )
         return estimate
-    tokens = int(n_questions * candidate_docs * candidate_words * WORDS_TO_TOKENS)
+    tokens = int(n_questions * candidate_docs * RERANK_UNITS_PER_QUERY * candidate_words * WORDS_TO_TOKENS)
     estimate["rerank_usd"] = round(tokens / 1e6 * float(rule["usd_per_mtok"]), 4)
     estimate["tokens"] = tokens
     estimate["source"] = f"measured ${rule['usd_per_mtok']}/Mtok x {tokens:,} tokens"

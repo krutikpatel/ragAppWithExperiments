@@ -201,6 +201,8 @@ reference here. An entry without a matching DEC entry is a process failure.
 |---|---|---|---|---|---|
 | 1 | 2026-09-16 | `dddcb9951da9357b` | $3.0000 (index_build) | DEC-TEST | run `run_20260916_051725_8767`, git `7c59851` |
 | 1 | 2026-09-16 | `dddcb9951da9357b` | $3.0000 (index_build) | DEC-TEST | run `run_20260916_051736_2dbd`, git `7c59851` |
+| 3 | 2026-09-23 | `f853a346cdad3e8f` | $0.2001 (rerank) | DEC-053: Krutik approved in chat 2026-09-22, $0.2001 estimate, EXP-0024 Axis 5 opening run | run `run_20260923_052903_c2ea`, git `f337ae2` |
+| 4 | 2026-09-23 | `f853a346cdad3e8f` | $0.2001 (rerank) | DEC-053: Krutik approved in chat 2026-09-22, $0.2001 estimate, EXP-0024 Axis 5 opening run | run `run_20260923_052941_4ada`, git `f337ae2` |
 
 ## Test-split openings log
 
@@ -2162,6 +2164,12 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   axis whose switch is off is excluded from the hash entirely: `promoted.yaml` still
   hashes to `7c99bc8e9a88e878`, asserted in `tests/test_reranking.py`. Any future
   axis added this way must follow the same rule or the ledger breaks.
+- **Measured outcome (appended 2026-09-23, EXP-0024).** Rule 4's arithmetic was right
+  in shape and low in size: the `dev_large` check is **$7.28**, not the $6.22 written
+  above — Cohere's search unit is filled by candidate *length*, not candidate count
+  (MIS-028). It was not bought, because nothing won on `dev` (OQ-033, answered).
+  Rules 1–3 held: the axis config was a clean one-dimension diff, the post-rerank
+  collapse ratio is on the row, and cost came from `usage.cost`.
 - **Revisit if:** a reranker wins on `dev` and the `dev_large` check is needed
   (OQ-033), or a second absent-dimension axis makes the hash exclusion list long
   enough to be worth a different mechanism.

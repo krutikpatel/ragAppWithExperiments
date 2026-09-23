@@ -475,7 +475,11 @@ which is the slice a reranker is most likely to move.
 check is bought for that one config only and the cost goes to Krutik first (DEC-053).
 If none does, the check is never run and the axis closes on `dev` as a negative
 result — nothing `dev_large` could say would promote a configuration that lost.
-**Status:** open — resolved by the Axis 5 `dev` runs.
+**Answered 2026-09-23 by EXP-0024: no.** `cohere/rerank-v3.5` did not win on `dev`
+(Δ −0.055, p = 0.139), so there is no winner for `dev_large` to check and nothing it
+could say would promote a configuration that lost. The check was never run and $7.28
+was not spent. If EXP-0025/0026 are ever run and one wins, this question reopens.
+**Status:** answered by EXP-0024 (not bought).
 
 ## OQ-034 — Does a reranker's gain survive the context the generator actually sees?
 Axis 5 is decided on Tier 1, where a reranker is scored on the document ranking. But
@@ -501,3 +505,33 @@ move a slice Cohere leaves flat.
 `rag compare`. Both configs exist; neither has a run row, so neither is an experiment.
 **Status:** open — queued behind EXP-0024. Whatever EXP-0024 says, the Negative
 Results or scorecard entry names this limit rather than generalising past it.
+
+## OQ-036 — Does the recalibrated Cohere unit multiplier hold out of sample?
+`rag/runner/cost.py` now estimates Cohere search units at **1.17 per query at 50
+candidate documents**, calibrated on EXP-0024 alone (234 units / 200 queries).
+DEC-035 is explicit that matching the calibration run proves nothing: the estimator's
+own output says "NOT yet validated out of sample" and will keep saying it until a
+second rerank run on different questions is compared against it. The multiplier is a
+threshold effect on candidate length, so it should move with `rerank_candidates` and
+with the chunker — a 20 -> 5 run would test that directly.
+**Decided by:** any second Cohere rerank run — the 20 -> 5 ratio config P2-10 asks
+for, or EXP-0025 — with `cost_actual_usd` compared to `cost_estimate_usd` on the row.
+Within 10% counts as validated.
+**Status:** open, queued behind any further Axis 5 run.
+
+## OQ-037 — Does the cross-encoder specifically rescue badly-phrased questions?
+Reading EXP-0024's 45 flipped questions, the 17 gains skew towards loose phrasing,
+typos and complaints (*"Hoe can I restore…"*, *"i cant create a new gallery"*, *"do I
+have to give my login to a website designer"* — golds at rank 33, 24 and 20 lifted to
+1 or 2), while the 28 losses skew towards well-formed questions the dense retriever
+had already placed at rank 1 to 5. If that is real it is the useful finding in this
+axis — it says *when* to pay for a reranker rather than whether to — and it would
+also explain the otherwise odd `q_len` split (medium +0.078, long −0.129).
+But it is a description of 45 hand-read questions, and the `source:expertwritten` vs
+`source:simulated` slices do **not** separate (−0.040 vs −0.070, both flat), which is
+evidence against it.
+**Decided by:** a pre-registered malformedness label over the `dev` questions —
+authored, in `data/authored/`, never derived from the run being tested — and
+strict recall@5 on that slice for EXP-0024 vs `promoted`, ≥ 0.10 separation between
+the well-formed and malformed halves. Labelling 200 questions is the cost, not compute.
+**Status:** open — a follow-up, not a sixth Axis 5 experiment.
