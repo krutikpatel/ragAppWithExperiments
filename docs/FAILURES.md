@@ -246,9 +246,11 @@ retrieval succeeded.
 | EXP-0005 (control, no reranker) | 0.985 (197/200) | 0.720 (144/200) | 53 |
 | EXP-0024 (`rerank-v3.5`) | 0.985 | 0.665 (133/200) | 64 |
 | EXP-0025 (`rerank-4-fast`) | 0.985 | 0.730 (146/200) | 51 |
+| EXP-0026 (`qwen3-reranker-8b`) | 0.985 | 0.720 (144/200) | 53 |
 
-No experiment has moved this by more than two questions. It is the standing target for
-P2-11, the k → n ratio runs (OQ-038) and Axis 4.
+**Three cross-encoders have now been tried and none moved this by more than two
+questions.** It is the standing target for P2-11, the k → n ratio runs (OQ-038) and
+Axis 4.
 
 ## Counts by run
 
@@ -271,6 +273,7 @@ Axis 5 (EXP-0024), counted from `rag compare` flips on strict recall@5, `dev` n=
 |---|---|---|---|
 | EXP-0024 (cohere/rerank-v3.5, 50 → 5) | 28 | 17 | −11 (Δ −0.055, p = 0.139) |
 | EXP-0025 (cohere/rerank-4-fast, 50 → 5) | 22 | 24 | +2 (Δ +0.010, p = 0.887) |
+| EXP-0026 (qwen3-reranker-8b, 50 → 5) | 26 | 26 | **0** (Δ +0.000, p = 1.000) |
 
 Counted across all 160 single-gold questions rather than only the top-5 boundary, both
 rerankers are near-symmetric: v3.5 moved the gold up a rank band on **40** questions

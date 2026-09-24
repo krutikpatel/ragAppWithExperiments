@@ -481,12 +481,31 @@ band: v3.5 moved 40 up and 39 down, `4-fast` 39 up and 32 down. The gains are th
 same; `4-fast` just destroys less. Both still demoted golds out of rank 1 and both
 replaced more than two of the five context documents on nearly every question.
 
-The third reranker never ran. `qwen/qwen3-reranker-8b`, the open-weight contrast, died
-on its first call with `HTTP 402: Insufficient credits` — the account ran dry mid-batch
-(MIS-031). Every cost control in this project is per-run and none of them knows whether
-there is money in the account, which is how a run got approved, estimated, gated and
-started before hitting a wall the gate could not see. Nothing was billed and the row is
-VOID rather than missing, but the open-weight question is still open.
+The third reranker took two attempts. `qwen/qwen3-reranker-8b`, the open-weight
+contrast, died on its first call with `HTTP 402: Insufficient credits` — the account
+ran dry mid-batch (MIS-031). Every cost control in this project is per-run and none of
+them knows whether there is money in the account, which is how a run got approved,
+estimated, gated and started before hitting a wall the gate could not see. Nothing was
+billed, the row is VOID rather than missing, and it ran properly once the account was
+topped up.
+
+It was worth the second attempt, and not for the reason I expected. Its strict
+recall@5 was **0.7200 against the control's 0.7200 — a delta of exactly zero, p =
+1.000, with 26 questions gained and 26 lost.** That is the cleanest null I have ever
+produced and it is not an inert component: it changed the retrieved set for a quarter
+of the questions and the metric did not notice.
+
+What makes it useful is that it is *unlike* the other two. Both Cohere models sharpen
+the very top and lose ground in the middle. This one does the opposite — it is the only
+reranker that was **worse** at rank 1 (−0.020), and the best at depth: recall@10 +0.030
+and **recall@20 = 0.950**, the highest any configuration in this project has produced.
+Three cross-encoders, one candidate set, three genuinely different behaviours, and the
+identical verdict on the deciding metric. A null that survives three different
+behaviours says something about the corpus; three repetitions of one behaviour would
+have said something about a model.
+
+And it cost the most of anything here: **$0.00605 a query, about fifteen thousand times
+the control**, with 31 transient retries against Cohere's one or two.
 
 ## 5. What actually moved the needle
 
@@ -508,6 +527,7 @@ latency:
 | Sentence-window chunking (1 sentence, ±3) | 0.720 → **0.530** | **−0.190** (10 / 48; p = 0.0001) | floor: 2 questions | — | $0.034, 2.8 h, 3.2 GB | EXP-0019 vs EXP-0005 |
 | Cross-encoder reranking, 50 candidate documents → 5 (`cohere/rerank-v3.5`) | 0.720 → 0.665 | −0.055 vs dense control (17 / 28; CI [−0.120, +0.010], p = 0.139) | — | 635 ms → **2,727 ms** | **$0.00117/query** (~2,900x) | EXP-0024 vs EXP-0005 |
 | Cross-encoder reranking, same 50 → 5 (`cohere/rerank-4-fast`) | 0.720 → 0.730 | +0.010 vs dense control (24 / 22; CI [−0.055, +0.080], p = 0.887); **+0.065 vs `v3.5`, p = 0.039** | — | 635 ms → **18,774 ms** | **$0.00224/query** (~5,600x) | EXP-0025 vs EXP-0005 |
+| Cross-encoder reranking, same 50 → 5 (`qwen/qwen3-reranker-8b`, open weights) | 0.720 → 0.720 | **+0.000** vs dense control (26 / 26; CI [−0.070, +0.070], p = 1.000); best depth in the project (@20 0.950) | — | 635 ms → 9,372 ms | **$0.00605/query** (~15,000x) | EXP-0026 vs EXP-0005 |
 
 One thing moved: the retriever. Everything on the chunking axis was within one
 question, the document-level walk changed what a generator sees on 62 of 200
@@ -558,11 +578,12 @@ construction, weighted fusion at α ≤ 0.4 — pays for the vetoes. The lexical
 on this corpus is worth a re-order inside dense's top ten, not a second opinion on what
 belongs there.
 
-**A reranker, which is the technique everyone reaches for next — twice.** The two
-cross-encoders produced the most movement of anything in Phase 2 and the least result:
-strict recall@5 came out at −0.055 (p = 0.139) and +0.010 (p = 0.887), while roughly
-40 golds moved up a rank band and roughly 35 moved down on each run, and more than two
-of five context documents were replaced on nearly every question. Two things in it are worth more than the headline. First, it was **better at
+**A reranker, which is the technique everyone reaches for next — three times.** The
+three cross-encoders produced the most movement of anything in Phase 2 and the least result:
+strict recall@5 came out at −0.055 (p = 0.139), +0.010 (p = 0.887) and +0.000
+(p = 1.000), while roughly 40 golds moved up a rank band and roughly 35 moved down on
+each run, and more than two of five context documents were replaced on nearly every
+question. Two things in it are worth more than the headline. First, it was **better at
 rank 1 and worse at rank 5** — so the mechanism does work, at a depth this system does
 not read; a one-document context would have scored it differently, and that is a live
 question for the combination phase rather than a closed one. Second — and this is where I got it

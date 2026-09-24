@@ -205,6 +205,7 @@ reference here. An entry without a matching DEC entry is a process failure.
 | 4 | 2026-09-23 | `f853a346cdad3e8f` | $0.2001 (rerank) | DEC-053: Krutik approved in chat 2026-09-22, $0.2001 estimate, EXP-0024 Axis 5 opening run | run `run_20260923_052941_4ada`, git `f337ae2` |
 | 5 | 2026-09-23 | `dad293c6d06bc518` | $0.4681 (rerank) | DEC-053: Krutik 'run the other two rerankers' 2026-09-23, $0.4681 estimate | run `run_20260923_054802_6566`, git `a62eaec` |
 | 6 | 2026-09-23 | `93e5a1d924c80c32` | $0.9168 (rerank) | DEC-053: Krutik 'run the other two rerankers' 2026-09-23, $0.9168 estimate | run `run_20260923_060805_1b9a`, git `a62eaec` |
+| 7 | 2026-09-24 | `93e5a1d924c80c32` | $0.9168 (rerank) | DEC-053: Krutik 'run the other two rerankers' 2026-09-23 + 'resume the work' after crediting; $0.9168 estimate; balance $14.77 checked (preflight 40) | run `run_20260924_033136_e51f`, git `2312ff9` |
 
 ## Test-split openings log
 
@@ -2227,9 +2228,13 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   both remaining models. EXP-0025 (`cohere/rerank-4-fast`) ran and **beat EXP-0024 at
   p = 0.039 while itself being null against the control**, which settles that the
   narrowness was a real cost and not a hypothetical one (OQ-035). EXP-0026
-  (`qwen/qwen3-reranker-8b`) is VOID on HTTP 402 — the account ran out of credit
-  (MIS-031) — so the open-weight contrast is still owed. Axis 5 has used **2** of its
-  5 experiment slots.
+  (`qwen/qwen3-reranker-8b`) VOIDed on HTTP 402 — the account ran out of credit
+  (MIS-031) — and ran on 2026-09-24 once credited: **Δ exactly 0.000, p = 1.000**,
+  and behaving unlike either Cohere model (worst at rank 1, best at depth). All three
+  approved rerankers are measured, all three are null, and **the decision to widen
+  from one model to three is vindicated by the result**: the axis's null now rests on
+  three distinct behaviours rather than one. Axis 5 has used **3** of its 5
+  experiment slots and closes with no winner.
 - **Consequences:** room remains for the two k -> n ratio runs P2-10 asks for
   (20 -> 5 and a wider setting), which OQ-038 now makes the most informative runs
   left in the axis, plus the owed open-weight reranker. `dev_large` is bought

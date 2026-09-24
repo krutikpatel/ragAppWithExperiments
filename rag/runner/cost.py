@@ -86,6 +86,18 @@ RERANK_UNITS_PER_QUERY = 1.17
 # ranked, measured at 58.4 chunks per 50 candidate documents on EXP-0024. Do not
 # collapse these two constants because they currently agree to two decimals.
 RERANK_CHUNKS_PER_CANDIDATE_DOC = 58.4 / 50
+# Token billing, recalibrated on EXP-0026 (run_20260924_033136_e51f), which was the
+# first run down this path and came in **32% over** ($1.210 against $0.917). Two
+# things were wrong, and both are properties of how a cross-encoder bills:
+#  - A cross-encoder scores (query, document) PAIRS, so the query and the model's
+#    template are billed once PER DOCUMENT, not once per call. Measured at 517.9
+#    tokens per pair against candidates averaging 348 words (442 tokens): ~76 tokens
+#    of per-pair overhead, times 58 candidates, is a third of the bill.
+#  - Candidates are longer than the corpus average (348 words against 309): longer
+#    articles produce more chunks and so are retrieved more often.
+# Together these reproduce 6,050,240 of the 6,051,291 tokens actually billed.
+RERANK_CANDIDATE_LENGTH_FACTOR = 348 / 309
+RERANK_TOKENS_PER_PAIR_OVERHEAD = 76
 GENERATED_TOKENS_OUT_PER_QUESTION = 350  # measured 118-183 on smoke runs; padded
 
 
@@ -495,14 +507,20 @@ def estimate_rerank_cost(
         )
         return estimate
     candidate_chunks = candidate_docs * RERANK_CHUNKS_PER_CANDIDATE_DOC
-    tokens = int(n_questions * candidate_chunks * candidate_words * WORDS_TO_TOKENS)
+    tokens_per_pair = (
+        candidate_words * RERANK_CANDIDATE_LENGTH_FACTOR * WORDS_TO_TOKENS
+        + RERANK_TOKENS_PER_PAIR_OVERHEAD
+    )
+    tokens = int(n_questions * candidate_chunks * tokens_per_pair)
     estimate["rerank_usd"] = round(tokens / 1e6 * float(rule["usd_per_mtok"]), 4)
     estimate["tokens"] = tokens
     estimate["candidate_chunks"] = round(candidate_chunks, 1)
+    estimate["tokens_per_pair"] = round(tokens_per_pair, 1)
     estimate["source"] = (
         f"measured ${rule['usd_per_mtok']}/Mtok x {tokens:,} tokens "
-        f"({candidate_chunks:.1f} candidate chunks/query at {candidate_words} words, "
-        f"chunks-per-doc calibrated on {RERANK_CALIBRATION_RUN_ID}, NOT validated out of sample)"
+        f"({candidate_chunks:.1f} (query,doc) pairs/query at {tokens_per_pair:.0f} tokens each — "
+        f"a cross-encoder bills the query once PER DOCUMENT; calibrated on "
+        f"run_20260924_033136_e51f, NOT validated out of sample)"
     )
     return estimate
 

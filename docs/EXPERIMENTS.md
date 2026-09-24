@@ -42,6 +42,7 @@ produced one.
 | EXP-0024 | `run_20260923_052941_4ada` | 2026-09-23 | reranking | **cohere/rerank-v3.5 cross-encoder**, 50 candidate **documents** (58.4 chunks/query) → top-5, dev (DEC-058/059). vs promoted (0.720): **Δ −0.055, CI [−0.120, +0.010], p=0.139** (17 gained / 28 lost). **Better at the top, worse in the middle, identical at the bottom**: strict@1 +0.065 (p=0.08), nDCG@10 +0.024 (p=0.28), **strict@20 0.920 → 0.920, p=1.000 — the candidate set is the ceiling**. Gold's rank moved up a band for 40 single-gold questions and down for 39; 2.28 of 5 context docs replaced per question. Collapse 1.106→1.113 (the feared re-concentration did not happen; 79% of articles are one chunk). **No measurable difference, at 4x latency and ~2,900x cost/query. Not promoted** | 0.665 | 0.775 | 0.655 | 0.600 (n=160) | — | 2727 | 0.00117 | VALID | [→](experiments/EXP-0024.md) |
 | EXP-0025 | `run_20260923_054802_6566` | 2026-09-23 | reranking | **cohere/rerank-4-fast**, same 50 candidate docs → top-5. vs promoted (0.720): **Δ +0.010, CI [−0.055, +0.080], p=0.887** (24 gained / 22 lost) — null. But **vs EXP-0024's v3.5: Δ +0.065, CI [+0.010, +0.125], p=0.039 — the two rerankers ARE distinguishable** (OQ-035 answered). strict@1 +0.070 (p=0.052), nDCG@10 +0.042 (p=0.057), **multi-doc 0.350→0.475 (+0.125, p=0.18)**, strict@20 **0.940** > control's 0.920 — which disproves EXP-0024's ceiling claim (MIS-029; true ceiling = control recall@50 = **0.985**). Cost $0.448 vs $0.468 estimated (4% under — first out-of-sample check of MIS-028). **No measurable difference vs control; not promoted** | 0.730 | 0.805 | 0.673 | 0.618 (n=160) | — | 18774 | 0.00224 | VALID | [→](experiments/EXP-0025.md) |
 | EXP-0026 | `run_20260923_060805_1b9a` | 2026-09-23 | reranking | **qwen/qwen3-reranker-8b** (the open-weight contrast), dev — died on its first rerank call: **HTTP 402, OpenRouter account out of credits**. 402 correctly not retried; **nothing billed** (`cost_actual_usd` NULL). Config committed and unrun; the open-weight question is still open. See MIS-031 | — | — | — | — | — | — | — | VOID (MIS-031, no credits) | [→](experiments/EXP-0026.md) |
+| EXP-0026 | `run_20260924_033136_e51f` | 2026-09-24 | reranking | **qwen/qwen3-reranker-8b** (open-weight, Fireworks), same 50 candidate docs → top-5, after crediting. vs promoted: **Δ +0.0000, CI [−0.070, +0.070], p=1.000 — 26 gained / 26 lost**, the cleanest null in the project. **Opposite shape to the Cohere pair**: the only reranker *worse* at rank 1 (−0.020) and the best at depth — @10 +0.030, **@20 0.950, the highest recall@20 any config here has produced**. multi-doc 0.350→0.450 (p=0.38). vs 4-fast −0.010 (p=0.88); vs v3.5 +0.055 (p=0.118). 31 transient retries. Cost **$1.210 vs $0.917 estimated (32% over — a cross-encoder bills the query once PER DOCUMENT, MIS-032)**. **No measurable difference; not promoted** | 0.720 | 0.820 | 0.645 | 0.552 (n=160) | — | 9372 | 0.00605 | VALID | [→](experiments/EXP-0026.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -237,60 +238,66 @@ What the axis established:
    `dev_large` gain was concentrated in the `feature_request` slice. Three axes in, the
    synthetic split has not once changed a decision correctly (DEC-055).
 
-## Axis 5 scorecard — reranking (P2-10, EXP-0024–0026)
+## Axis 5 scorecard — reranking (P2-10, EXP-0024–0026) — CLOSED
 
-Two cross-encoders measured against the promoted dense control, one owed. `dev`
-decides (DEC-055); the `dev_large` check was never bought, because nothing won
-(OQ-033). Every delta is a paired test (DEC-047, seed 20260915). Axis spend:
-**$0.682** over 4 runs (2 VOID — MIS-026 no API key, MIS-031 no credits).
+Three cross-encoders against the promoted dense control, over an identical 50-document
+candidate set. `dev` decides (DEC-055); the `dev_large` check was never bought because
+nothing won (OQ-033). Every delta is a paired test (DEC-047, seed 20260915). Axis
+spend: **$1.892** over 5 runs (2 VOID — MIS-026 no API key, MIS-031 no credits).
 
-| EXP | Reranker | `dev` strict R@5 (Δ, CI, p) | flips (+/−) | R@1 | R@20 | nDCG@10 | multi-doc R@5 | collapse | p50 / p95 ms | $/query | Verdict |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| — | **control** (no reranker) | 0.720 | — | 0.305 | 0.920 | 0.631 | 0.350 | 1.106 | 298 / 635 | $0.0000004 | promoted |
-| 0024 | `cohere/rerank-v3.5` | 0.665 (−0.055, [−0.120, +0.010], 0.139) | 17 / 28 | 0.370 (p=0.082) | 0.920 (p=1.000) | 0.655 (p=0.279) | 0.300 (p=0.73) | 1.113 | 1,194 / 2,727 | $0.00117 | no measurable difference |
-| 0025 | `cohere/rerank-4-fast` | **0.730** (+0.010, [−0.055, +0.080], 0.887) | 24 / 22 | **0.375** (p=0.052) | **0.940** (p=0.392) | **0.673** (p=0.057) | **0.475** (p=0.18) | 1.119 | 3,847 / 18,774 | $0.00224 | no measurable difference |
-| 0026 | `qwen/qwen3-reranker-8b` | — | — | — | — | — | — | — | — | — | **VOID** (no credits, MIS-031) |
-| — | **ceiling**: control recall@**50** | **0.985** | — | — | — | — | — | — | — | — | what the candidate set contains |
+| EXP | Reranker | `dev` strict R@5 (Δ, CI, p) | flips (+/−) | R@1 | R@10 | R@20 | nDCG@10 | multi-doc R@5 | collapse | p50 ms | $/query | Verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| — | **control** (no reranker) | 0.720 | — | 0.305 | 0.850 | 0.920 | 0.631 | 0.350 | 1.106 | 298 | $0.0000004 | **promoted** |
+| 0024 | `cohere/rerank-v3.5` | 0.665 (−0.055, [−0.120, +0.010], 0.139) | 17 / 28 | **0.370** | 0.825 | 0.920 | 0.655 | 0.300 | 1.113 | 1,194 | $0.00117 | no measurable difference |
+| 0025 | `cohere/rerank-4-fast` | **0.730** (+0.010, [−0.055, +0.080], 0.887) | 24 / 22 | **0.375** | 0.840 | 0.940 | **0.673** | **0.475** | 1.119 | 3,847 | $0.00224 | no measurable difference |
+| 0026 | `qwen/qwen3-reranker-8b` | 0.720 (**+0.000**, [−0.070, +0.070], **1.000**) | 26 / 26 | 0.285 | **0.880** | **0.950** | 0.645 | 0.450 | 1.101 | 3,172 | $0.00605 | no measurable difference |
+| — | **ceiling**: control recall@**50** | **0.985** | — | — | — | — | — | — | — | — | — | what the candidate set contains |
 
 What the axis established:
 
-1. **Neither reranker beat the dense control, at any depth.** −0.055 (p = 0.139) and
-   +0.010 (p = 0.887) on the deciding metric. `promoted.yaml` is unchanged.
-2. **But the two rerankers differ from each other at p = 0.039** (+0.065, CI [+0.010,
-   +0.125], 24 questions gained / 11 lost). Neither is distinguishable from the
-   control and they *are* distinguishable from one another — so a single reranker's
-   null was never evidence about reranking, exactly as OQ-035 warned. That question
-   is now answered by measurement rather than caution.
-3. **The ceiling is 0.985, and the gap to it is the finding.** The gold document is
-   inside the 50-document candidate set for **98.5%** of questions. The best reranker
-   put it in the top five for **73%**. Twenty-five points of headroom sit between
-   "the right article was retrieved" and "the right article was ranked", and two
-   cross-encoders left them there. The control's own depth curve, measured on
-   `run_questions`: **@5 0.720, @10 0.850, @20 0.920, @30 0.955, @40 0.975, @50
-   0.985**. (This replaces EXP-0024's claim that 0.920 was the ceiling — MIS-029.)
-4. **Both move a great deal and net almost nothing.** Gold rank-band migration on the
-   160 single-gold questions: v3.5 moved 40 up and 39 down, `4-fast` 39 up and 32
-   down. Both replaced ~2.3 of the 5 context documents per question; `4-fast` left
-   only 3 of 200 contexts untouched. `4-fast` is not more accurate than v3.5 so much
-   as less destructive — the gains are near-identical, the losses are fewer.
-5. **`multi_doc` is where the movement is, and it cannot be called.** 0.350 → 0.300
-   (v3.5) → 0.475 (`4-fast`), the largest slice swing in Phase 2. On 40 questions,
-   p = 0.18 against the control and p = 0.067 head-to-head. Suggestive, not a finding;
-   it is what a bigger multi-document slice would be for.
-6. **The re-concentration risk P2-10 named did not appear** for either reranker
-   (collapse 1.106 → 1.113 → 1.119, p90 flat, zero exhaustion). 79% of articles are a
-   single chunk, so there is rarely a second chunk of the same article to promote.
-   The corpus cannot express that failure mode.
-7. **Cost and latency are the clearest result.** 4x and 13x the control's median
-   latency; ~2,900x and ~5,600x its per-query cost; nothing measurable bought. And
-   reranking is the first axis billed **per query**, so the same config is $0.23–0.45
-   on `dev` and $7–14 on `dev_large` (MIS-025, preflight 34).
+1. **No reranker moved the deciding metric.** −0.055 (p = 0.139), +0.010 (p = 0.887),
+   +0.000 (p = 1.000). `promoted.yaml` is unchanged and Axis 5 closes with no winner.
+2. **The nulls are not inaction — they are balanced churn.** EXP-0026 gained 26
+   questions and lost 26 for a delta of exactly zero. Across the three, each replaced
+   roughly 2.3 of the 5 context documents on nearly every question. A reranker changed
+   what the generator sees for ~97% of questions and changed the measured outcome for
+   none of them.
+3. **They do not share a shape, and two of them differ significantly.**
+   `rerank-4-fast` beat `rerank-v3.5` by +0.065 (p = 0.039). The Cohere pair sharpen
+   rank 1 (+0.065, +0.070) and lose ground at rank 5; `qwen3-reranker-8b` runs the
+   other way — the only one *worse* at rank 1 (−0.020) and the best at depth
+   (**@20 = 0.950**, the highest any configuration in this project has produced).
+   Three cross-encoders, one candidate set, three different behaviours, one identical
+   verdict. That is why one reranker could never have closed this axis (OQ-035).
+4. **The ceiling is 0.985 and none of them approached it.** The gold document is in
+   the 50-document candidate set for **98.5%** of questions; the best reranker put it
+   in the top five for **73%**. Twenty-five points sit between "retrieved" and
+   "ranked", untouched by any of the three (F16). The control's depth curve:
+   **@5 0.720, @10 0.850, @20 0.920, @30 0.955, @40 0.975, @50 0.985.**
+   (This replaces EXP-0024's claim that 0.920 was the ceiling — MIS-029.)
+5. **`multi_doc` moved most and can still not be called.** 0.350 → 0.300 / 0.475 /
+   0.450. The best is +0.125 on 40 questions at p = 0.18. Suggestive, and exactly the
+   slice size that moves without meaning anything.
+6. **The re-concentration risk P2-10 named did not appear** for any of the three
+   (collapse 1.106 → 1.113 / 1.119 / **1.101**). 79% of articles are a single chunk,
+   so there is rarely a second chunk of the same article to promote. The corpus cannot
+   express that failure mode.
+7. **Cost and latency are the only unambiguous results.** 4x, 13x and 11x the
+   control's median latency; ~2,900x, ~5,600x and **~15,000x** its per-query cost;
+   nothing measurable bought. Reranking is also the first axis billed **per query**,
+   so these configs cost $0.23–$1.21 on `dev` and would cost $7–$38 on `dev_large`.
+8. **Three cost-model errors in one axis, all the same mistake** (MIS-025, MIS-028,
+   MIS-032): assuming the provider bills the thing we happened to be counting. Prices
+   listed at $0 that are not free; search units filled by candidate length rather than
+   count; a cross-encoder billing the query once per document. The estimator now
+   reproduces both billing models to within 0.1–4%, calibrated on these runs and
+   **not yet validated out of sample** (OQ-036).
 
-Owed: `qwen/qwen3-reranker-8b` (the open-weight contrast, config committed, VOID on
-credits), the LLM-as-reranker, and the two k → n ratio runs P2-10 asks for. Given
-point 3, the ratio runs are now the interesting ones: a reranker that sees 50
-documents and keeps 5 is leaving 25 points of recall unclaimed, and whether a
-narrower or wider candidate set changes that is untested (OQ-038).
+Still owed in P2-10: the LLM-as-reranker (a different mechanism — one call sees all
+candidates and compares them, where a cross-encoder scores each pair alone) and the
+two k → n ratio runs. Given point 4, OQ-038 makes the ratio runs the more informative
+of the two: they test whether the reranker is drowning in 50 candidates or simply not
+good enough at this task.
 
 ## Negative results (P2-17)
 
@@ -422,6 +429,20 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   most useful output — the gold is in the candidate set 98.5% of the time and the
   best reranker surfaces it in the top five 73% of the time, so what remains at this
   depth is a ranking problem with the documents already in hand, not a retrieval one.
+
+- **EXP-0026 — `qwen/qwen3-reranker-8b` open-weight cross-encoder, 50 candidate
+  documents → top 5.** On `dev`, strict recall@5 0.7200 → 0.7200, **Δ exactly zero,
+  95% CI [−0.070, +0.070], p = 1.000 — 26 questions gained and 26 lost.** Elsewhere it
+  is the mirror of the Cohere pair: the only reranker *worse* at rank 1 (−0.020) and
+  the best at depth (@10 +0.030, **@20 0.950**, the highest recall@20 in the project).
+  Cost it would have added: **$0.00605 per query** (~15,000x the control, 2.7x the
+  dearer Cohere model) and a p50 of 3,172 ms against 298 ms, with 31 transient retries
+  against Cohere's 1–2. **Decision: control retained; not promoted; Axis 5 closed with
+  no winner.** What it adds to the axis is the demonstration that the three rerankers
+  do not share a mechanism — two sharpen the top and lose the middle, this one
+  improves the middle and blunts the top — and all three return the same verdict on
+  the deciding metric. A null that survives three different behaviours is a stronger
+  statement about the corpus than three repetitions of one behaviour would have been.
 
 ## Phase 1 scorecard — the controls (P1-08)
 

@@ -143,6 +143,12 @@ Derived from the prevention rules below. Run through it and say in chat that you
 40. **Before a batch, check the account balance, not just the estimate.** Every cost
     control here is per-run and none of them knows whether the account has money.
     The failure lands on the last run in the queue. (MIS-031)
+41. **Work out what the provider's UNIT OF WORK is before estimating: per call, per
+    document, per pair, per search unit.** Get it from one real response's `usage`,
+    not from the shape of the request you sent. A cross-encoder bills (query,
+    document) pairs, so the query is charged once per document. All three Axis 5
+    cost errors were the same mistake — assuming the provider bills the thing we
+    happened to be counting. (MIS-025, MIS-028, MIS-032)
 
 ---
 
@@ -994,3 +1000,37 @@ Derived from the prevention rules below. Run through it and say in chat that you
   empty, and the failure lands on whichever run is last in the queue — which is the
   one you were least likely to have already validated.
 - **Added to preflight:** yes (item 40)
+
+## MIS-032 — Estimated a cross-encoder's tokens as the sum of its documents; it bills (query, document) pairs
+- **Date:** 2026-09-24
+- **Severity:** Low — 32% over, inside the gate and inside the approved amount. It is
+  logged at length because it is the third cost-model error in this axis and the
+  three have the same shape.
+- **What happened:** EXP-0026 (`qwen/qwen3-reranker-8b`, the one token-billed
+  reranker) estimated $0.9168 and billed **$1.2103**. The estimator computed the
+  candidates' own token count and stopped there.
+- **How it was caught:** `cost_actual_usd` against `cost_estimate_usd` on the run row,
+  per preflight 37. The three-run drift check still did not fire.
+- **Root cause:** a cross-encoder does not read a list of documents; it scores
+  **(query, document) pairs**, one forward pass each. So the query text and the
+  model's prompt template are billed once **per document**, not once per call.
+  Measured: **517.9 tokens per pair**, against candidates averaging 348 words
+  (442 tokens) — about **76 tokens of per-pair overhead**, and at 58 candidates per
+  query that is a third of the bill. Compounding it, the estimator used the
+  corpus-wide mean chunk length (309 words) where actual candidates average 348,
+  because longer articles produce more chunks and so are retrieved more often.
+- **Impact:** $0.29 of unanticipated spend. No result affected.
+- **Fix applied:** the token path now estimates
+  `candidate_chunks x (candidate_words x 1.126 x 1.27 + 76)`, which reproduces
+  6,050,240 of the 6,051,291 tokens actually billed — within 0.1%. Both constants are
+  named for what they are, and the estimator's printed source says "a cross-encoder
+  bills the query once PER DOCUMENT" so the next reader does not have to rediscover
+  it. `tests/test_reranking.py` pins it against the run. **Calibrated on one run and
+  labelled not validated out of sample** (DEC-035, OQ-036).
+- **Prevention rule:** before estimating a hosted component, work out **what the unit
+  of work actually is** — per call, per document, per pair, per search unit — and get
+  it from one real response's `usage`, not from the shape of the request you sent.
+  All three Axis 5 cost errors (MIS-025 free-looking prices, MIS-028 search units by
+  count, this one) are the same mistake: assuming the provider bills the thing we
+  happened to be counting.
+- **Added to preflight:** yes (item 41)

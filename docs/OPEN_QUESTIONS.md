@@ -512,8 +512,14 @@ other, so EXP-0024's null was a fact about one model. It still does not follow t
 some third reranker would win; it follows that one reranker cannot close the axis.
 `qwen/qwen3-reranker-8b` remains unrun (VOID on credits, MIS-031) and is the open
 part of this.
-**Status:** answered by EXP-0025 for the two Cohere models; open for open-weight
-and LLM rerankers.
+**Closed 2026-09-24 by EXP-0026.** The open-weight model ran and returned the same
+verdict by a different route: Δ **exactly 0.000**, p = 1.000, while behaving unlike
+either Cohere model (the only one worse at rank 1, the best at depth, @20 = 0.950).
+So the axis's answer rests on three cross-encoders with three distinct behaviours
+rather than one, which is a much stronger statement than EXP-0024 alone could make —
+and it vindicates running all three. The LLM-as-reranker, a genuinely different
+mechanism, is still unrun.
+**Status:** answered for cross-encoders (3 of 3 null); open for the LLM reranker.
 
 ## OQ-036 — Does the recalibrated Cohere unit multiplier hold out of sample?
 `rag/runner/cost.py` now estimates Cohere search units at **1.17 per query at 50
@@ -532,7 +538,15 @@ predicted) on different questions from the calibration run — inside the 10% ba
 question set. That is one out-of-sample check at the *same* `rerank_candidates` and
 the same chunker, so the threshold behaviour the multiplier encodes is still untested:
 a 20 → 5 run would move candidate length and is the real test.
-**Status:** open — one check passed, the varying-candidate-count case untested.
+**Second check, 2026-09-24, FAILED on the token path.** EXP-0026 was the first
+token-billed run and came in **32% over** ($1.2103 against $0.9168): a cross-encoder
+bills (query, document) **pairs**, so the query and template are charged once per
+document — about 76 tokens per pair, times 58 candidates (MIS-032). Recalibrated to
+within 0.1% of the run. So: the search-unit path has one passing out-of-sample check
+(4%), the token path has none — it has only just been calibrated. Both remain
+labelled as such in the estimator's own output.
+**Status:** open — search-unit path one check passed; token path uncalibrated until a
+second token-billed run; the varying-candidate-count case untested on either.
 
 ## OQ-037 — Does the cross-encoder specifically rescue badly-phrased questions?
 Reading EXP-0024's 45 flipped questions, the 17 gains skew towards loose phrasing,

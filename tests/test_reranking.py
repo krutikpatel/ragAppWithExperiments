@@ -248,6 +248,27 @@ def test_rerank_cost_reproduces_what_exp_0024_was_actually_billed():
     assert "NOT yet validated out of sample" in estimate["source"]
 
 
+def test_token_billed_rerank_charges_the_query_once_per_document():
+    """MIS-032: a cross-encoder scores (query, document) PAIRS, so the query and the
+    model's template are billed once per DOCUMENT, not once per call. Ignoring that
+    made EXP-0026's estimate 32% low. Calibrated on run_20260924_033136_e51f, which
+    billed 6,051,291 tokens / $1.2103."""
+    from rag.runner.cost import PricingTable, estimate_rerank_cost
+
+    pricing = PricingTable.load()
+    estimate = estimate_rerank_cost(
+        reranker="openrouter",
+        estimate_params={"kind": "rerank_endpoint", "model": "qwen/qwen3-reranker-8b",
+                         "provider": "Fireworks"},
+        n_questions=200, candidate_docs=50, candidate_words=309, pricing=pricing,
+    )
+    assert estimate["rerank_usd"] == pytest.approx(1.2103, abs=0.01)
+    assert estimate["tokens"] == pytest.approx(6_051_291, rel=0.01)
+    # The per-pair overhead is the whole point: without it the estimate is a third low.
+    assert estimate["tokens_per_pair"] > 400
+    assert "PER DOCUMENT" in estimate["source"]
+
+
 def test_rerank_cost_scales_with_the_split_not_the_corpus():
     """Preflight 34: a reranker charges again for every question, so the same config
     is cents on `dev` and dollars on `dev_large`."""
