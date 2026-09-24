@@ -299,6 +299,62 @@ about reranking in general: a narrower candidate set is untested (OQ-038), and t
 mechanism that is not a cross-encoder was never run. `rag/reranking/llm.py` and its
 output parser are therefore built and never exercised on real model output.
 
+## Top-k sweep (P2-13) — reconstructed from a recorded run, not a new run
+
+**No run was made for this.** Every number below is computed from
+`run_20260912_225005_be04` (the promoted dense control, `dev`, n=200) by replaying
+its stored per-question chunk ranking through the same `select_distinct_docs` the
+runner uses. It is exact, not an approximation, for a reason worth stating:
+
+**`top_k` cannot change a retrieval metric.** The metrics score the pooled document
+*ranking*; `top_k` only decides how far down that ranking the context walk goes.
+Measured directly — `run_20260913_222423_db8c` is the control at `top_k=10` and
+scores strict recall@1/@5/@10/@20 of 0.305 / 0.715 / 0.850 / 0.920, identical to the
+`top_k=5` run `run_20260912_224833_75b2` at every depth (nDCG differs by 0.00016,
+which is the dense retriever's known non-determinism, OQ-023, not `top_k`). So a
+"top-k sweep" at Tier 1 re-measures numbers the ledger already holds, and the
+honest move is to read them rather than buy them.
+
+| top_k | gold in context | single-doc | multi-doc | collapse | exhaustion | ctx words | ~ctx tokens |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.305 | 0.381 | 0.000 | 1.000 | 0.000 | 357 | 453 |
+| 3 | 0.565 | 0.656 | 0.200 | 1.078 | 0.000 | 1,034 | 1,313 |
+| **5** (promoted) | **0.720** | **0.812** | **0.350** | 1.106 | 0.000 | 1,711 | 2,172 |
+| 10 | 0.850 | 0.906 | 0.625 | 1.126 | 0.000 | 3,341 | 4,243 |
+| 15 | 0.890 | 0.925 | 0.750 | 1.147 | 0.000 | 4,963 | **6,303** |
+| 20 | 0.920 | 0.944 | 0.825 | 1.151 | 0.000 | 6,531 | 8,294 |
+| 30 | 0.955 | 0.963 | 0.925 | 1.151 | 0.000 | 9,773 | 12,411 |
+| 40 | 0.975 | 0.975 | 0.975 | 1.163 | 0.005 | 12,953 | 16,450 |
+| 50 | 0.985 | 0.988 | 0.975 | 1.164 | 0.000 | 16,089 | 20,433 |
+
+`candidate_pool` was held at the promoted 50 through `top_k=20`; beyond that the walk
+needs a deeper pool to find that many distinct documents, so it was widened (53 / 69 /
+85) and the exhaustion column confirms the widening was sufficient. **The promoted
+`candidate_pool` of 50 supports `top_k` up to about 30 without exhaustion.**
+
+What it shows:
+
+1. **Depth is where the multi-document questions live.** The slice that is 20% of the
+   question set and 46% of the failures goes **0.350 → 0.625 → 0.825** at k = 5, 10,
+   20. It more than doubles by k=10. Single-document questions gain far less over the
+   same range (0.812 → 0.906 → 0.944) because they are mostly already satisfied.
+2. **`context_max_tokens` binds before the recall does.** The promoted config caps
+   the assembled context at **6,000 tokens**, which is reached at about **k=14**. So
+   raising `top_k` past ~14 hands the assembler more documents than it will pass on,
+   and the retrieval gain from k=15 to k=50 (0.890 → 0.985) **cannot reach the
+   generator** without also raising that cap. Any top-k experiment that moved one
+   without the other would be measuring truncation, not context depth. This is a
+   two-field change and so is not a one-dimension diff (P2-05).
+3. **Collapse stays flat.** 1.106 at k=5 to 1.164 at k=50 — the walk does not have to
+   work much harder for ten times the documents, because 79% of articles are a single
+   chunk.
+
+What it does **not** show, and what a Tier 2 run would cost: whether a larger context
+produces better *answers*. Everything above is an input-side fact. More context also
+means more tokens to dilute, more opportunity to cite the wrong article, and more
+money per query. Faithfulness and citation precision at k=10 or k=20 against EXP-0006
+are unmeasured, and that is the experiment worth buying here (OQ-040).
+
 ## Negative results (P2-17)
 
 Standing section, populated as Phase 2 runs. Each entry: what was tried, the measured

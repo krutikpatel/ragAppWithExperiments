@@ -2283,3 +2283,51 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** P2-11's revisit pass or P2-16's combinations need a reranker arm, or
   if the assembly axis (P2-13) shows that context depth is the binding constraint — in
   which case the k -> n ratio question returns with a reason attached.
+
+## DEC-061 — Axis 6 (assembly) runs before P2-11 and P2-12, and its top-k sweep is read, not run
+- **Date:** 2026-09-24
+- **Decided by:** Krutik (ordering); Claude (the reconstruction, flagged here)
+- **Status:** Active
+- **Context:** The Phase 2 handover's run order is P2-10 -> P2-11 (chunking revisit
+  under the winning reranker) -> P2-12 (query transformation) -> P2-13 (assembly).
+  P2-10 closed with no winner (DEC-060), and Axis 5 measured a ceiling that reframes
+  what is worth doing next: the gold document is in the 50-document candidate set for
+  **98.5%** of questions and reaches the generator for **72%** (MIS-029, F16).
+- **Options considered:**
+  1. Follow the handover order: P2-11 next, ~$0.90 for 2 runs (the control arm already
+     exists as EXP-0025 and the Axis 1 indexes are still cached). Rejected: P2-11 asks
+     whether chunking differences collapse under a reranker, and the best reranker
+     moved the metric by +0.010 at p = 0.887, so the composition question is close to
+     arithmetically settled before it is run.
+  2. P2-12 (query transformation) next — also targets multi-document questions, but
+     every configuration costs an LLM call per query.
+  3. **P2-13 (assembly) next — chosen.** It contains the one untested lever that acts
+     directly on the measured gap (`top_k`), and MMR, the technique aimed squarely at
+     multi-document coverage, which is 20% of the questions and 46% of the failures.
+- **Decision:** run Axis 6 next. P2-11 and P2-12 keep their place in the queue behind
+  it and are not cancelled.
+- **Second decision, and it is Claude's:** P2-13's "top-k sweep" experiment is
+  **satisfied at Tier 1 by re-reading a recorded run, not by a new run.** `top_k`
+  cannot change a retrieval metric — the metrics score the document ranking and
+  `top_k` only sets how far the context walk goes down it — which is shown directly
+  by `run_20260913_222423_db8c` (control at `top_k=10`) scoring identically to
+  `run_20260912_224833_75b2` (`top_k=5`) at every depth. The sweep is therefore
+  reconstructed exactly from the control's stored per-question rankings through the
+  runner's own `select_distinct_docs`, and recorded in EXPERIMENTS.md under a heading
+  that says no run was made. Spending an experiment slot to re-measure numbers already
+  in the store would be theatre.
+- **Evidence:** measured — the two top_k runs above; the reconstructed sweep; the
+  0.985 ceiling from EXP-0005's stored rankings.
+- **Consequences:**
+  - Axis 6 spends **4** of its 5 experiment slots on runs (MMR, contextual
+    compression, lost-in-the-middle, contextual retrieval), not 5.
+  - The sweep exposed an interaction that constrains every later assembly experiment:
+    **`context_max_tokens` (6,000) binds at about `top_k=14`**, so recall gained above
+    that k cannot reach the generator without also raising the cap — a two-field
+    change, therefore not a one-dimension diff (P2-05). Any such run must be declared
+    as changing two fields, with the reason.
+  - The Tier 2 question the sweep cannot answer — does a larger context produce better
+    *answers*? — becomes OQ-040 and needs its own approval.
+- **Revisit if:** a later axis changes the document ranking enough that the control's
+  reconstructed curve no longer describes the promoted configuration; the sweep is
+  then re-read from the new promoted run, still without a dedicated run.

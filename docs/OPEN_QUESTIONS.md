@@ -591,3 +591,18 @@ EXP-0026 came to be approved, estimated, gated and started before dying on HTTP 
 unasked. The options are a hard halt when the balance is below the estimate, a warning
 printed beside the running totals, or nothing.
 **Status:** open — put to Krutik 2026-09-23.
+
+## OQ-040 — Does a larger context produce better answers, or just more tokens to dilute?
+The top-k sweep (P2-13, reconstructed) shows the input-side gain precisely: gold
+reaches the generator for 0.720 of questions at `top_k=5`, **0.850 at 10** and 0.920
+at 20, with multi-document questions going 0.350 -> 0.625 -> 0.825. All of that is a
+statement about what is *in* the context, not about what the generator does with it.
+More context also means more tokens to dilute the answer, more chance of citing the
+wrong article, and more money per query — and `context_max_tokens` (6,000) truncates
+above about k=14, so a test at k=20 must raise that too (two fields, DEC-061).
+**Decided by:** a Tier 2 `dev` sub100 run at `top_k=10` against EXP-0006 (`top_k=5`,
+citation precision 0.550, MDD 0.08, step coverage 0.289) — citation precision and step
+coverage each against their MDD (DEC-048), plus tokens and cost per query. ~$0.09 of
+generation and judge, no reranker, no new index. The judged metrics remain the DEC-018
+placeholder and must not reach EXPERIMENTS.md as measurements.
+**Status:** open, queued, needs approval (DEC-053).
