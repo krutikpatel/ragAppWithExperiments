@@ -555,6 +555,10 @@ def _execute(
             config.reranker,
             chunk_text=chunk_text,
             generation_cache=generation_cache,
+            # P2-13: a reranker that works in the retriever's vector space (MMR) asks
+            # the retriever for candidate embeddings rather than building its own.
+            # Rerankers that do not need them ignore it.
+            vector_source=retriever,
             **config.reranker_params,
         )
         if config.reranker

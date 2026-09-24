@@ -1,0 +1,36 @@
+# EXP-0027 — Axis 6 (assembly): MMR diversity sweep, lambda = 0.7
+#
+# P2-13. MMR re-orders the top 50 candidate DOCUMENTS' chunks by
+#   lambda * relevance - (1 - lambda) * max similarity to an already-picked chunk
+# then the usual walk takes top_k distinct documents. lambda = 1 is the promoted
+# ranking exactly; lower lambda buys diversity. Relevance is the dense retriever's
+# own cosine score and similarity is the cached index's Gram matrix, so this run
+# makes NO network call and builds NO index: it is free.
+#
+# It occupies the reranker slot because it is mechanically a reranker (DEC-062);
+# its axis is `assembly` because the question is what the context should
+# contain. The config diff therefore reports the `reranking` dimension —
+# one dimension, as P2-05 requires.
+name: "EXP-0027 MMR lambda=0.7 — diversity-aware assembly over 50 candidate docs, dev"
+axis: assembly
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+reranker: mmr
+reranker_params:
+  lambda_: 0.7
+rerank_candidates: 50
+doc_pooling: max
+seed: 1

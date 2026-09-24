@@ -506,3 +506,134 @@ def test_a_recorded_rerank_run_carries_its_reranker_and_post_rerank_collapse():
         assert metrics["reranker"] == row["reranker"]
         assert metrics["collapse_ratio_mean"] is not None
         assert json.loads(row["reranker_meta"])["usage"]["calls"] == row["n_questions"]
+
+
+# --- MMR (P2-13, Axis 6) -------------------------------------------------------
+
+def _unit(*xs):
+    import numpy as np
+
+    v = np.array(xs, dtype=np.float32)
+    return v / np.linalg.norm(v)
+
+
+class _Vectors:
+    """A stand-in retriever that owns a vector space."""
+
+    name = "fake_dense"
+
+    def __init__(self, table):
+        self.table = table
+
+    def chunk_vectors(self, chunk_ids):
+        import numpy as np
+
+        return np.stack([self.table[c] for c in chunk_ids])
+
+
+def test_mmr_at_lambda_one_reproduces_the_retrievers_ranking():
+    """The identity case. If this drifts, every lambda below it is uninterpretable."""
+    from rag.reranking.mmr import MMRReranker
+
+    table = {"a": _unit(1, 0), "b": _unit(0.99, 0.14), "c": _unit(0, 1)}
+    chunks = [ScoredChunk("a", "A", 0.9), ScoredChunk("b", "B", 0.8), ScoredChunk("c", "C", 0.1)]
+    out = MMRReranker({}, vector_source=_Vectors(table), lambda_=1.0).rerank("q", chunks)
+    assert [c.chunk_id for c in out] == ["a", "b", "c"]
+
+
+def test_mmr_demotes_a_near_duplicate_in_favour_of_a_novel_candidate():
+    """The point of the technique: `b` is more relevant than `c` but nearly identical
+    to `a`, so at a diversity-weighted lambda it loses its place."""
+    from rag.reranking.mmr import MMRReranker
+
+    table = {"a": _unit(1, 0), "b": _unit(0.99, 0.14), "c": _unit(0, 1)}
+    chunks = [ScoredChunk("a", "A", 0.9), ScoredChunk("b", "B", 0.8), ScoredChunk("c", "C", 0.1)]
+    out = MMRReranker({}, vector_source=_Vectors(table), lambda_=0.3).rerank("q", chunks)
+    assert [c.chunk_id for c in out] == ["a", "c", "b"]
+
+
+def test_mmr_separates_two_chunks_of_one_document():
+    """Document diversity is expected to fall out of chunk diversity, because two
+    chunks of one article are near-duplicates in embedding space. That is the whole
+    mechanism by which MMR is supposed to help multi-document questions, so it is
+    tested directly rather than assumed."""
+    from rag.reranking.mmr import MMRReranker
+
+    table = {"a1": _unit(1, 0), "a2": _unit(0.98, 0.2), "b1": _unit(0.1, 1)}
+    chunks = [ScoredChunk("a1", "A", 0.9), ScoredChunk("a2", "A", 0.85), ScoredChunk("b1", "B", 0.4)]
+    plain = MMRReranker({}, vector_source=_Vectors(table), lambda_=1.0).rerank("q", chunks)
+    diverse = MMRReranker({}, vector_source=_Vectors(table), lambda_=0.3).rerank("q", chunks)
+    assert [c.doc_id for c in plain][:2] == ["A", "A"]
+    assert [c.doc_id for c in diverse][:2] == ["A", "B"]
+
+
+def test_mmr_refuses_a_retriever_with_no_vector_space():
+    """BM25's Okapi scores share no scale with any cosine, so `lambda` would be a
+    dial calibrated to nothing. Refused rather than silently relevance-only."""
+    from rag.reranking.mmr import MMRReranker
+    from rag.retrieval.bm25 import BM25Retriever
+
+    bm25 = BM25Retriever({"x": "X"}, chunk_text={"x": "wix payments settings"})
+    assert bm25.chunk_vectors(["x"]) is None
+    reranker = MMRReranker({}, vector_source=bm25, lambda_=0.5)
+    with pytest.raises(RuntimeError, match="needs candidate embeddings"):
+        reranker.rerank("q", [ScoredChunk("x", "X", 1.0)])
+
+
+def test_mmr_rejects_a_lambda_outside_the_unit_interval():
+    from rag.reranking.mmr import MMRReranker, mmr_order
+
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        MMRReranker({}, lambda_=1.5)
+    import numpy as np
+
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        mmr_order(np.array([1.0]), np.array([[1.0]]), lambda_=-0.1)
+
+
+def test_mmr_returns_every_candidate_exactly_once():
+    from rag.reranking.mmr import MMRReranker
+
+    table = {f"c{i}": _unit(1, i / 10) for i in range(12)}
+    chunks = [ScoredChunk(f"c{i}", f"D{i % 4}", 1.0 - i / 20) for i in range(12)]
+    for lam in (0.0, 0.25, 0.5, 0.75, 1.0):
+        out = MMRReranker({}, vector_source=_Vectors(table), lambda_=lam).rerank("q", chunks)
+        assert sorted(c.chunk_id for c in out) == sorted(c.chunk_id for c in chunks), lam
+
+
+def test_mmr_records_how_much_redundancy_it_removed():
+    """`lambda` is supposed to buy diversity; the run row says whether it did."""
+    from rag.reranking.mmr import MMRReranker
+
+    table = {"a": _unit(1, 0), "b": _unit(0.99, 0.14), "c": _unit(0, 1)}
+    chunks = [ScoredChunk("a", "A", 0.9), ScoredChunk("b", "B", 0.8), ScoredChunk("c", "C", 0.1)]
+    greedy = MMRReranker({}, vector_source=_Vectors(table), lambda_=1.0)
+    diverse = MMRReranker({}, vector_source=_Vectors(table), lambda_=0.3)
+    greedy.rerank("q", chunks)
+    diverse.rerank("q", chunks)
+    assert diverse.provenance()["mean_redundancy_of_picks"] < greedy.provenance()["mean_redundancy_of_picks"]
+
+
+def test_mmr_costs_nothing():
+    """No network call, no index: MMR reads the retriever's cached vectors."""
+    from rag.reranking.mmr import MMRReranker
+
+    table = {"a": _unit(1, 0), "b": _unit(0, 1)}
+    reranker = MMRReranker({}, vector_source=_Vectors(table), lambda_=0.5)
+    reranker.rerank("q", [ScoredChunk("a", "A", 0.9), ScoredChunk("b", "B", 0.5)])
+    assert reranker.query_cost_usd() == 0.0
+    assert MMRReranker.estimate_params({"lambda_": 0.5}) is None
+
+
+def test_dense_retriever_vectors_are_normalized_so_the_gram_matrix_is_cosine():
+    """MMR combines the retriever's score with a vector dot product and calls both
+    cosines. That is only true if the index rows are unit length."""
+    import numpy as np
+
+    from rag.retrieval.dense import DenseRetriever
+
+    vectors = getattr(DenseRetriever, "_normalize", None)
+    from rag.retrieval.dense import _normalize
+
+    rows = _normalize(np.array([[3.0, 4.0], [1.0, 0.0]], dtype=np.float32))
+    assert np.allclose(np.linalg.norm(rows, axis=1), 1.0)

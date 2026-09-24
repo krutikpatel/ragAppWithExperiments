@@ -74,13 +74,14 @@ class LLMReranker(Reranker):
         chunk_text: dict[str, str],
         *,
         generation_cache: Any = None,
+        vector_source: Any = None,
         model: str = "",
         prompt: str = "rerank_llm@v1",
         max_tokens: int = 1000,
         reasoning_effort: str = "minimal",
         candidate_words: int = 0,
     ) -> None:
-        super().__init__(chunk_text, generation_cache=generation_cache)
+        super().__init__(chunk_text, generation_cache=generation_cache, vector_source=vector_source)
         if generation_cache is None:
             raise ValueError(
                 "the LLM reranker needs the generation cache: every in-pipeline LLM call "

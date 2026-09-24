@@ -110,6 +110,13 @@ class DenseRetriever(Retriever):
         # everything after is queries.
         self._build_cost_usd = self._usage_cost()
 
+    def chunk_vectors(self, chunk_ids: list[str]) -> np.ndarray:
+        """Rows of the cached index, in the order asked for. Already L2-normalized,
+        so a dot product between two rows is their cosine similarity — which is the
+        same scale as this retriever's own scores, and what lets MMR combine them."""
+        position = {cid: i for i, cid in enumerate(self.chunk_ids)}
+        return self.vectors[[position[cid] for cid in chunk_ids]]
+
     @classmethod
     def embedding_params(cls, retriever_params: dict[str, Any]) -> dict[str, Any] | None:
         return retriever_params

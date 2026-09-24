@@ -140,6 +140,10 @@ class HybridRetriever(Retriever):
     def query_cost_usd(self) -> float:
         return self.dense.query_cost_usd()
 
+    def chunk_vectors(self, chunk_ids: list[str]):
+        """The dense half owns the vector space, as it owns the index."""
+        return self.dense.chunk_vectors(chunk_ids)
+
     def provenance(self) -> dict[str, Any]:
         """The dense index's provenance at top level — it *is* this retriever's index,
         and the cost bookkeeping reads `embedder` / `embedder_now` / `cache_hit` there —

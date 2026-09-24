@@ -111,6 +111,13 @@ class Retriever(ABC):
         there is nothing beyond the chunk index itself (BM25 is rebuilt in-process)."""
         return {}
 
+    def chunk_vectors(self, chunk_ids: list[str]) -> Any | None:
+        """Embeddings for these chunks, row-aligned, or None when this retriever has
+        none. MMR (P2-13) needs them to measure how similar two candidates are to each
+        other; BM25 has no vector space, so it returns None and MMR refuses rather
+        than silently falling back to relevance-only ordering."""
+        return None
+
     def query_cost_usd(self) -> float:
         """Money spent answering queries so far, excluding any index build. Zero for
         anything in-process; a hosted embedder reports what the provider charged."""

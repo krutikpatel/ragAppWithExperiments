@@ -50,6 +50,7 @@ class OpenRouterReranker(Reranker):
         chunk_text: dict[str, str],
         *,
         generation_cache: Any = None,
+        vector_source: Any = None,
         model: str = "",
         provider: str = "",
         batch_size: int = 0,
@@ -60,7 +61,7 @@ class OpenRouterReranker(Reranker):
         rate_limit_backoff_s: float = 15.0,
         rate_limit_max_wait_s: float = 300.0,
     ) -> None:
-        super().__init__(chunk_text, generation_cache=generation_cache)
+        super().__init__(chunk_text, generation_cache=generation_cache, vector_source=vector_source)
         if not model:
             raise ValueError(
                 "no rerank model configured. Model choice is Krutik's — see CLAUDE.md "

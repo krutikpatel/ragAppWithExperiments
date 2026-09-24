@@ -92,11 +92,16 @@ class Reranker(ABC):
         chunk_text: dict[str, str],
         *,
         generation_cache: GenerationCache | None = None,
+        vector_source: Any = None,
     ) -> None:
         # The text the reranker scores is the text the retriever indexed, so a
         # "retrieve small, expand" chunker (P2-07) is reranked on what was indexed.
         self.chunk_text = chunk_text
         self.generation_cache = generation_cache
+        # The retriever, for rerankers that work in its vector space (MMR, P2-13).
+        # On the base because the runner hands it to every reranker uniformly; those
+        # that score text rather than vectors simply never read it.
+        self.vector_source = vector_source
         self.usage = RerankUsage()
 
     @abstractmethod

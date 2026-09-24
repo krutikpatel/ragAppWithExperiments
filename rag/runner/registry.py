@@ -27,6 +27,7 @@ def _ensure_builtins() -> None:
         return
     _BUILTINS_LOADED = True
     import rag.reranking.llm  # noqa: F401
+    import rag.reranking.mmr  # noqa: F401
     import rag.reranking.toy  # noqa: F401
     import rag.reranking.openrouter  # noqa: F401
     import rag.retrieval.bm25  # noqa: F401

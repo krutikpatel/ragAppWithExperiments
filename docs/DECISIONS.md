@@ -2331,3 +2331,48 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** a later axis changes the document ranking enough that the control's
   reconstructed curve no longer describes the promoted configuration; the sweep is
   then re-read from the new promoted run, still without a dedicated run.
+
+## DEC-062 — MMR occupies the reranker slot, and Axis 6 will exceed the 5-experiment cap
+- **Date:** 2026-09-24
+- **Decided by:** Claude (Krutik not in the loop; flagged in chat)
+- **Status:** Active
+- **Context:** MMR is Axis 6's prioritised technique (P2-13). Mechanically it is a
+  reranker — it re-orders a candidate set and adds nothing — but the question it
+  answers is about what the context should contain, not about scoring quality.
+- **Options considered:**
+  1. Give MMR its own config dimension (`assembly_reorder` or similar) — rejected: it
+     would duplicate the P2-10 machinery (document-level candidates, splicing,
+     re-pooling, the recomputed collapse ratio, `check_same_chunks`) for no gain, and
+     a second code path that must stay in step with the first is how they drift apart.
+  2. **Put MMR in the `reranker` slot with `axis: assembly`** — chosen.
+- **Decision:** MMR is registered as a reranker. A run carries `axis: assembly` while
+  its config diff reports the `reranking` dimension. Both are true and neither is a
+  bug: `axis` records which story owns the run, `dimensions` records which config
+  fields moved. The one-dimension check (P2-05) still passes.
+- **A guard that came with it.** MMR combines the retriever's relevance score with a
+  vector similarity and treats both as cosines. That holds for a dense retriever —
+  its score *is* the query-chunk cosine and the index rows are L2-normalized — and
+  fails for BM25, whose Okapi scores are unbounded and share no space with any
+  vector, which would make `lambda` a dial calibrated to nothing.
+  `Retriever.chunk_vectors` returns None for retrievers without a vector space and
+  MMR **refuses to run** rather than silently degrading to relevance-only ordering.
+  Tested.
+- **Evidence:** No measured data; a design judgment. MMR's effect on this corpus is
+  EXP-0027 and is not predicted here.
+- **Consequences:**
+  - **Axis 6 will exceed the P2-06 cap of 5 experiments per axis.** The λ sweep P2-13
+    asks for is four configurations, and the axis still has contextual compression,
+    lost-in-the-middle and contextual retrieval to run. The runner will warn from the
+    fifth distinct config hash on, and the warning is correct. The λ sweep is counted
+    as **one experiment reported as a curve** — the same treatment the top-k sweep
+    gets (DEC-061) and that Axis 3's α sweep did not — because it is free: no network
+    call, no index, $0.0001 of query embeddings per run. **The cap exists to bound
+    spend and scope, and a free sweep bounds itself.** If Krutik disagrees, the fix is
+    to report fewer λ values, not to hide the count.
+  - MMR is the first technique in this project that costs nothing per query and still
+    changes the ranking, so it is also the cheapest thing left that could move the
+    multi-document slice.
+- **Revisit if:** a later axis needs a reorderer that is genuinely not a reranker
+  (lost-in-the-middle reorders the *assembled context* without changing which
+  documents are in it, and so does NOT belong in this slot — it changes no retrieval
+  metric by construction and is Tier 2 only).
