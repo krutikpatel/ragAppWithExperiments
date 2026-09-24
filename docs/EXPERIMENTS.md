@@ -293,11 +293,11 @@ What the axis established:
    reproduces both billing models to within 0.1–4%, calibrated on these runs and
    **not yet validated out of sample** (OQ-036).
 
-Still owed in P2-10: the LLM-as-reranker (a different mechanism — one call sees all
-candidates and compares them, where a cross-encoder scores each pair alone) and the
-two k → n ratio runs. Given point 4, OQ-038 makes the ratio runs the more informative
-of the two: they test whether the reranker is drowning in 50 candidates or simply not
-good enough at this task.
+**Cut from this axis (DEC-060):** the two k → n ratio runs and the LLM-as-reranker.
+So this axis's null is a statement about **50 → 5 with three cross-encoders**, not
+about reranking in general: a narrower candidate set is untested (OQ-038), and the one
+mechanism that is not a cross-encoder was never run. `rag/reranking/llm.py` and its
+output parser are therefore built and never exercised on real model output.
 
 ## Negative results (P2-17)
 

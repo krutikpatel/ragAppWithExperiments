@@ -2242,3 +2242,44 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** OpenRouter starts serving a rerank model with a materially
   different mechanism (a multi-vector or late-interaction endpoint — see the ColBERT
   note in HYPOTHESES.md), or a chosen reranker's provider pin changes.
+
+## DEC-060 — P2-10 closes at 3 of 5 experiments; the ratio runs and the LLM reranker are cut
+- **Date:** 2026-09-24
+- **Decided by:** Krutik ("i want to skip them")
+- **Status:** Active
+- **Context:** P2-10 specifies five experiments: three rerankers at a fixed 50 -> 5
+  ratio, plus two retrieve-k -> rerank-to-n ratios on the best of them. The three
+  rerankers ran (EXP-0024/0025/0026) and all three were null on the deciding metric.
+  The two ratio runs and the LLM-as-reranker were offered with estimates and declined.
+- **Options considered:**
+  1. Run the two k -> n ratio runs (~$1.10) — they test the one live reading of the
+     axis's central measurement, that a reranker handed 50 candidates might do better
+     handed 20 (OQ-038). Declined.
+  2. Run the LLM-as-reranker (~$0.22) — a different mechanism from a cross-encoder,
+     and the only thing that would exercise the `rerank_llm` prompt and its output
+     parser on stored model output. Declined.
+  3. Close the axis at three experiments — chosen.
+- **Decision:** P2-10 closes with **3 of 5 experiments** and **3 of 4 acceptance
+  criteria** met. Met: document-level k and n (P1-03); collapse ratio re-measured
+  post-rerank on every run; latency and per-query cost reported per reranker. **Not
+  met:** "LLM-as-reranker runs are marked `pipeline_nondeterministic` and cache-backed
+  per P2-03" — no such run exists, so that path is built and untested.
+- **Evidence:** measured — three null results (Δ −0.055 p=0.139, +0.010 p=0.887,
+  +0.000 p=1.000) and a measured ceiling of 0.985 the axis did not approach. The
+  judgment that three nulls across three distinct behaviours is enough to close is
+  Krutik's.
+- **Consequences:**
+  - **Code exists that no experiment has exercised.** `rag/reranking/llm.py`, the
+    `rerank_llm@v1` prompt and `parse_ranking` are tested against hand-built
+    adversarial inputs but **never against stored model output**, which preflight 21
+    requires before trusting any parser of model output. The test that would do it
+    (`test_parse_ranking_on_stored_model_output`) skips for want of a run and will
+    keep skipping. This is recorded rather than removed: the alternative is deleting
+    working code to make a gap invisible.
+  - OQ-038 (does a narrower or wider candidate set close the 25-point ranking gap?)
+    stays open and unqueued rather than answered.
+  - Axis 5's null is a statement about **50 -> 5 with three cross-encoders**, and must
+    be written that way in NARRATIVE.md — not as "reranking does not help here".
+- **Revisit if:** P2-11's revisit pass or P2-16's combinations need a reranker arm, or
+  if the assembly axis (P2-13) shows that context depth is the binding constraint — in
+  which case the k -> n ratio question returns with a reason attached.

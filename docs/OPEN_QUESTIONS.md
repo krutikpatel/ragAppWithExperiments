@@ -519,7 +519,8 @@ So the axis's answer rests on three cross-encoders with three distinct behaviour
 rather than one, which is a much stronger statement than EXP-0024 alone could make —
 and it vindicates running all three. The LLM-as-reranker, a genuinely different
 mechanism, is still unrun.
-**Status:** answered for cross-encoders (3 of 3 null); open for the LLM reranker.
+**Status:** answered for cross-encoders (3 of 3 null); the LLM reranker was cut
+(DEC-060), so the different-mechanism question is closed unanswered, not resolved.
 
 ## OQ-036 — Does the recalibrated Cohere unit multiplier hold out of sample?
 `rag/runner/cost.py` now estimates Cohere search units at **1.17 per query at 50
@@ -578,7 +579,8 @@ sit near the control.
 (the better of the two measured), `dev`, `rag compare` on strict recall@5, ≥ 0.03
 separation between the ratios. Roughly $0.20 and $0.90. **Blocked: the OpenRouter
 account has no credit (MIS-031).**
-**Status:** open, queued, blocked on account balance.
+**Status:** open, **not queued** — cut from P2-10 by DEC-060. Returns if P2-13 shows
+context depth is the binding constraint.
 
 ## OQ-039 — Should the cost gate check the account balance, not just the estimate?
 Every cost control here is per-run: the $2 gate, the estimate, the approval, the
