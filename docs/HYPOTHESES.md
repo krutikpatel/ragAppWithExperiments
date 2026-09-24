@@ -415,6 +415,26 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      ceiling is not approached, it is sitting on it.
   `run_20260923_052941_4ada`.
 
+## H-019 — MMR was expected to help multi-document questions; no entry was written first
+- **Date written:** 2026-09-24, **after EXP-0027 ran**. Recorded as a miss.
+- **Source:** Claude, and the P2-13 story, which prioritises MMR on the stated ground
+  that *"diversity directly serves multi-document coverage, which is the organizing
+  question."*
+- **What should have been written, and was not:** this file's rule is that an entry is
+  written **before** the run it names. For EXP-0027 none was. The expectation existed —
+  the story states it, the configs were built around it, and the axis was chosen over
+  P2-11 partly because MMR targets the multi-document slice — but it was never
+  committed to paper before the numbers arrived. That is a process failure and it is
+  recorded here rather than back-filled as though it had been a prediction.
+- **What happened:** the opposite, monotonically. `multi_doc` 0.350 → 0.000 at λ=0.3,
+  14 questions lost and 0 gained. The handover's premise is measurably wrong on this
+  corpus, and the reason is measurable too: two gold documents of one question are
+  **+0.095 more similar to each other** than a gold is to an average candidate, so
+  MMR's redundancy term penalises the second gold hardest.
+- **Resolution:** **not scoreable as a prediction** — nothing was predicted in time.
+  The finding stands on the runs (`run_20260924_041357_ebc5` and the λ curve); the
+  calibration value of this entry is zero, which is the cost of having skipped it.
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /

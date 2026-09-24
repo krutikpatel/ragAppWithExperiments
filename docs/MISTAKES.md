@@ -149,6 +149,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
     document) pairs, so the query is charged once per document. All three Axis 5
     cost errors were the same mistake — assuming the provider bills the thing we
     happened to be counting. (MIS-025, MIS-028, MIS-032)
+42. **Write the HYPOTHESES entry in the same action as the config, before the run.**
+    A free or fast run is the most likely to skip it, because nothing forces a pause,
+    and a hypothesis written afterwards is not evidence of anything. (MIS-033)
 
 ---
 
@@ -1034,3 +1037,31 @@ Derived from the prevention rules below. Run through it and say in chat that you
   count, this one) are the same mistake: assuming the provider bills the thing we
   happened to be counting.
 - **Added to preflight:** yes (item 41)
+
+## MIS-033 — Ran an axis without pre-registering the hypothesis
+- **Date:** 2026-09-24
+- **Severity:** Low — no number is affected; the calibration record is.
+- **What happened:** EXP-0027 (MMR) ran with no `docs/HYPOTHESES.md` entry written
+  beforehand. Axis 5's runs had H-017 and H-018 committed before them; Axis 6's did
+  not. The expectation plainly existed — P2-13 prioritises MMR *because* "diversity
+  directly serves multi-document coverage", DEC-061 chose this axis partly on that
+  ground, and the configs were built around it — so there was something to write down
+  and it was not written down.
+- **How it was caught:** writing the experiment file and reaching for the hypothesis
+  to resolve.
+- **Root cause:** the sweep was free and quick, so it was launched as soon as the code
+  passed its tests. The pre-registration step is the one thing in this workflow with
+  no immediate payoff, which is exactly why it needs to be mechanical rather than
+  remembered.
+- **Impact:** the strongest result in Axis 6 — that a diversity technique inverts on
+  this corpus because gold documents cluster — arrives with **no record of whether it
+  was expected**. H-019 records the miss rather than back-filling a prediction, which
+  would have been worse: a hypothesis written after the fact is not evidence of
+  anything except a good memory.
+- **Fix applied:** none in code. A test could assert that every `axis` config has a
+  matching HYPOTHESES entry before it runs, and that is worth considering, but it is
+  not written unasked.
+- **Prevention rule:** the hypothesis entry is written and **committed** in the same
+  action as the config, before the run — not before the writeup. A free run is the
+  most likely one to skip it, because nothing forces a pause.
+- **Added to preflight:** yes (item 42)

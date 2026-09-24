@@ -252,6 +252,28 @@ retrieval succeeded.
 questions.** It is the standing target for P2-11, the k → n ratio runs (OQ-038) and
 Axis 4.
 
+### F17 — A diversity reorderer demotes the second gold document of a multi-hop question
+The failure mode MMR introduced, and the reason it inverts on this corpus. Two gold
+articles for one question are about the same task, so they sit **close together** in
+embedding space — measured at cosine **0.788** against **0.693** for a gold versus an
+average candidate. MMR's redundancy term penalises similarity to what is already
+selected, so once the first gold is picked the second gold is penalised *harder than
+an irrelevant article is*. Stage: `assembly`. At λ=0.3 not one multi-gold question in
+`dev` survived.
+
+| Run | Multi-gold questions solved | Lost vs control | Gained |
+|---|---|---|---|
+| EXP-0005 (control, no reorder) | 14 / 40 | — | — |
+| EXP-0027 λ=0.9 | 12 / 40 | 2 | 0 |
+| EXP-0027 λ=0.7 | 6 / 40 | 8 | 0 |
+| EXP-0027 λ=0.5 | 1 / 40 | 13 | 0 |
+| EXP-0027 λ=0.3 | **0 / 40** | 14 | 0 |
+
+Generalisable form: a diversity technique assumes the documents a question needs are
+*spread out* in embedding space. On a single-product help centre they are clustered,
+and the assumption inverts. Any future diversity-based method (and P2-12's multi-query
+expansion has a related shape) should be checked against this measurement first.
+
 ## Counts by run
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |

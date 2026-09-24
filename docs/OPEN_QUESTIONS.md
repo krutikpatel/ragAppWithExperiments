@@ -606,3 +606,18 @@ coverage each against their MDD (DEC-048), plus tokens and cost per query. ~$0.0
 generation and judge, no reranker, no new index. The judged metrics remain the DEC-018
 placeholder and must not reach EXPERIMENTS.md as measurements.
 **Status:** open, queued, needs approval (DEC-053).
+
+## OQ-041 — Would a diversity penalty that is document-aware rather than vector-aware help?
+EXP-0027 showed MMR inverts here because gold documents of one question cluster in
+embedding space (0.788 against 0.693) and the redundancy term cannot tell "another
+chunk of the article I just picked" from "another article about the same task" — it
+only sees cosine. The document-level walk (P1-03) already does the first job
+perfectly and for free: the control's collapse ratio is 1.106, so the context is
+already ~90% distinct documents. A penalty applied to *repeat documents* rather than
+to *vector similarity* is therefore close to what the system already does, which
+suggests the whole diversity family has little left to offer on this corpus.
+**Decided by:** not worth a run on the evidence so far — recorded so that the next
+person to propose a diversity method finds the measurement rather than repeating the
+experiment. It becomes live only if a future chunker or retriever pushes the collapse
+ratio materially above 1.2, which would mean the context has real redundancy to remove.
+**Status:** open, **not queued** — parked with its decision rule.

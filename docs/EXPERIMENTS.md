@@ -43,6 +43,7 @@ produced one.
 | EXP-0025 | `run_20260923_054802_6566` | 2026-09-23 | reranking | **cohere/rerank-4-fast**, same 50 candidate docs → top-5. vs promoted (0.720): **Δ +0.010, CI [−0.055, +0.080], p=0.887** (24 gained / 22 lost) — null. But **vs EXP-0024's v3.5: Δ +0.065, CI [+0.010, +0.125], p=0.039 — the two rerankers ARE distinguishable** (OQ-035 answered). strict@1 +0.070 (p=0.052), nDCG@10 +0.042 (p=0.057), **multi-doc 0.350→0.475 (+0.125, p=0.18)**, strict@20 **0.940** > control's 0.920 — which disproves EXP-0024's ceiling claim (MIS-029; true ceiling = control recall@50 = **0.985**). Cost $0.448 vs $0.468 estimated (4% under — first out-of-sample check of MIS-028). **No measurable difference vs control; not promoted** | 0.730 | 0.805 | 0.673 | 0.618 (n=160) | — | 18774 | 0.00224 | VALID | [→](experiments/EXP-0025.md) |
 | EXP-0026 | `run_20260923_060805_1b9a` | 2026-09-23 | reranking | **qwen/qwen3-reranker-8b** (the open-weight contrast), dev — died on its first rerank call: **HTTP 402, OpenRouter account out of credits**. 402 correctly not retried; **nothing billed** (`cost_actual_usd` NULL). Config committed and unrun; the open-weight question is still open. See MIS-031 | — | — | — | — | — | — | — | VOID (MIS-031, no credits) | [→](experiments/EXP-0026.md) |
 | EXP-0026 | `run_20260924_033136_e51f` | 2026-09-24 | reranking | **qwen/qwen3-reranker-8b** (open-weight, Fireworks), same 50 candidate docs → top-5, after crediting. vs promoted: **Δ +0.0000, CI [−0.070, +0.070], p=1.000 — 26 gained / 26 lost**, the cleanest null in the project. **Opposite shape to the Cohere pair**: the only reranker *worse* at rank 1 (−0.020) and the best at depth — @10 +0.030, **@20 0.950, the highest recall@20 any config here has produced**. multi-doc 0.350→0.450 (p=0.38). vs 4-fast −0.010 (p=0.88); vs v3.5 +0.055 (p=0.118). 31 transient retries. Cost **$1.210 vs $0.917 estimated (32% over — a cross-encoder bills the query once PER DOCUMENT, MIS-032)**. **No measurable difference; not promoted** | 0.720 | 0.820 | 0.645 | 0.552 (n=160) | — | 9372 | 0.00605 | VALID | [→](experiments/EXP-0026.md) |
+| EXP-0027 | `run_20260924_041357_ebc5` (+λ 0.5/0.7/0.9/1.0) | 2026-09-24 | assembly | **MMR diversity sweep**, λ = 0.3/0.5/0.7/0.9/1.0 over 50 candidate docs → top-5 (P2-13, DEC-062). **Monotone and monotonically harmful**: 0.335 / 0.360 / 0.570 / 0.685 / 0.715 against the control's 0.720. λ=0.3 vs promoted **Δ −0.385, CI [−0.460, −0.315], p=0.0001 (3 gained / 80 lost)**; λ=0.9 **Δ −0.035, p=0.039**. **multi-doc 0.350 → 0.000** at λ=0.3 (14 lost / 0 gained, p=0.0002) — the slice MMR exists to serve, hurt worst. λ=1.0 reproduces the control (0.715, collapse 1.107), so the machinery is verified. Collapse falls to **1.000** — perfect diversity, halved recall. Measured cause: candidate-candidate cosine spans 0.5–0.87 while relevance spans 0.173, so diversity out-leverages relevance and selects semantic outliers; and **two golds of one question are +0.095 MORE similar to each other (0.788) than to an average candidate (0.693)**, so MMR penalises the second gold hardest. **Negative; not promoted.** Whole sweep cost **$0.0005** | 0.335 | 0.440 | 0.381 | 0.415 (n=160) | — | 6454 | 0.0000004 | VALID | [→](experiments/EXP-0027.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -355,6 +356,44 @@ means more tokens to dilute, more opportunity to cite the wrong article, and mor
 money per query. Faithfulness and citation precision at k=10 or k=20 against EXP-0006
 are unmeasured, and that is the experiment worth buying here (OQ-040).
 
+## Axis 6 scorecard — context assembly (P2-13, in progress)
+
+`dev` decides (DEC-055). The top-k sweep is read from a recorded run rather than run
+(DEC-061, section above); MMR occupies the reranker slot with `axis: assembly`
+(DEC-062). Axis spend so far: **$0.0005**.
+
+| EXP | Technique | `dev` strict R@5 (Δ, CI, p) | multi-doc | collapse | $/query | Verdict |
+|---|---|---|---|---|---|---|
+| — | **control** (top_k=5, no reorder) | 0.720 | 0.350 | 1.106 | $0.0000004 | promoted |
+| — | top-k sweep (**not a run**, reconstructed) | k=10 → 0.850, k=20 → 0.920, k=50 → 0.985 | 0.625 / 0.825 / 0.975 | 1.13–1.16 | — | input-side only; Tier 2 unanswered (OQ-040) |
+| 0027 | MMR, λ sweep 0.3–1.0 | **0.335** at λ=0.3 (−0.385, [−0.460, −0.315], **0.0001**); 0.685 at λ=0.9 (−0.035, **0.039**) | **0.000** at λ=0.3 | **1.000** | $0.0000004 | **negative, monotone** |
+
+What the axis has established so far:
+
+1. **Diversity was never the binding constraint.** The control's collapse ratio is
+   1.106 — the context was already ~90% distinct documents — so MMR had almost
+   nothing to fix and a great deal to break. It drove collapse to exactly **1.000**
+   (perfect document diversity) and halved recall doing it.
+2. **MMR is structurally biased against multi-document answers on this corpus**, which
+   is the precise opposite of why P2-13 prioritised it. Two gold documents of one
+   question are **+0.095 more similar to each other** (0.788) than a gold is to an
+   average candidate (0.693) — they are about the same task — so the redundancy term
+   penalises the second gold harder than it penalises an irrelevant article.
+   `multi_doc` 0.350 → 0.000, 14 lost, 0 gained.
+3. **The failure has a measurable cause that generalises.** Candidate-candidate cosine
+   spans 0.505–0.832 (mean 0.667) while relevance spans **0.173** within a candidate
+   set, so at λ ≤ 0.5 the diversity term out-leverages relevance by more than 2:1 and
+   the ordering selects **semantic outliers**. On a single-product help centre, being
+   unlike the other candidates is evidence of irrelevance, not of novelty.
+4. **Depth is what moves multi-document questions, and it is free to measure but not
+   free to use.** 0.350 → 0.625 → 0.825 at k = 5/10/20, against `context_max_tokens`
+   binding at about k=14 and an unmeasured effect on answer quality (OQ-040).
+
+Still to run in this axis: contextual compression, lost-in-the-middle reordering
+(Tier 2 only — it changes no retrieval metric by construction) and Anthropic-style
+contextual retrieval (one LLM call per chunk across the corpus; needs an estimate and
+approval before it starts, P2-13 cost note).
+
 ## Negative results (P2-17)
 
 Standing section, populated as Phase 2 runs. Each entry: what was tried, the measured
@@ -499,6 +538,24 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   improves the middle and blunts the top — and all three return the same verdict on
   the deciding metric. A null that survives three different behaviours is a stronger
   statement about the corpus than three repetitions of one behaviour would have been.
+
+- **EXP-0027 — MMR diversity-aware assembly, λ sweep 0.3–1.0 over 50 candidate
+  documents.** On `dev`, strict recall@5 went 0.720 → 0.685 / 0.570 / 0.360 / **0.335**
+  as λ fell from 0.9 to 0.3 — monotone, and every step worse. λ=0.3: Δ −0.385, 95% CI
+  [−0.460, −0.315], p = 0.0001 (3 gained / 80 lost). λ=0.9, the gentlest setting
+  tested: Δ −0.035, p = 0.039, already significant and negative. **multi-document
+  0.350 → 0.000** (14 lost, 0 gained, p = 0.0002) — the slice the technique was
+  prioritised for. Cost it would have added: **nothing.** MMR reads the cached index,
+  makes no network call and builds no index; the entire five-run sweep cost $0.0005.
+  **Decision: control retained; not promoted.** The interesting part is that the
+  failure is explained rather than observed: two golds of one question are +0.095
+  *more* similar to each other than to an average candidate, so the redundancy term
+  demotes the second gold hardest; and candidate-candidate similarity has more than
+  twice the dynamic range of relevance, so below λ≈0.7 the objective selects semantic
+  outliers. **A diversity technique needs the gold documents to be spread out in
+  embedding space. On a single-product help centre they are clustered, and MMR
+  inverts.** The identity run at λ=1.0 reproduces the control exactly, so this is the
+  technique and not the harness.
 
 ## Phase 1 scorecard — the controls (P1-08)
 
