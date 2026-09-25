@@ -37,6 +37,9 @@ DIMENSIONS = {
                  "context_order", "context_compressor", "context_compressor_params"),
     "generation": (
         "generator_model", "generator_prompt", "generator_max_tokens", "generator_reasoning_effort",
+        # P2-14: the self-check replaces an answer with a refusal, so it is a change to
+        # what the generation step returned.
+        "grounding_check", "grounding_check_params",
     ),
 }
 RUN_SETTINGS = (

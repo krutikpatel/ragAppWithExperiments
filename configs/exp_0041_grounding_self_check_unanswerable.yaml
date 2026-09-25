@@ -1,0 +1,44 @@
+# EXP-0041 groundedness self-check — a second call that can replace an answer with a refusal
+#
+# P2-14, Axis 7. Measured against the Phase 1 control on BOTH splits:
+#   dev           EXP-0006  run_20260913_205058_dc03
+#   unanswerable  EXP-0007  run_20260913_060733_6a9b
+#
+# The hard target is the false-answer rate on `unanswerable`, which is **0.2667**, not
+# the 0.4222 in EXP-0007's row — that row was written by `refusal-lexical-v1`, which
+# hid 7 refusals of 45 (MIS-037 corrects it).
+#
+# The judge is skipped (DEC-063): every metric this axis decides on — false-answer rate,
+# false-refusal rate, citation precision/recall, step coverage — is
+# deterministic and label-based, and the judge is still the DEC-018 placeholder whose
+# scores may not be reported.
+# The only Axis 7 technique that costs a second LLM call per query, so P2-14 requires
+# its added latency, its cost and its own false-refusal contribution reported next to
+# whatever it fixes. The prompt is the CONTROL's — this measures the check, not a
+# different way of asking.
+name: "EXP-0041 groundedness self-check — a second call that can replace an answer with a refusal (unanswerable)"
+axis: generation
+split: unanswerable
+eval_tier: tier2
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+skip_judge: true
+grounding_check: self_check
+grounding_check_params:
+  model: openai/gpt-oss-20b
+  max_tokens: 200

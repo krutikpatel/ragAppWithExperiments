@@ -91,6 +91,54 @@ def citation_scores(cited_doc_ids: list[str], gold_doc_ids: list[str]) -> Citati
     )
 
 
+@dataclass(frozen=True)
+class SpanSupport:
+    """How many quoted spans actually appear in the document they were attributed to."""
+
+    supported: int
+    total: int
+    unsupported_examples: list[str]
+
+    @property
+    def rate(self) -> float | None:
+        """None, not zero, when the answer quoted nothing: an answer with no spans has
+        made no unsupported claim, and scoring it zero would punish chunk-level
+        citation for a metric that does not apply to it (MIS-002)."""
+        return (self.supported / self.total) if self.total else None
+
+
+def span_support(
+    spans: list[tuple[str, str]], context_by_doc: dict[str, str]
+) -> SpanSupport:
+    """Check each `[doc:<id>|<quote>]` against the text of the document it names.
+
+    This is what span-level citation buys over chunk-level and the reason P2-14 asks for
+    the comparison: a quoted span can be **verified against the source with no LLM and no
+    judge**. A document id alone can only be checked for being in the gold set; a span
+    can be checked for being true of the thing it cites.
+
+    Matching is on whitespace-normalised, case-folded text. It is deliberately exact
+    beyond that: a model that paraphrases while claiming to quote has not supported its
+    claim, and softening the match would hide precisely the failure being measured.
+    A span attributed to a document that was never retrieved counts as unsupported —
+    the model cannot have read it.
+    """
+    normalised = {
+        doc_id: " ".join((text or "").split()).casefold()
+        for doc_id, text in context_by_doc.items()
+    }
+    supported = 0
+    unsupported: list[str] = []
+    for doc_id, span in spans:
+        needle = " ".join(span.split()).casefold()
+        haystack = normalised.get(doc_id)
+        if haystack and needle and needle in haystack:
+            supported += 1
+        elif len(unsupported) < 5:
+            unsupported.append(f"[doc:{doc_id}] {span[:80]}")
+    return SpanSupport(supported=supported, total=len(spans), unsupported_examples=unsupported)
+
+
 def is_refusal(answer: str) -> bool:
     """Whether the answer declines to answer: a refusal phrase in its opening, and no
     numbered steps anywhere. See `REFUSAL_DETECTOR_VERSION`."""

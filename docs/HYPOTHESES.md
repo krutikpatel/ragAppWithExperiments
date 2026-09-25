@@ -686,6 +686,60 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   partly the wrong reason is worth recording as plainly as being wrong.
   `run_20260925_074024_9154`.
 
+## H-027 — Citation enforcement cuts false answers and costs false refusals
+- **Date written:** 2026-09-25, before EXP-0039 ran
+- **Source:** Claude.
+- **Hypothesis:** the false-answer rate on `unanswerable` falls below the corrected
+  baseline of **0.2667** by more than 0.05, and the false-refusal rate on answerable
+  `dev` questions rises above the control's **0.0299**. Reasoning: the prompt makes a
+  citation a precondition for writing a step and names refusal as the explicit fallback,
+  so it should push behaviour toward refusing — in both directions at once. This is the
+  cheapest possible intervention on the trade-off and I expect it to be a *trade*, not a
+  free move.
+- **The part I expect to be wrong:** that the two move by similar amounts. A prompt
+  instruction is a blunt instrument and may move one number a lot and the other not at
+  all, in which case the interesting question is which.
+- **Tested by:** false-answer rate on the full `unanswerable` split and false-refusal
+  rate on `dev` (gold-in-context questions only, MIS-012), against EXP-0007/EXP-0006.
+- **Resolution:** _pending EXP-0039._
+
+## H-028 — Span citations are frequently unfaithful, and that is the finding
+- **Date written:** 2026-09-25, before EXP-0040 ran
+- **Source:** Claude.
+- **Hypothesis:** `span_support` — the share of quoted spans that actually appear
+  verbatim in the document they are attributed to — comes in **below 0.80**. Reasoning:
+  the model is being asked to copy character-for-character from a 1,700-word context
+  while composing a numbered answer, and every prior parser in this project found models
+  reformatting what they were told to reproduce exactly (MIS-016, DEC-045, MIS-035).
+  Document-level citation precision meanwhile stays within its MDD of 0.080, because
+  naming the right article is an easier task than quoting it.
+- **Why the number matters either way:** span-level citation is only worth its cost if
+  the span can be trusted. A high support rate makes citations checkable for free; a low
+  one means span citations look more rigorous while being less verifiable than a bare
+  document id, which is the worse outcome and the more useful thing to know.
+- **Tested by:** `span_support` on `dev` (EXP-0040) and citation precision/recall
+  against EXP-0006.
+- **Resolution:** _pending EXP-0040._
+
+## H-029 — The self-check rejects too few answers to matter, at 4.6 s each
+- **Date written:** 2026-09-25, before EXP-0041 ran
+- **Source:** Claude, with a rate measured on a 10-answer probe.
+- **Hypothesis:** the false-answer rate on `unanswerable` falls by **less than 0.10**,
+  and the check's rejection rate on `dev` is **under 0.20**. Reasoning: on the probe it
+  rejected **1 of 6** answers it judged, and — the observation that drives this — one of
+  the `unanswerable` questions it was shown had been *answered* by the generator and the
+  checker called it **supported**. A model asked whether its own family's output is
+  grounded in a context that was retrieved to look relevant is being asked a question it
+  is poorly placed to answer.
+- **What it costs regardless of what it fixes:** **4.6 s per answered question**
+  (measured) and ~$0.0055 per 100 dev questions. P2-14 requires those next to the
+  quality numbers, which is why they are written down before the run.
+- **The part I expect to be wrong:** the rejection rate. Six judged answers is a very
+  thin basis, and the full split may behave nothing like it.
+- **Tested by:** false-answer rate on `unanswerable`, `grounding_rejection_rate`,
+  false-refusal contribution on `dev`, and `mean_check_ms`.
+- **Resolution:** _pending EXP-0041._
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /

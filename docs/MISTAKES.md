@@ -181,6 +181,12 @@ Derived from the prevention rules below. Run through it and say in chat that you
     wall clock, and nothing in the harness would have said so. If the answer is hours,
     parallelise or cut N before launching. (MIS-036)
 
+47. **When a metric definition changes, recompute every ledger number it touches and
+    append the correction at that moment.** The code fix and the restatement are one
+    task, not two. A stale row does not look stale — it looks like a measurement, and
+    the next story anchors to it. Where the raw material is stored the recount is free.
+    (MIS-037, and DEC-045 which fixed the detector without restating its numbers)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1238,3 +1244,42 @@ Derived from the prevention rules below. Run through it and say in chat that you
   asking for approval.** One real call gives the rate; N times it is the run. If the
   answer is hours, parallelise or reduce N *before* launching, not after.
 - **Added to preflight:** yes — item 46.
+
+## MIS-037 — A detector fix left a stale number in the ledger, and a later story anchored to it
+- **Date:** 2026-09-25
+- **Severity:** Medium — P2-14's stated hard target was wrong by 15.6 points
+- **What happened:** DEC-045 replaced `refusal-lexical-v1` with `v2` because v1 matched
+  `don't` while the model wrote `don’t`, hiding 13–18 refusals per Phase 0 run. The
+  detector was fixed **going forward**. The numbers already in the ledger were not
+  restated, and `EXP-0007` — the Phase 1 unanswerable control — still carries its v1
+  figures. **P2-14 names that row's false-answer rate as the hard target every config in
+  Axis 7 is measured against.**
+- **The correction, recomputed from the stored answers of `run_20260913_060733_6a9b`:**
+
+  | | refusals of 45 | refusal rate | **false-answer rate** |
+  |---|---|---|---|
+  | as recorded (`refusal-lexical-v1`) | 26 | 0.5778 | **0.4222** |
+  | recounted (`refusal-lexical-v2`) | **33** | **0.7333** | **0.2667** |
+
+  Seven refusals of forty-five were hidden — the baseline is **15.6 points better** than
+  the ledger says.
+- **How it was caught:** reading EXP-0007's row to set up P2-14 and noticing it recorded
+  `refusal_detector: refusal-lexical-v1` while the current code emits `v2`. The answers
+  are stored, so recounting cost nothing.
+- **Root cause:** a metric-definition change has two halves — fix the code, and restate
+  every affected number that stays in the ledger. DEC-045 did the first. Nothing in the
+  contract forced the second, and the append-only rule makes the stale row *correct as
+  history* while making it *wrong as a target*. The failure mode is specific and nasty:
+  the number does not look stale, it looks like a measurement.
+- **Impact:** none on any comparison yet made — every Phase 2 run used v2 throughout, so
+  runs are comparable to each other. The damage was scoped to P2-14's target, caught
+  before the axis ran.
+- **Fix applied:** correction appended to `EXP-0007.md` and to the EXPERIMENTS.md row
+  with a `> **CORRECTED by MIS-037**` line beneath the original, per the append-only
+  rule. P2-14 measures against **0.2667**, not 0.4222.
+- **Prevention rule:** **when a metric definition changes, recompute every number in the
+  ledger it touches and append the correction at that moment** — the fix and the
+  restatement are one task. Where the raw material is stored (answers, rankings), the
+  recount is free; where it is not, the row gets a note saying which detector version
+  produced it and that it is not comparable across the boundary.
+- **Added to preflight:** yes — item 47.

@@ -1,0 +1,38 @@
+id: groundedness_check
+description: >
+  Groundedness self-check (P2-14, Axis 7). After an answer is generated it is shown back
+  to a model together with the articles it was written from, and asked whether every
+  step is supported. An unsupported answer is replaced by a refusal. This buys a second
+  LLM call per query; P2-14 requires its added latency, its cost and its own
+  false-refusal contribution to be reported alongside whatever it fixes.
+versions:
+  v1:
+    description: >
+      A single token out, SUPPORTED or UNSUPPORTED, so the parse cannot be ambiguous and
+      the call can be capped short. The prompt says explicitly that a correct refusal is
+      SUPPORTED — without that the checker rejects the system's own good refusals and
+      manufactures false refusals out of correct behaviour.
+    template: |
+      You are checking whether an answer is supported by the articles it cites.
+
+      Reply with exactly one word:
+      - SUPPORTED — every factual step in the answer appears in the articles below.
+      - UNSUPPORTED — the answer states a step, setting or fact that is not in them.
+
+      Important:
+      - An answer that declines to answer ("The provided articles do not cover this")
+        is SUPPORTED. Declining is not an unsupported claim.
+      - Judge only whether the articles contain the claims. Do not judge whether the
+        answer is helpful, complete or well written.
+      - Reply with the single word and nothing else.
+
+      ARTICLES:
+      {context}
+
+      QUESTION:
+      {question}
+
+      ANSWER:
+      {answer}
+
+      VERDICT:

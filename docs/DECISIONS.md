@@ -2579,3 +2579,29 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
     decision should be revisited: the configs are committed and cost $1.40 to execute.
 - **Revisit if:** any technique in Phase 2 achieves a significant positive result on
   `dev` strict recall@5, which would give composition something to test.
+
+## DEC-067 — `openai/gpt-oss-20b` runs the groundedness self-check
+- **Date:** 2026-09-25
+- **Decided by:** Krutik (proposed by Claude)
+- **Status:** Active. Third role for this model, after DEC-064 (chunk prefixes,
+  compression) and DEC-065 (query transforms).
+- **Evidence:** the (model, prompt) pair probed on **10 real stored answers** with their
+  real contexts before any config was committed (preflight 42): 4 refusals correctly
+  short-circuited without a call, 6 checked, 1 rejected, **zero unparseable, zero
+  failures**, and **4,600 ms per answered question** — the latency number P2-14 requires.
+- **Why it is the right family for this job:** the check grades `gpt-5-nano`'s output,
+  so `gpt-oss-20b` makes it a **cross-family** check. P0-07 refuses same-family judging
+  for the Ragas judge on self-preference grounds; the same argument applies to a model
+  asked whether an answer is grounded. Using the generator's own model here would have
+  been the cheaper-looking option and the wrong one.
+- **Recorded against it, from the same probe:** one `unanswerable` question that the
+  generator had **answered** was judged **SUPPORTED** by the check. That is the failure
+  mode this technique is supposed to catch, missed on a 10-answer sample. It is
+  pre-registered as H-029 rather than treated as a reason to change the prompt —
+  P2-14 allows one configuration per technique.
+- **Consequences:** ~$0.0055 per 100 dev questions and 4.6 s per answered question, both
+  now in the cost estimator (`estimate_grounding_cost`, calibrated on this probe) so the
+  gate sees them. Runs carrying it are `pipeline_nondeterministic` and cache-backed.
+- **Revisit if:** the rejection rate on the full split is near zero (the check is doing
+  nothing for its latency) or very high (it is rejecting good answers, and its
+  false-refusal contribution is the thing to look at).

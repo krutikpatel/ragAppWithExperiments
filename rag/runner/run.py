@@ -24,13 +24,22 @@ from rag.eval.judge import CRITERIA, JudgeConfig, RagasJudge, judge_provenance
 from rag.eval.qrels import qrels_from_split, run_from_results
 from rag.eval.retrieval_metrics import evaluate_retrieval
 from rag.eval.slices import aggregate_by_slice, build_slices
-from rag.generation.base import CITATION_PARSER_VERSION, GeneratorConfig, OpenRouterGenerator
+from rag.eval.generation_metrics import span_support
+from rag.generation.base import (
+    CITATION_PARSER_VERSION,
+    GeneratorConfig,
+    OpenRouterGenerator,
+    extract_citations,
+    extract_span_citations,
+)
+from rag.generation.grounding import GroundednessCheck
 from rag.generation.cache import GenerationCache
 from rag.generation.pipeline_llm import PipelineLLM
 from rag.hashing import short_id
 from rag.prompts import load_prompt
 from rag.runner.config import EvalTier, RunConfig
 from rag.runner.cost import (
+    estimate_grounding_cost,
     estimate_query_transform_cost,
     estimate_chunker_llm_cost,
     estimate_compression_cost,
@@ -313,6 +322,13 @@ def _run(
     # with the split. `queries_per_question` is what the transform will send to the
     # retriever, which drives the extra query embeddings.
     transform_estimate = _query_transform_estimate(config, frame, pricing)
+    # P2-14: the self-check is a second LLM call per ANSWERED question, billed per query.
+    grounding_estimate = estimate_grounding_cost(
+        grounding_check=config.grounding_check,
+        grounding_params=config.grounding_check_params,
+        n_questions=len(frame),
+        pricing=pricing,
+    ) if config.eval_tier is EvalTier.TIER_2 else {}
     run_estimate = estimate_run_cost(
         tier2=cost_estimate or None,
         index=index_estimate,
@@ -320,6 +336,7 @@ def _run(
         chunker_llm=chunker_llm_estimate,
         compression=compression_estimate,
         query_transform=transform_estimate,
+        grounding=grounding_estimate,
     )
     run_estimate["index"] = index_estimate
     if config.reranker:
@@ -330,6 +347,8 @@ def _run(
         run_estimate["compression"] = compression_estimate
     if transform_estimate:
         run_estimate["query_transform"] = transform_estimate
+    if grounding_estimate:
+        run_estimate["grounding"] = grounding_estimate
     print(format_run_estimate(run_estimate, pricing_version=pricing.pricing_version))
     _print_running_totals(store)
     if estimate_only:
@@ -841,6 +860,17 @@ def _execute(
         # P2-13 — assembly's own record. Popped before `generated` is read per
         # question, since these keys are not question ids.
         aggregate["assembly_profile"] = generated.pop("__assembly__", {})
+        grounding_profile = generated.pop("__grounding__", None)
+        if grounding_profile is not None:
+            aggregate["grounding_check"] = config.grounding_check
+            aggregate["grounding_profile"] = grounding_profile
+            aggregate["grounding_rejection_rate"] = grounding_profile.get("rejection_rate")
+            compression_llms.append(grounding_profile["llm"])
+        spans = [r["span_support"] for r in per_question.values()
+                 if r.get("span_support") is not None]
+        if spans:
+            aggregate["span_support"] = sum(spans) / len(spans)
+            aggregate["span_support_n"] = len(spans)
         compression_profile = generated.pop("__compression__", None)
         if compression_profile is not None:
             aggregate["compression_profile"] = compression_profile
@@ -1035,6 +1065,14 @@ def _tier2(
         )
     )
     judge = None if config.skip_judge else RagasJudge(_judge_config(config))
+    # P2-14, Axis 7: a second call that can replace an answer with a refusal.
+    grounding = None
+    if config.grounding_check:
+        gparams = dict(config.grounding_check_params)
+        grounding = GroundednessCheck(
+            PipelineLLM(gparams.pop("model", ""), cache=generation_cache,
+                        max_tokens=int(gparams.pop("max_tokens", 200)))
+        )
 
     generated: dict[str, Any] = {}
     for row in rows:
@@ -1067,11 +1105,27 @@ def _tier2(
                 f"{config.generator_prompt!r} (MIS-015)"
             )
 
+        answer_text = answer.text
+        if grounding is not None:
+            answer_text, grounding_record = grounding.check(
+                question_id=question_id, question=row["question"],
+                context=context.text, answer=answer_text,
+            )
+            per_question[question_id].update(grounding_record)
+        # P2-14: a span citation can be checked against the text it names, with no
+        # judge. Empty for chunk-level prompts, which is the comparison's point.
+        spans = extract_span_citations(answer_text)
+        if spans:
+            support = span_support(spans, {c.doc_id: texts[c.chunk_id] for c in context_chunks})
+            per_question[question_id].update({
+                "span_support": support.rate,
+                "spans_cited": float(support.total),
+            })
         per_question[question_id].update(
             deterministic_metrics(
-                generated_answer=answer.text,
+                generated_answer=answer_text,
                 reference_answer=row["answer"],
-                cited_doc_ids=answer.cited_doc_ids,
+                cited_doc_ids=extract_citations(answer_text),
                 gold_doc_ids=list(row["gold_doc_ids"]),
             )
         )
@@ -1088,7 +1142,7 @@ def _tier2(
         elif reference:
             scores = judge.score(
                 question=row["question"],
-                answer=answer.text,
+                answer=answer_text,
                 contexts=contexts,
                 reference=reference,
             )
@@ -1104,8 +1158,8 @@ def _tier2(
             per_question[question_id]["judge_skipped_no_reference"] = 1.0
 
         generated[question_id] = {
-            "text": answer.text,
-            "cited": answer.cited_doc_ids,
+            "text": answer_text,
+            "cited": extract_citations(answer_text),
             "latency_ms": answer.latency_ms,
             "attempts": answer.meta.get("attempts", 1),
             # Ragas does not surface per-call token usage, so only the generator's
@@ -1113,6 +1167,8 @@ def _tier2(
             "tokens_in": answer.tokens_in,
             "tokens_out": answer.tokens_out,
         }
+    if grounding is not None:
+        generated["__grounding__"] = grounding.provenance()
     if compressor is not None:
         generated["__compression__"] = compressor.provenance()
     generated["__assembly__"] = {"order": config.context_order}

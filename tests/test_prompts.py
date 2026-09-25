@@ -32,6 +32,12 @@ PINNED_HASHES = {
     "query_hyde@v1": "sha256:a49d4b8d2bec73e",
     "query_multi@v1": "sha256:cc5424b96c1dd02",
     "query_step_back@v1": "sha256:6d4745041ad8a64",
+    # P2-14 (Axis 7). The two answer prompts are one-dimension variants of
+    # baseline_answer@v1 — same task, format, language and URL rule — so that a delta
+    # is attributable to the citation requirement and nothing else.
+    "enforced_answer@v1": "sha256:55e7413b9f6f541",
+    "groundedness_check@v1": "sha256:a46b489e756ab1b",
+    "span_answer@v1": "sha256:9e410481d6645ba",
 }
 
 

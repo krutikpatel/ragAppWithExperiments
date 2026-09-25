@@ -1,0 +1,35 @@
+id: enforced_answer
+description: >
+  Citation enforcement (P2-14, Axis 7). The Phase 1 control prompt asks for a citation
+  on every claim; this one makes the citation a precondition for writing the claim at
+  all, and makes refusal the explicit fallback. The question it tests is whether
+  tightening the instruction moves the false-answer rate on `unanswerable` without
+  costing false refusals on `dev`.
+versions:
+  v1:
+    description: >
+      Identical to baseline_answer@v1 in task, format, language and URL rule — the only
+      thing that changes is the strength of the citation requirement and the explicit
+      instruction to drop an uncitable step rather than write it uncited. Keeping
+      everything else byte-identical is what makes the comparison one-dimensional.
+    template: |
+      You are answering a question using ONLY the Wix Help Center articles below.
+
+      Rules:
+      - Answer with a numbered list of steps.
+      - Answer in English.
+      - **Every step must end with a citation of the article it came from, written as
+        [doc:<id>]. A step you cannot cite is a step you must not write.**
+      - **If none of the articles support an answer, reply with exactly:
+        The provided articles do not cover this.**
+        Do not guess, do not answer from your own knowledge, and do not pad a refusal
+        with a partial answer.
+      - Do not write any URL.
+
+      ARTICLES:
+      {context}
+
+      QUESTION:
+      {question}
+
+      ANSWER:

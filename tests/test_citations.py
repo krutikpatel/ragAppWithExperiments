@@ -58,7 +58,7 @@ def test_spaced_and_capitalised_citations_are_parsed():
     citations per 100 answers. citation-v2 accepts whitespace and case."""
     from rag.generation.base import CITATION_PARSER_VERSION
 
-    assert CITATION_PARSER_VERSION == "citation-v2"
+    assert CITATION_PARSER_VERSION == "citation-v3"
     a = "a" * 64
     assert extract_citations(f"[doc: {a}]") == [a]
     assert extract_citations(f"[ doc:{a} ]") == [a]
@@ -66,3 +66,62 @@ def test_spaced_and_capitalised_citations_are_parsed():
     assert extract_citations(f"[doc:{a}] and again [doc: {a}]") == [a]
     # Not a citation: wrong keyword, or a non-hex id.
     assert extract_citations("[document: abcdef12] [doc: xyz]") == []
+
+
+
+# --- P2-14: the span form, and that adding it moved nothing ---------------------
+
+def test_citation_v3_parses_every_v2_form_identically():
+    """A parser bump that changed a historical number would invalidate every citation
+    comparison in the ledger at once. v3 is strictly additive: it adds the span form
+    and must not touch anything v2 already parsed."""
+    from rag.generation.base import extract_citations
+
+    cases = [
+        ("Do X [doc:abc12345].", ["abc12345"]),
+        ("Spaced [doc: abc12345] and [DOC : DEF67890].", ["abc12345", "DEF67890"]),
+        ("Repeated [doc:abc12345] twice [doc:abc12345].", ["abc12345"]),
+        ("Adjacent [doc:abc12345][doc:def67890].", ["abc12345", "def67890"]),
+        ("No citations at all.", []),
+        ("Too short [doc:abc] ignored.", []),
+        ("", []),
+        (None, []),
+    ]
+    for text, expected in cases:
+        assert extract_citations(text) == expected, f"v3 changed the parse of {text!r}"
+
+
+def test_span_citations_are_parsed_and_plain_ones_are_not_invented():
+    from rag.generation.base import extract_citations, extract_span_citations
+
+    text = ('1. Click Save [doc:abc12345|Click the Save button]. '
+            '2. Publish [doc:def67890#Then click Publish]. '
+            '3. Something uncited [doc:99999999].')
+    # Doc-level parsing is unaffected by the span, so precision/recall still compute.
+    assert extract_citations(text) == ["abc12345", "def67890", "99999999"]
+    assert extract_span_citations(text) == [
+        ("abc12345", "Click the Save button"),
+        ("def67890", "Then click Publish"),
+    ]
+
+
+def test_span_extraction_keeps_duplicates_because_they_are_separate_claims():
+    from rag.generation.base import extract_span_citations
+
+    text = "A [doc:abc12345|Click Save]. B [doc:abc12345|Click Save]."
+    assert len(extract_span_citations(text)) == 2
+
+
+def test_a_span_form_citation_would_have_parsed_as_nothing_under_v2():
+    """The bug this bump exists to prevent. Under v2's regex a span-form citation
+    matched NOTHING, so an Axis 7 span run would have recorded zero citations for every
+    question and read as 'span citations destroy citation quality' (MIS-016)."""
+    import re
+
+    v2 = re.compile(r"\[\s*doc\s*:\s*([0-9a-f]{8,64})\s*\]", re.IGNORECASE)
+    span_text = "Click Save [doc:abc12345|Click the Save button]."
+    assert v2.findall(span_text) == [], "this is what v2 did"
+
+    from rag.generation.base import extract_citations
+
+    assert extract_citations(span_text) == ["abc12345"], "this is what v3 does"

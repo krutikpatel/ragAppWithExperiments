@@ -665,6 +665,59 @@ def estimate_query_transform_cost(
     return estimate
 
 
+# Measured on a 10-answer probe against real stored answers and their real contexts
+# (2026-09-25, `openai/gpt-oss-20b`): 2,925 input tokens and 70 output tokens per
+# CHECKED answer, and 4.6 s of latency each. Refusals are short-circuited without a
+# call, so only answered questions are billed — on the dev control that is 93%.
+GROUNDING_TOKENS_IN_PER_CHECK = 2925
+GROUNDING_TOKENS_OUT_PER_CHECK = 70
+GROUNDING_ANSWERED_SHARE = 0.93
+GROUNDING_CALIBRATION = "10-answer probe on stored answers, 2026-09-25"
+
+
+def estimate_grounding_cost(
+    *,
+    grounding_check: str,
+    grounding_params: dict[str, Any] | None,
+    n_questions: int,
+    answered_share: float = GROUNDING_ANSWERED_SHARE,
+    pricing: PricingTable | None = None,
+) -> dict[str, Any]:
+    """Cost of a groundedness self-check: one extra LLM call per ANSWERED question.
+
+    Billed per query like reranking and the query transforms, so it scales with the
+    split. Refusals cost nothing because they are never sent (see rag/generation/
+    grounding.py), which is why this is not simply `n_questions`.
+    """
+    if not grounding_check:
+        return {}
+    pricing = pricing or PricingTable.load()
+    model = (grounding_params or {}).get("model", "")
+    checks = int(round(n_questions * answered_share))
+    tokens_in = checks * GROUNDING_TOKENS_IN_PER_CHECK
+    tokens_out = checks * GROUNDING_TOKENS_OUT_PER_CHECK
+    estimate: dict[str, Any] = {
+        "checks": checks,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "model": model,
+        "calibration": GROUNDING_CALIBRATION,
+        "is_estimate": True,
+    }
+    if not model:
+        estimate["price_unavailable"] = f"grounding_check {grounding_check!r} has no model"
+        return estimate
+    price = pricing.price("chat", model)
+    if not price:
+        estimate["price_unavailable"] = f"no chat price for {model}"
+        return estimate
+    estimate["grounding_usd"] = round(
+        tokens_in / 1e6 * price["in"] + tokens_out / 1e6 * price["out"], 4
+    )
+    estimate["price_per_mtok"] = {"in": price["in"], "out": price["out"]}
+    return estimate
+
+
 def estimate_run_cost(
     *,
     tier2: dict[str, Any] | None,
@@ -674,6 +727,7 @@ def estimate_run_cost(
     chunker_llm: dict[str, Any] | None = None,
     compression: dict[str, Any] | None = None,
     query_transform: dict[str, Any] | None = None,
+    grounding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Total pre-run estimate with the breakdown of what drives it."""
     parts: dict[str, float] = {}
@@ -698,6 +752,7 @@ def estimate_run_cost(
         ("chunker_llm", chunker_llm, "chunker_llm_usd"),
         ("compression", compression, "compression_usd"),
         ("query_transform", query_transform, "query_transform_usd"),
+        ("grounding", grounding, "grounding_usd"),
     ):
         if part:
             if key in part:

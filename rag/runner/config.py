@@ -21,6 +21,9 @@ from rag.retrieval.pooling import DEFAULT_POOLING, POOLING_RULES
 # The list is asserted against the registry in tests/test_query_transform_p2_12.py,
 # so it cannot drift.
 QUERY_TRANSFORM_NAMES = ("decompose", "hyde", "multi_query", "step_back")
+# Axis 7 (P2-14). One entry today; a tuple so an unknown name is refused by the config
+# rather than ignored.
+GROUNDING_CHECKS = ("self_check",)
 
 
 # Phase 2 axes (P2-07 … P2-16). `axis` places a run under the split policy (P2-04),
@@ -132,6 +135,11 @@ class RunConfig:
     # accidental omission still fails the Tier 2 check instead of quietly producing a
     # cheap run that looks like a judged one. Part of config_hash when set.
     skip_judge: bool = False
+    # Axis 7 (P2-14). A second LLM call per answer that can replace it with a refusal.
+    # Tier 2 only and absent from TIER1_FIELDS: it changes what the generator returned,
+    # never what was retrieved. Its `model` param is Krutik's choice.
+    grounding_check: str = ""
+    grounding_check_params: dict[str, Any] = field(default_factory=dict)
     context_max_tokens: int = 6000
 
     # Axis 6 (P2-13). Both act after the document walk has selected, so neither can
@@ -222,6 +230,15 @@ class RunConfig:
             raise ValueError(
                 f"unknown context_order {self.context_order!r}; known: {CONTEXT_ORDERS}"
             )
+        if self.grounding_check and self.grounding_check not in GROUNDING_CHECKS:
+            raise ValueError(
+                f"unknown grounding_check {self.grounding_check!r}; known: {GROUNDING_CHECKS}"
+            )
+        if self.grounding_check and not self.eval_tier.uses_llm:
+            raise ValueError(
+                "grounding_check inspects a generated answer, so there is nothing for it "
+                "to do at Tier 1. Run it at Tier 2 (P2-14)."
+            )
         if (self.context_compressor or self.context_order != "rank") and not self.eval_tier.uses_llm:
             raise ValueError(
                 "context_order and context_compressor only change what the GENERATOR "
@@ -275,6 +292,7 @@ class RunConfig:
         ("context_compressor", "", ("context_compressor", "context_compressor_params")),
         ("skip_judge", False, ("skip_judge",)),
         ("query_transform", "", ("query_transform", "query_transform_params")),
+        ("grounding_check", "", ("grounding_check", "grounding_check_params")),
     )
 
     @classmethod

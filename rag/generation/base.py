@@ -21,8 +21,18 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Recorded on every run. v1 matched `[doc:<id>]` exactly and dropped `[doc: <id>]`
 # — 4 to 13 citations per 100 answers in the Phase 0 Tier 2 runs (MIS-016). v2
 # tolerates whitespace inside the brackets and a capitalised "Doc" (DEC-043).
-CITATION_PARSER_VERSION = "citation-v2"
-_CITATION = re.compile(r"\[\s*doc\s*:\s*([0-9a-f]{8,64})\s*\]", re.IGNORECASE)
+# v3 (P2-14) adds the span form `[doc:<id>|<quote>]` alongside the plain `[doc:<id>]`.
+# Strictly additive: every string v2 parsed, v3 parses identically, which a test pins —
+# a parser bump that moved a historical number would invalidate every citation
+# comparison in the ledger at once.
+CITATION_PARSER_VERSION = "citation-v3"
+# The span separator is `|` or `#`; the span itself is anything up to the closing
+# bracket. Without this, a span-form citation matched NOTHING and every citation metric
+# on an Axis 7 span run would have silently read zero (MIS-016's lesson, caught before
+# the run rather than after).
+_CITATION = re.compile(
+    r"\[\s*doc\s*:\s*([0-9a-f]{8,64})\s*(?:[|#]\s*([^\]]*?)\s*)?\]", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True)
@@ -130,11 +140,28 @@ class Generator(ABC):
 
 
 def extract_citations(text: str) -> list[str]:
-    """Document ids cited as `[doc:<id>]`, de-duplicated, first-mention order."""
+    """Document ids cited as `[doc:<id>]` or `[doc:<id>|<quote>]`, de-duplicated,
+    first-mention order."""
     seen: dict[str, None] = {}
     for match in _CITATION.finditer(text or ""):
         seen.setdefault(match.group(1), None)
     return list(seen)
+
+
+def extract_span_citations(text: str) -> list[tuple[str, str]]:
+    """`(doc_id, span)` for every citation that carried a quoted span (P2-14).
+
+    Order of appearance, duplicates kept: the same span cited twice is two claims, and
+    collapsing them would flatter the support rate. A plain `[doc:<id>]` contributes
+    nothing here — it has no span to verify, which is the whole difference between
+    chunk-level and span-level citation.
+    """
+    out: list[tuple[str, str]] = []
+    for match in _CITATION.finditer(text or ""):
+        span = (match.group(2) or "").strip().strip('"\u201c\u201d')
+        if span:
+            out.append((match.group(1), span))
+    return out
 
 
 class OpenRouterGenerator(Generator):

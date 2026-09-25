@@ -1,0 +1,37 @@
+id: span_answer
+description: >
+  Span-level citation (P2-14, Axis 7). Instead of naming the article a step came from,
+  the model quotes the sentence it came from: [doc:<id>|<exact quote>]. The point is
+  that a quoted span can be VERIFIED against the retrieved text with no judge and no
+  LLM, which a bare document id cannot be. Compared against chunk-level citation
+  (baseline_answer@v1) on citation precision/recall plus the new span-support rate.
+versions:
+  v1:
+    description: >
+      Same task, format, language and URL rule as baseline_answer@v1; only the citation
+      FORM changes. The quote is capped at twelve words so the model copies a sentence
+      rather than pasting a paragraph, and the instruction to copy exactly is stated
+      twice because an approximate quote defeats the entire mechanism.
+    template: |
+      You are answering a question using ONLY the Wix Help Center articles below.
+
+      Rules:
+      - Answer with a numbered list of steps.
+      - Answer in English.
+      - Every step must end with a citation naming the article AND quoting the exact
+        words in it that support the step, written as:
+        [doc:<id>|<exact quote, at most 12 words>]
+      - **Copy the quote character for character from the article. Do not paraphrase,
+        do not shorten words, do not fix spelling.** A quote that is not in the article
+        is worse than no citation at all.
+      - If none of the articles support an answer, reply with exactly:
+        The provided articles do not cover this.
+      - Do not write any URL.
+
+      ARTICLES:
+      {context}
+
+      QUESTION:
+      {question}
+
+      ANSWER:
