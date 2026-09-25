@@ -566,7 +566,24 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   the number I care about most in this run.
 - **Tested by:** `rag compare promoted <run> --metric strict_recall@5` on `dev`, per
   slice; plus `mean_generated_per_question` and `mean_new_docs_per_extra_query`.
-- **Resolution:** _pending EXP-0031._
+- **Resolution:** **wrong on both halves, and wrong about the part I flagged as most
+  uncertain — which turned out to be the mechanism.**
+  1. I predicted `multi_doc` would improve by **more than +0.05**. It **fell 0.050**
+     (0.350 → 0.300, 3 lost / 1 gained, p = 0.628 at n=40).
+  2. I predicted overall recall would **not move**, because the transform would decline
+     to split most questions. The premise was right — 1.27 sub-questions, 150 of 200
+     unsplit, 145 of those verbatim — and the conclusion was wrong: those 150 reproduce
+     the control (0.713 → 0.707) while the **50 that were split went 0.740 → 0.540**,
+     which moves the whole split by −0.055 at **p = 0.0186**.
+  3. The part I named as most likely wrong, and said I cared about most, was whether the
+     sub-queries retrieve *different* documents. Measured: **40.8 new documents per extra
+     sub-query.** They retrieve very different documents. **I had the sign of that
+     quantity inverted** — I treated a high distinct-document yield as the success
+     condition, when it is the failure condition. Retrieving 41 documents that answer
+     half the question is *how* the one document answering all of it leaves the top five.
+  The corpus fact underneath: decomposition assumes documents are indexed by sub-fact. A
+  help centre is indexed by task, and a multi-part user question is usually one task.
+  `run_20260925_063044_0da8`.
 
 ## H-024 — HyDE helps single-document recall and this split cannot show it
 - **Date written:** 2026-09-25, before EXP-0032 ran
