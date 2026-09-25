@@ -650,3 +650,28 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   both behaviours — the one-dimension diff against the Tier 2 control, and the
   two-dimension diff against promoted — so whichever way this is decided, a test
   states what changed.
+
+## OQ-043 — `chunker_id` is not a complete identity for an LLM-built index
+- **Status:** open. Surfaced 2026-09-25 by EXP-0030's warm-cache repeat.
+- **What happened:** the dense index is cached under a key containing `chunker_id`, which
+  is a hash of the chunker's `params`. For every chunker before P2-13 that was a complete
+  identity: the same params over the same corpus produce the same chunks. The contextual
+  chunker breaks that, because one of its chunks' text comes from a model call that can
+  **fail and later succeed**. EXP-0030's cold run had 1 failed prefix of 8,218 and indexed
+  that chunk unprefixed; the warm repeat's retry succeeded, so it reported 8,218 prefixes
+  while reusing an index built from 8,217. Same key, different content.
+- **Why it is small now and would not always be:** one chunk in 8,218 is 0.012% and cannot
+  move a metric. But the failure rate is a property of the provider on the day, not of the
+  config — MIS-034 measured the same model failing ~1 in 222 on a different prompt. At that
+  rate this would be 37 chunks, and two runs of the "same" config would silently search
+  different indexes.
+- **Decided by:** a judgment call, not a measurement. Options, none yet chosen:
+  1. Put a content hash of the chunks into the index key, so any change in indexed text
+     rebuilds. Correct and complete; costs a full re-embed whenever a retry fills a hole.
+  2. Refuse to build an index when any chunk's generation failed — VOID the run instead.
+     Clean, and it throws away a paid 8,217-call build over one chunk.
+  3. Record the failed chunk ids on the row and treat a run whose failure set differs from
+     the cached index's as not comparable. Cheapest; relies on a check nobody has written.
+- **Current handling:** option 3 without the check — the failure ids are on the row
+  (`prefix_call_failures`) and the discrepancy is stated in EXP-0030's Anomalies. Whichever
+  way this is decided, it needs a DEC entry, because it changes when an index is rebuilt.

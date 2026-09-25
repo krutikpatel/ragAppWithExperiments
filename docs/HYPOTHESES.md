@@ -526,7 +526,25 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   That subset comparison is the measurement I care about more than the headline.
 - **Tested by:** `rag compare promoted <run> --metric strict_recall@5` on `dev`, per
   slice, for EXP-0030. Plus the one-time index cost, recorded on the row.
-- **Resolution:** _pending EXP-0030._
+- **Resolution:** **the headline claim is wrong; the caveat I flagged as most likely to
+  matter is right, and it is the more useful half.**
+  I predicted strict recall@5 would improve by **more than +0.03 at p < 0.05**. Measured:
+  **+0.0050 at p = 1.000** (16 gained / 15 lost), and +0.0100 at p = 0.857 on the
+  warm-cache repeat. Axis 6 joins Axes 1, 2, 3 and 5 with no measurable difference.
+  The caveat was the valuable part. I wrote that the effect "should therefore be
+  concentrated in the 21% of chunks from multi-chunk articles" and that "that subset
+  comparison is the measurement I care about more than the headline." It was, and it is:
+  **one-chunk gold articles are perfectly inert — 0.780 → 0.780, four gained and four
+  lost** — while every bit of movement sits in the multi-chunk half at **+0.010 (12/11)**.
+  The mechanism I reasoned about was real and its magnitude was nil.
+  Two things I did not anticipate. **The dev split is 50% multi-chunk against the
+  corpus's 21%**, so this ran on a subset 2.4x enriched for the condition the technique
+  needs and still returned +0.010 — a stronger negative than the headline alone. And the
+  losses are **not** failures of the prefix: a gold with an accurate prefix fell from rank
+  1 to outside the top 5, because **every competitor was prefixed too**. I framed this as
+  "does the prefix add discriminating information?" when the right question was "does it
+  add information that discriminates *between candidates*?" A uniform lift cannot
+  re-rank. `run_20260925_045759_b1c7`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

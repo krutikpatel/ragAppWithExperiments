@@ -47,6 +47,8 @@ produced one.
 | EXP-0028 | `run_20260925_014154_2d6b` | 2026-09-25 | assembly | **lost-in-the-middle reordering** — the five selected documents written into the prompt as rank 1, 3, 5, 4, 2 (P2-13). Tier 2, **no judge (DEC-063)**. **Retrieval columns are deliberately blank: this technique is a permutation of the same chunks and cannot change a retrieval metric** (asserted in tests; P2-13 forbids reporting one). Deterministic generation metrics, paired test vs `run_20260913_205058_dc03`: citation precision 0.525→0.513 (Δ −0.021, p=0.558), citation recall Δ −0.005 **p=1.000**, step coverage Δ −0.008 (p=0.792), refusal Δ −0.010 p=1.000 — **every metric inside its MDD, nothing significant on any slice** (lowest p anywhere 0.106). The finding is the churn: **15 questions changed citations, and for 13 of them the retrieved set AND ranking were identical** — 6 up, 7 down, net zero. One question (`3f42c8a9`) flipped to the **opposite factual claim** on identical evidence. Measured cause of the null: the assembled context is **1,712 words ≈ 2,174 tokens**, below the **2,700-token floor** of the range Liu et al. 2023 measured the effect over. **No measurable difference; not promoted.** $0.0278 vs $0.0341 est | — | — | — | — | — | 5441 | 0.00034 | VALID | [→](experiments/EXP-0028.md) |
 | EXP-0029 | `run_20260925_015243_dd41` | 2026-09-25 | assembly | **contextual compression** attempt 1 — died on call ~222 of ~500 with `EmptyGenerationError`: `openai/gpt-oss-20b` returned `finish_reason='length'`, `completion_tokens=1000`, **`reasoning_tokens=1000`** — the whole budget spent reasoning before any output. **221 calls had succeeded (~$0.009) and all are in the generation cache, so nothing was wasted.** Two faults: the model was licensed on a probe of a *different prompt* (DEC-064 tested `contextual_chunk`, not `compress_context`), and a per-chunk failure was allowed to VOID a 100-question run. The same input **succeeds on retry** (123 reasoning tokens) — the failure is non-deterministic at temperature 0. See MIS-034 | — | — | — | — | — | — | — | VOID (MIS-034) | [→](experiments/EXP-0029.md) |
 | EXP-0029 | `run_20260925_025103_28d7` | 2026-09-25 | assembly | **contextual compression** — each retrieved chunk trimmed by `gpt-oss-20b` to the sentences bearing on the question (P2-13, DEC-063/064). Tier 2, no judge. **Retrieval columns blank by construction: compression runs after the document walk.** Prompt went **1,712 → 912 words (reduction 0.467)** and **5.00 → 3.13 documents**; 187 of 500 chunks dropped entirely. Paired test: **citation recall 0.598 → 0.522, Δ −0.0883, CI [−0.168, −0.010], p = 0.0358, MDD 0.040 — significant and negative**, the first significant deterministic result in Axis 6. Citation precision −0.051 (p=0.21), **step coverage +0.019 (p=0.73)**, refusal **Δ 0.0000 p=1.000**. The compressor discriminates well — drops **43.9% of non-gold vs 8.7% of gold chunks** — yet of the 17 questions that lost citation recall, only 6 lost a gold chunk: **11 kept every gold chunk and lost the citation anyway.** Reduction is understated by my own checker (MIS-035; 0.542 corrected, simulated on the same completions) — a bug that worked *against* this finding. **Negative; not promoted.** $0.0306 actual vs $0.0566 est (221 calls replayed free) | — | — | — | — | — | 18440 | 0.00031 | VALID | [→](experiments/EXP-0029.md) |
+| EXP-0030 | `run_20260925_045759_b1c7` | 2026-09-25 | assembly | **Anthropic-style contextual retrieval** — every chunk prefixed with an LLM-generated situating statement (`gpt-oss-20b`, mean 34.2 words) and the **prefixed text indexed**; the generator still sees the original chunk, and the 600/100 boundaries are the control's, so only retrieval can move (P2-13, DEC-064). **8,218 calls, 1 failed** (0.012% — cost one chunk, not the run: MIS-034's hardening). vs promoted (0.720): **Δ +0.0050, CI [−0.050, +0.060], p = 1.000 — 16 gained / 15 lost.** Same depth shape as the rerankers from a different mechanism: **@1 +0.035, @10 −0.020, @20 −0.025**, nDCG@10 +0.017 (p=0.32). multi-doc 0.350→0.400 (p=0.72). **The pre-registered subset test: one-chunk gold articles are perfectly inert (0.780→0.780, 4 gained / 4 lost), all movement is in multi-chunk golds (+0.010, 12/11)** — and dev is 50% multi-chunk against the corpus's 21%, so the technique was tested on a 2.4x enriched subset and still returned +0.010. Losses are not bad prefixes: a gold with an accurate prefix fell rank 1 → >5 because **every competitor got a prefix too**. Index build **$0.2550** (21 min at 16 workers; 16 h before MIS-036). **No measurable difference; not promoted** | 0.725 | 0.830 | 0.648 | 0.584 (n=160) | — | 3818 | 0.0000008 | VALID | [→](experiments/EXP-0030.md) |
+| EXP-0030 | `run_20260925_051847_7c33` | 2026-09-25 | assembly | **the P2-03 warm-cache repeat** of the row above: 99.99% of the 8,218 prefix calls replayed from cache, **$0.00016**, byte-identical index. strict@5 **0.730**, Δ +0.0100 vs promoted (p = 0.857). The **0.005 gap between two runs of this identical config is hosted query-embedding non-determinism alone** (OQ-023) — the cleanest measurement of that noise floor so far. Caveat on the row: the one prefix call that failed cold **succeeded here**, so this run reports 8,218 prefixes while reusing the cold run's 8,217-prefix index (OQ-043) | 0.730 | 0.830 | 0.648 | 0.584 (n=160) | — | 3654 | 0.0000008 | VALID | [→](experiments/EXP-0030.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -359,19 +361,25 @@ means more tokens to dilute, more opportunity to cite the wrong article, and mor
 money per query. Faithfulness and citation precision at k=10 or k=20 against EXP-0006
 are unmeasured, and that is the experiment worth buying here (OQ-040).
 
-## Axis 6 scorecard — context assembly (P2-13, in progress)
+## Axis 6 scorecard — context assembly (P2-13, EXP-0027–0030) — CLOSED
 
 `dev` decides (DEC-055). The top-k sweep is read from a recorded run rather than run
 (DEC-061, section above); MMR occupies the reranker slot with `axis: assembly`
-(DEC-062). Axis spend so far: **$0.0005**.
+(DEC-062); the two Tier 2 techniques skip the judge (DEC-063) and the two LLM-using
+ones run on `gpt-oss-20b` (DEC-064). **Axis spend: $0.3441** across five techniques —
+$0.0005 MMR, $0.0278 reordering, $0.0306 compression, $0.2852 contextual retrieval
+(both runs).
 
 | EXP | Technique | `dev` strict R@5 (Δ, CI, p) | multi-doc | collapse | $/query | Verdict |
 |---|---|---|---|---|---|---|
 | — | **control** (top_k=5, no reorder) | 0.720 | 0.350 | 1.106 | $0.0000004 | promoted |
 | — | top-k sweep (**not a run**, reconstructed) | k=10 → 0.850, k=20 → 0.920, k=50 → 0.985 | 0.625 / 0.825 / 0.975 | 1.13–1.16 | — | input-side only; Tier 2 unanswered (OQ-040) |
 | 0027 | MMR, λ sweep 0.3–1.0 | **0.335** at λ=0.3 (−0.385, [−0.460, −0.315], **0.0001**); 0.685 at λ=0.9 (−0.035, **0.039**) | **0.000** at λ=0.3 | **1.000** | $0.0000004 | **negative, monotone** |
+| 0028 | lost-in-the-middle reordering | **not reported — permutation, cannot change retrieval** | — | — | $0.00034 | **null** (Tier 2: every metric inside its MDD) |
+| 0029 | contextual compression | **not reported — runs after the document walk** | — | — | $0.00031 | **negative** (Tier 2: citation recall −0.088, **p=0.036**) |
+| 0030 | contextual retrieval (prefix + re-index) | 0.725 (+0.005, [−0.050, +0.060], **1.000**) | 0.400 (+0.050, p=0.72) | 1.124 | $0.0000008 | **null**; $0.2550 one-off |
 
-What the axis has established so far:
+What the axis established:
 
 1. **Diversity was never the binding constraint.** The control's collapse ratio is
    1.106 — the context was already ~90% distinct documents — so MMR had almost
@@ -392,10 +400,34 @@ What the axis has established so far:
    free to use.** 0.350 → 0.625 → 0.825 at k = 5/10/20, against `context_max_tokens`
    binding at about k=14 and an unmeasured effect on answer quality (OQ-040).
 
-Still to run in this axis: contextual compression, lost-in-the-middle reordering
-(Tier 2 only — it changes no retrieval metric by construction) and Anthropic-style
-contextual retrieval (one LLM call per chunk across the corpus; needs an estimate and
-approval before it starts, P2-13 cost note).
+5. **Assembly cannot be fixed by reordering what is already there.** Two of the five
+   techniques act purely on the assembled context — reordering and compression — and
+   neither can change a retrieval metric by construction. Reordering moved **no**
+   deterministic generation metric beyond its MDD, and the measured reason is that this
+   prompt is **~2,174 tokens**, below the 2,700-token floor of the range Liu et al. 2023
+   measured the mid-prompt dip over. Five documents is not a long context.
+6. **The generator's willingness to cite a document depends on how much of it it is
+   shown.** Compression's loss (citation recall −0.088, p = 0.036) is **not** information
+   loss: of the 17 questions that regressed, only 6 lost a gold chunk and **11 kept every
+   gold chunk and lost the citation anyway**. That is a property of the generation step
+   and would bite any technique that shortens a retrieved document in place.
+7. **Contextual retrieval is inert exactly where the corpus says it must be, and
+   near-inert where it could have helped.** On the 100 dev questions whose gold article
+   fits in one chunk: **0.780 → 0.780, four gained and four lost.** On the multi-chunk
+   half: +0.010 (12/11). Dev is **50% multi-chunk against the corpus's 21%**, so the
+   technique was measured on a subset 2.4x enriched for the condition it needs.
+   The losses are not bad prefixes — a gold with an accurate prefix fell from rank 1 to
+   outside the top 5, because **every competitor was prefixed too**. A uniform lift
+   cannot re-rank.
+8. **Three techniques, two mechanisms, one depth shape.** Contextual retrieval produced
+   the reranker profile — better at rank 1 (+0.035), worse at depth (@20 −0.025) — by
+   changing what is *indexed* rather than by re-ordering a candidate set. Whatever this
+   corpus is doing at rank 1 versus rank 20 is not specific to reranking.
+
+**Axis 6 verdict: no winner, five techniques, `promoted.yaml` unchanged.** One
+significant result in the axis and it was negative (compression). The axis's most
+transferable output is item 6: a fact about the generator, found while measuring
+something else.
 
 ## Negative results (P2-17)
 
@@ -606,6 +638,30 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   depends on how much of that document it is shown.** That is a fact about the
   generation step, not about compression, and it would apply to any technique that
   shortens a retrieved document in place.
+
+- **EXP-0030 — Anthropic-style contextual retrieval, one LLM call per chunk across the
+  corpus.** On `dev`, strict recall@5 0.7200 → 0.7250, **Δ +0.0050, 95% CI
+  [−0.050, +0.060], p = 1.000 — 16 questions gained, 15 lost.** The warm-cache repeat
+  gave +0.0100 at p = 0.857. Cost it would have added: **$0.2550 once** (8,218 calls,
+  21 minutes, plus a $0.0385 re-embed) and nothing per query.
+  **Decision: control retained; not promoted.**
+  This is the one negative result in the project with a mechanism measured on **both**
+  sides of the question. It works where it should: gold documents moved from outside the
+  top 5 to rank 1 when the prefix supplied vocabulary the question used and the chunk
+  lacked — *"do I have to give my login to a website designer"* found an article whose
+  prefix named "collaborators" and "Roles & Permissions", words the question never used.
+  And it is inert where it should be: on the 100 dev questions whose gold article fits in
+  a single chunk, the result is **0.780 → 0.780, four gained and four lost**, because the
+  prefix there restates text the chunk already contains in full.
+  What kills it is the half in between. The losses are **not** bad prefixes — a gold
+  article with an accurate, well-written prefix fell from rank 1 to outside the top 5.
+  **Every competing document got a prefix too, so the lift is near-uniform across the
+  index and relative ordering barely moves.** A technique that improves every candidate
+  equally cannot re-rank them. Recall@20 actually fell 0.025, which a purely additive
+  "more findable" account would not predict.
+  The scale point belongs with the number: **$0.25 is affordable at 6,221 articles and
+  would be ~$250 per index build at 6 million**, repeated on every re-chunk, prompt
+  revision and model change. Bounded here, a standing budget line there.
 
 ## Phase 1 scorecard — the controls (P1-08)
 
