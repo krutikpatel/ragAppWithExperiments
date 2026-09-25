@@ -698,3 +698,25 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   3. Drop it, and record that the one positive signal on the organizing question's slice
      was left unresolved for want of a sample.
 - **Current handling:** open, untaken. It belongs in P2-16's combination set if anywhere.
+
+## OQ-046 — The chosen abstention threshold has never actually executed
+- **Status:** open. Surfaced 2026-09-25 by DEC-068.
+- **What is true:** EXP-0038 evaluated the threshold by **reconstruction** — replaying
+  stored per-question scores and answers through the abstention rule. That is exact for
+  the metrics it reports, because the rule is a pure function of numbers already
+  recorded, and it cost nothing.
+- **What is therefore not true:** no run has ever applied the threshold. There is no
+  `abstention_threshold` field in `RunConfig`, no code path that skips generation when a
+  score is low, and consequently **`promoted.yaml` cannot adopt DEC-068 without recording
+  a configuration that has never run.**
+- **What reconstruction cannot show, even in principle:** the reconstruction assumes
+  abstaining produces the standard refusal and nothing else changes. A real
+  implementation also **skips the generation call**, which changes cost per query and p95
+  latency — both of them favourably, and neither of them measured. It would also need a
+  decision about what the user sees, which is a product question this project has not
+  asked.
+- **Decided by:** implementing the field and running it on `dev` + `unanswerable` at
+  Tier 2 (~$0.05, ~8 minutes), then confirming the reconstructed numbers reproduce. If
+  they do not, the reconstruction has a bug and EXP-0038's curve is wrong.
+- **Why it was not done here:** P2-14's experiment count is four and this would be a
+  fifth. The curve, not the implementation, is what the story asks for.

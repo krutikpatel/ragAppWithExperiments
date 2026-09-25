@@ -445,7 +445,10 @@ rag/
                     rrf_fuse — a single-query transform skips it and keeps its own scores),
                     toy.py (smoke tests only; toy_llm_rewrite puts a
                     fake non-deterministic LLM call inside retrieval for the P2-03 test)
-  eval/             qrels.py (binary document-level qrels + alignment check),
+  eval/             abstention.py (P2-14: the false-answer / false-refusal trade-off curve,
+                    reconstructed from stored per-question scores and answers — the
+                    threshold is never run, it is replayed, DEC-068/OQ-046),
+                    qrels.py (binary document-level qrels + alignment check),
                     retrieval_metrics.py (strict/loose recall, nDCG, subset MRR),
                     generation_metrics.py (citations, refusal — no LLM calls),
                     steps.py (procedural step coverage), slices.py (P0-08),
@@ -454,7 +457,13 @@ rag/
                     family, matched from a run row's judge/generator/prompt provenance;
                     labels every delta significant / within judge noise / no MDD
                     measured; rag diff and rag compare use it (DEC-037/046/048)
-  generation/       base.py — Generator interface + OpenRouter generator;
+  generation/       base.py — Generator interface + OpenRouter generator. citation-v3
+                    parses `[doc:<id>]` AND `[doc:<id>|<quote>]`; under v2 the span form
+                    matched NOTHING, which would have read as "span citations destroy
+                    citation quality" (P2-14);
+                    grounding.py — the P2-14 self-check: a refusal is never sent to it,
+                    UNSUPPORTED is tested before SUPPORTED (the first contains the second),
+                    and a failed or unparseable check KEEPS the answer;
                     cache.py — GenerationCache, SQLite keyed on (question_id, prompt_id,
                     prompt_version, model_id, input_hash) for in-pipeline LLM calls;
                     pipeline_llm.py — PipelineLLM, the ONLY way retrieval-side code calls
@@ -497,6 +506,7 @@ rag/
                     smoke tests only. All DEC-058
 
 prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0), query_{decompose,hyde,multi,step_back}.yaml (P2-12),
+                    enforced_answer.yaml / span_answer.yaml / groundedness_check.yaml (P2-14),
                     baseline_answer.yaml (the Phase 1 control, DEC-042: numbered
                     steps, English, [doc:<id>] on every claim, NO URLs) and
                     rerank_llm.yaml (P2-10's ordering prompt),

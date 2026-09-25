@@ -701,7 +701,20 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   all, in which case the interesting question is which.
 - **Tested by:** false-answer rate on the full `unanswerable` split and false-refusal
   rate on `dev` (gold-in-context questions only, MIS-012), against EXP-0007/EXP-0006.
-- **Resolution:** _pending EXP-0039._
+- **Resolution:** **wrong on both halves, and wrong in the same direction on each.**
+  I predicted the false-answer rate would **fall** by more than 0.05 and the
+  false-refusal rate would **rise** — a trade. Measured: false answers rose
+  **0.2667 → 0.8444 (+0.578)** and false refusals fell to **exactly zero**, with the
+  system producing **no refusals at all across 145 questions on both splits**.
+  My reasoning was that naming refusal as the explicit fallback "should push behaviour
+  toward refusing". It pushed the opposite way, because the *other* instruction in the
+  same prompt — cite every step — is easier to satisfy by describing a document than by
+  declining: *"1. The provided articles cover currency changes for Wix products, not
+  Squarespace."* I treated two instructions in one prompt as additive when they compete,
+  and the cheaper one won.
+  I did write that I expected the two numbers to move by dissimilar amounts and that
+  "the interesting question is which". They did move dissimilarly, in directions that
+  were not among the options I allowed for. `run_20260925_205710_eb8f`.
 
 ## H-028 — Span citations are frequently unfaithful, and that is the finding
 - **Date written:** 2026-09-25, before EXP-0040 ran
@@ -719,7 +732,22 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   document id, which is the worse outcome and the more useful thing to know.
 - **Tested by:** `span_support` on `dev` (EXP-0040) and citation precision/recall
   against EXP-0006.
-- **Resolution:** _pending EXP-0040._
+- **Resolution:** **first half right, second half wrong, and the first half is the
+  finding.**
+  `span_support` came in at **0.7964** on dev — below the 0.80 I named, and **0.7429** on
+  `unanswerable`. Roughly **one quoted span in five is not in the document it is
+  attributed to**, at 4.87 spans per answer. My reasoning held exactly: every prior
+  parser in this project found models reformatting what they were told to reproduce
+  verbatim, and this is the fourth instance.
+  The second half was **wrong**. I predicted document-level citation precision would
+  stay inside its MDD of 0.080 because "naming the right article is an easier task than
+  quoting it". It fell **0.1102**, well outside. Asking for quotes did not leave document
+  selection alone; it degraded it, along with step coverage (0.193 → 0.019, the lowest in
+  the project). I underestimated how much a citation *format* reshapes the entire answer
+  rather than just its citations.
+  I also wrote that a low support rate "means span citations look more rigorous while
+  being less verifiable than a bare document id, which is the worse outcome and the more
+  useful thing to know." That is what happened. `run_20260925_210039_c048`.
 
 ## H-029 — The self-check rejects too few answers to matter, at 4.6 s each
 - **Date written:** 2026-09-25, before EXP-0041 ran
@@ -738,7 +766,24 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   thin basis, and the full split may behave nothing like it.
 - **Tested by:** false-answer rate on `unanswerable`, `grounding_rejection_rate`,
   false-refusal contribution on `dev`, and `mean_check_ms`.
-- **Resolution:** _pending EXP-0041._
+- **Resolution:** **both numbers correct, the reasoning correct, and one cost I failed
+  to price.**
+  I predicted the false-answer rate would fall by **less than 0.10** — it fell **0.0444**
+  — and the dev rejection rate would be **under 0.20** — it was **0.1200**. The mechanism
+  I named held too: a model asked whether its own family's output is grounded in a
+  context retrieved to look relevant is poorly placed to answer, and the probe
+  observation that drove the hypothesis (an answered `unanswerable` question judged
+  SUPPORTED) recurred at scale — the check caught **2 of the 12** false answers the
+  control produced.
+  What I did not predict is the **false-refusal cost: +0.0913, three times the control's
+  entire false-refusal rate.** Of 12 dev answers it rejected, **6 had the gold document
+  in context.** I priced this technique's latency (4,600 ms, measured in advance) and its
+  money ($0.0055/100q) and never asked what it would cost in *quality* — which turned
+  out to be the number that decides it. Being right about the headline while missing the
+  deciding cost is its own kind of miss.
+  The verdict is cleaner than the hypothesis: it is dominated on **both** axes by
+  EXP-0038's free threshold (0.1333 / 0.0299 against 0.2222 / 0.1212).
+  `run_20260925_211103_1e43`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

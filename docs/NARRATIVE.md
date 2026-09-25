@@ -507,6 +507,95 @@ have said something about a model.
 And it cost the most of anything here: **$0.00605 a query, about fifteen thousand times
 the control**, with 31 transient retries against Cohere's one or two.
 
+### Grounding: four ways to stop the system answering what it cannot (EXP-0038 to EXP-0041)
+
+Axis 7 is the one that matters commercially. Everything before it asked whether the right
+article was found; this one asks what the system does when there is no right article. The
+corpus cannot answer 45 of the questions put to it, and the Phase 1 control answered
+**27%** of them anyway.
+
+That baseline number took a correction before the axis could start. The ledger said 42%,
+because the row was written by a refusal detector that missed the model's curly
+apostrophe — a bug fixed months earlier by DEC-045 for all *future* runs, with the
+affected historical numbers left standing. Recounting the stored answers put the real
+figure at **0.2667**. A stale row does not look stale; it looks like a measurement, and
+the next story anchors to it.
+
+**The free win came from the cheapest possible mechanism (EXP-0038).** Before calling the
+generator at all, look at the top retrieval score; if it is below a threshold, decline.
+No model call, no latency, and — because per-question scores are recorded on every row —
+**every threshold could be evaluated exactly from two runs already on disk, for nothing.**
+
+The curve is the deliverable, not a point on it:
+
+| Threshold | False answers | False refusals | Questions still answered |
+|---|---|---|---|
+| none | 0.2667 | 0.0299 | 93% |
+| **0.575** | **0.1333** | **0.0299** | **93%** |
+| 0.625 | 0.0667 | 0.1045 | 85% |
+| 0.750 | 0.0000 | 0.5224 | 43% |
+
+At 0.575 the false-answer rate **halves and nothing is paid for it**: no false refusals,
+no questions lost. Every unanswerable question it newly declines scored below every
+answerable question's top score. Past that the trade turns steep — the next halving costs
+three and a half times the false refusals — and eliminating false answers entirely would
+mean declining more than half the questions the system can actually answer.
+
+That became the operating point, on the reasoning that for a support assistant a false
+answer is worse than a false refusal and not symmetrically so. A refused user goes to a
+human and still gets a correct answer; an over-answered user changes a setting on a live
+site on the strength of a confident, cited paragraph that is wrong. Because the system
+cites its sources, a wrong answer arrives wearing the appearance of evidence. But "worse"
+is not "worth any price", which is why the point sits at the last free spot on the curve
+rather than deeper in.
+
+**The two citation experiments went spectacularly the wrong way (EXP-0039, EXP-0040).**
+The obvious lever on grounding is to demand citations harder. One prompt made a citation
+a precondition for writing a step; another required the model to quote the exact words it
+relied on. Both **tripled** the false-answer rate — 0.2667 to **0.8444** and **0.8889** —
+and drove refusals to **zero across 145 questions**.
+
+The mechanism is worth stating carefully, because it generalises. Told that every step
+must carry a citation, the model does not refuse more carefully. It writes a numbered,
+cited sentence *about* a document: *"1. The provided articles cover currency changes for
+Wix products, not Squarespace."* That is cited, formatted, confident, and not an answer to
+the question — and every metric that counts refusals scores it as an answer, as would a
+user. **A citation requirement is a formatting requirement, and a model can satisfy it
+without being grounded.** Step coverage measured the same thing from the other side: it
+fell from 0.193 to 0.033 and 0.019, the two lowest figures in the project. The answers had
+stopped being procedures and become descriptions of sources.
+
+Span-level citation added a second finding. Its whole appeal is that a quote is checkable
+where a document id is not — so I checked, and **one quoted span in five does not appear
+in the document it is attributed to**. Support was 0.796 on answerable questions and 0.743
+on unanswerable ones. The technique produces a verifiable artifact and then fails its own
+verification 20% of the time, while document-level citation precision falls 0.110 as well.
+A reader who trusts the quotes ends up worse informed than one who only had document ids.
+
+**The self-check was beaten by the free option (EXP-0041).** A second model — from a
+different family, deliberately, so it was not grading its own lineage — read each answer
+against its context and replaced unsupported ones with a refusal. It worked mechanically:
+zero unparseable verdicts, zero failed calls, every existing refusal short-circuited
+without a call. It reduced false answers from 0.2667 to 0.2222 and raised false refusals
+from 0.0299 to 0.1212, at **4.6 seconds per answered question**. Of the twelve answers it
+rejected, **six had the gold document sitting in the context**. It rejects about as much
+good work as bad — and the free threshold beats it on **both** axes at once.
+
+**What the axis cost in instrument failures is the part I would tell another team.**
+Three of the four techniques were measured through a broken instrument before they were
+measured correctly. The stale detector version put the target 15.6 points off. The
+citation parser matched span-form citations as *nothing*, so the span experiment's first
+reading was "zero citations, every question" — a finding that would have been entirely an
+artifact. And the refusal detector's rule of "a refusal has no numbered steps", calibrated
+on a prompt whose refusals are bare sentences, inverted under prompts that *demand*
+numbered steps: a refusal written as "1. The provided articles do not cover this" was
+scored as an answer, and one experiment's false-answer rate read a perfect 1.0000.
+
+Each was caught by the same reflex — a number too extreme to believe, checked against the
+raw output. **A generation metric is calibrated against a prompt, and this was the one
+axis whose entire purpose was changing the prompt.**
+
+
 ### Query transformation: four ways to ask again, and a rule about fusing (EXP-0031 to EXP-0034)
 
 Axis 4 changes the question rather than the index. Four techniques, eight runs, and the

@@ -170,10 +170,10 @@ def test_no_gold_gives_no_recall_rather_than_zero():
 
 # --- DEC-045: refusal-lexical-v2 ------------------------------------------------
 
-def test_refusal_detector_version_is_v2():
+def test_refusal_detector_version_is_v3():
     from rag.eval.generation_metrics import REFUSAL_DETECTOR_VERSION
 
-    assert REFUSAL_DETECTOR_VERSION == "refusal-lexical-v2"
+    assert REFUSAL_DETECTOR_VERSION == "refusal-lexical-v3"
 
 
 def test_curly_apostrophes_are_normalised():

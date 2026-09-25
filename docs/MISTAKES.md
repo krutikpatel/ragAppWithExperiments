@@ -187,6 +187,13 @@ Derived from the prevention rules below. Run through it and say in chat that you
     the next story anchors to it. Where the raw material is stored the recount is free.
     (MIS-037, and DEC-045 which fixed the detector without restating its numbers)
 
+48. **A lexical metric is calibrated against a prompt. When the prompt changes,
+    re-validate the metric on the new output before reporting anything computed from
+    it.** The refusal detector's "no numbered steps" rule was correct for the control
+    prompt and inverted under a prompt that demands numbered steps. Treat an extreme
+    value — 0/45, 45/45 — as a suspected instrument failure until the raw output says
+    otherwise. (MIS-038)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1283,3 +1290,46 @@ Derived from the prevention rules below. Run through it and say in chat that you
   recount is free; where it is not, the row gets a note saying which detector version
   produced it and that it is not comparable across the boundary.
 - **Added to preflight:** yes — item 47.
+
+## MIS-038 — The refusal detector was calibrated on one prompt and used across a prompt change
+- **Date:** 2026-09-25
+- **Severity:** High — would have produced two false headline findings in Axis 7
+- **What happened:** `refusal-lexical-v2` classified an answer as a refusal only if it
+  contained **no numbered steps anywhere**. That rule was calibrated on
+  `baseline_answer@v1`, whose refusals are bare sentences and whose hedged answers put
+  their caveat after three or more steps (DEC-045 measured exactly that).
+  **Axis 7 changes that prompt.** `enforced_answer@v1` and `span_answer@v1` both demand
+  a numbered list, so the model writes its refusal *as step one* — `"1. The provided
+  articles do not cover this. [doc:65699c31…|The currency you select…]"` — and v2 scored
+  every one of those as an **answer**.
+- **What it would have produced:** EXP-0040's false-answer rate on `unanswerable` read
+  **1.0000** — the system apparently answering every single unanswerable question. The
+  write-up would have been "span-level citation destroys refusal behaviour", which is
+  false.
+- **How it was caught:** the number was too extreme to believe. A refusal rate of
+  exactly 0/45 against a baseline of 33/45 is not a result, it is a broken instrument,
+  and reading the raw answers took two minutes.
+- **Root cause:** a metric's calibration is a property of **the metric and the input
+  distribution together**. I carried a detector across the one axis in the project whose
+  entire purpose is changing the prompt that produces its input. Preflight 21 says to
+  test every parser of model output on stored model output; I did that when the detector
+  was built (DEC-045) and did not redo it when the output changed.
+- **Impact:** none reported — caught before any write-up. The runs are VALID; it was the
+  metric that was wrong, so they are recounted rather than voided.
+- **Fix applied:** `refusal-lexical-v3` strips list markers before reading the opening
+  window and changes the guard from "no numbered steps" to "**at most one** numbered
+  step". Two or more steps is still not a refusal, which keeps the hedged-answer
+  distinction v2 existed to draw. Validated at **100% agreement with v2 on the 45
+  hand-labelled answers** of DEC-045; across the three Tier 2 control runs it
+  reclassifies exactly **one** answer, and correctly — `"1. The provided articles do not
+  cover this specific error message…"`, a refusal v2 missed for being numbered.
+- **The finding underneath survived the fix, which is why the fix mattered.** Recounted
+  under v3 the citation prompts are still far worse than the control (0.8444 and 0.8889
+  against 0.2667) — but that is now a measurement of behaviour rather than an artifact
+  of formatting, and the difference between those two readings is the entire value of
+  having checked.
+- **Prevention rule:** **a lexical metric is calibrated against a prompt. When the
+  prompt changes, re-validate the metric on the new output before reporting anything
+  computed from it** — and treat an extreme value (0/45, 45/45) as a suspected
+  instrument failure until the raw output says otherwise.
+- **Added to preflight:** yes — item 48.

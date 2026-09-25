@@ -17,7 +17,7 @@ from typing import Any
 
 from rag.eval.steps import step_coverage
 
-REFUSAL_DETECTOR_VERSION = "refusal-lexical-v2"
+REFUSAL_DETECTOR_VERSION = "refusal-lexical-v3"
 
 # Phrases a grounded system uses when it declines. Lexical on purpose: refusal rate
 # has to be computable in Tier 1 cost terms and be auditable line by line. It is a
@@ -57,6 +57,9 @@ _REFUSAL_PATTERNS = [
 _REFUSAL = re.compile("|".join(_REFUSAL_PATTERNS), re.IGNORECASE)
 _APOSTROPHES = str.maketrans({"\u2019": "'", "\u2018": "'", "\u02bc": "'"})
 _NUMBERED_STEP = re.compile(r"^[ \t]*\d+[.)]\s+\S", re.MULTILINE)
+# v3 (P2-14, MIS-038): list markers are stripped before the opening window is read, so a
+# refusal written AS a numbered step is still seen as a refusal.
+_LIST_MARKER = re.compile(r"^[ \t]*(?:\d+[.)]|[-*\u2022])\s+", re.MULTILINE)
 
 # How far into the answer a refusal phrase may sit and still count as declining.
 REFUSAL_WINDOW = 300
@@ -140,12 +143,25 @@ def span_support(
 
 
 def is_refusal(answer: str) -> bool:
-    """Whether the answer declines to answer: a refusal phrase in its opening, and no
-    numbered steps anywhere. See `REFUSAL_DETECTOR_VERSION`."""
+    """Whether the answer declines to answer: a refusal phrase in its opening, and at
+    most one numbered step. See `REFUSAL_DETECTOR_VERSION`.
+
+    v2 required **no** numbered steps anywhere. That rule was calibrated on
+    `baseline_answer@v1`, whose refusals are bare sentences — and it inverts under a
+    prompt that *demands* numbered steps, where the model writes "1. The provided
+    articles do not cover this." and v2 scores it as an answer. Axis 7 changes exactly
+    that prompt, so v3 strips list markers before reading the opening window and
+    switches the guard from "no steps" to "at most one step" (MIS-038).
+
+    Two or more steps is still not a refusal: a caveat after a procedure is a hedged
+    answer, which is the distinction v2 existed to draw and v3 keeps. Validated at 100%
+    agreement with v2 on the 45 hand-labelled answers of DEC-045; across the three
+    Tier 2 control runs it reclassifies exactly one answer, correctly.
+    """
     text = (answer or "").translate(_APOSTROPHES)
-    if _NUMBERED_STEP.search(text):
+    if len(_NUMBERED_STEP.findall(text)) >= 2:
         return False
-    return bool(_REFUSAL.search(text[:REFUSAL_WINDOW]))
+    return bool(_REFUSAL.search(_LIST_MARKER.sub("", text)[:REFUSAL_WINDOW]))
 
 
 # P1-05: the generator must not write links — they are rendered from the doc store's

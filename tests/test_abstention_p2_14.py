@@ -112,7 +112,7 @@ def test_format_curve_states_the_detector_and_the_sample_sizes():
     """A curve without its n is a picture, not a measurement."""
     text = format_curve(sweep({"a": row(0.9, ANSWER, 1.0)},
                               {"u": row(0.5, ANSWER, None)}, [0.0, 0.7]))
-    assert "refusal-lexical-v2" in text
+    assert "refusal-lexical-v3" in text
     assert "n = 1 unanswerable, 1 answerable" in text
 
 
@@ -257,3 +257,49 @@ def test_span_support_is_a_dimension_of_generation_not_retrieval():
 
     assert "grounding_check" in DIMENSIONS["generation"]
     assert "grounding_check" not in RunConfig.TIER1_FIELDS
+
+
+# --- MIS-038: the detector was prompt-dependent ---------------------------------
+
+def test_a_refusal_written_as_a_numbered_step_is_a_refusal():
+    """MIS-038. v2 required NO numbered steps, a rule calibrated on a prompt whose
+    refusals are bare sentences. Axis 7's prompts demand numbered steps, so the model
+    writes '1. The provided articles do not cover this.' and v2 scored it as an ANSWER
+    — which would have read as 'citation enforcement makes the system answer more'."""
+    from rag.eval.generation_metrics import REFUSAL_DETECTOR_VERSION, is_refusal
+
+    assert REFUSAL_DETECTOR_VERSION == "refusal-lexical-v3"
+    assert is_refusal("1. The provided articles do not cover this.")
+    assert is_refusal("1) The provided articles do not cover this. [doc:abc12345|quote]")
+    assert is_refusal("- The provided articles do not cover this.")
+    assert is_refusal("The provided articles do not cover this.")
+
+
+def test_a_hedged_procedure_is_still_not_a_refusal():
+    """The distinction v2 existed to draw, kept. A caveat after a real procedure is a
+    hedged answer; scoring it as a refusal would make every careful answer a refusal."""
+    from rag.eval.generation_metrics import is_refusal
+
+    hedged = (
+        "1. Open Settings. [doc:abc12345]\n"
+        "2. Click Domains. [doc:abc12345]\n"
+        "3. Click Save. [doc:abc12345]\n"
+        "Note: the provided articles do not give a timeline for propagation."
+    )
+    assert not is_refusal(hedged)
+
+
+def test_v3_agrees_with_the_hand_labels_it_inherited():
+    """DEC-045's 45 hand-labelled answers. A detector change that moved these would be
+    changing the definition, not fixing a bug."""
+    import yaml
+
+    from rag.eval.generation_metrics import is_refusal
+    from rag.paths import REPO_ROOT
+
+    path = REPO_ROOT / "data" / "authored" / "refusal_labels_v1.yaml"
+    if not path.exists():
+        pytest.skip("hand-labelled refusal set not present")
+    rows = yaml.safe_load(path.read_text())["rows"]
+    wrong = [r for r in rows if is_refusal(r["answer"]) != bool(r["refused"])]
+    assert wrong == [], f"v3 disagrees with {len(wrong)} hand labels: {wrong[:2]}"

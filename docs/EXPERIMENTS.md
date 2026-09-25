@@ -54,6 +54,10 @@ produced one.
 | EXP-0032 | `run_20260925_064215_4033` | 2026-09-25 | query_transform | **HyDE** — a generated 120-word help passage **replaces** the question as the query (Gao et al. 2022); one query, so no fusion. 200/200 generated, 0 fallbacks. vs promoted: Δ **+0.0150**, CI [−0.050, +0.080], p = 0.754 — **no measurable difference**, but the only positive direction in the axis. **multi-doc 0.350 → 0.450 (+0.100, p=0.35, 7 gained / 3 lost) — the largest multi-document movement any technique in this project has produced, and not significant at n=40** (OQ-045). Highest churn in the axis: 43 of 200 questions changed outcome to net +0.015. single-doc flat (p=1.000) against a 0.8125 start. **Not promoted.** $0.00035 warm | 0.735 | 0.830 | 0.653 | 0.578 (n=160) | — | — | 0.0000018 | VALID | [→](experiments/EXP-0032.md) |
 | EXP-0033 | `run_20260925_070609_71df` | 2026-09-25 | query_transform | **multi-query expansion** — 3 paraphrases + the original, RRF fused. 2.985 generated/question, 0 fallbacks. vs promoted: **Δ exactly +0.0000, p = 1.000 (12 gained / 12 lost)** — the cleanest null in the axis. But **q_len:short −0.0946, p = 0.0160, 7 lost / 0 gained** — the only slice in the axis with an empty side: a short question is already near-keyword, and paraphrases pull the fusion off the literal match. Each rewrite found **16.8 documents the original did not**, falsifying the premise that a meaning-preserving paraphrase retrieves the same ranking. **Not promoted.** $0.00030 warm | 0.720 | 0.845 | 0.641 | 0.567 (n=160) | — | — | 0.0000015 | VALID | [→](experiments/EXP-0033.md) |
 | EXP-0034 | `run_20260925_074024_9154` | 2026-09-25 | query_transform | **step-back prompting** — one general question + the original, RRF fused (Zheng et al. 2023). vs promoted: **Δ −0.0750, CI [−0.130, −0.020], p = 0.0169 — significant and negative** (10 gained / 25 lost), the worst result in Axis 4. long questions −0.129 (**p=0.037**); multi-doc 0.350 → 0.250. **Measured defect: 46 of 200 step-back questions (23.0%) invented a Wix product the original never named** — *"How to make the published changes draft?"* → *"How does **Wix Bookings** handle published changes draft?"*. **But only 6 of those 46 lost the gold, so it explains ~a quarter of the 25 losses**; the rest is the axis's fusion problem — the general question found **34.7 new documents** and RRF then ranks 'best overview' above 'good specific'. **Significant negative; not promoted.** $0.00014 warm | 0.645 | 0.780 | 0.584 | 0.512 (n=160) | — | — | 0.0000007 | VALID | [→](experiments/EXP-0034.md) |
+| EXP-0038 | _(no run — reconstructed)_ | 2026-09-25 | generation | **abstention threshold sweep**, the P2-14 deliverable. Rebuilt exactly from EXP-0006 and EXP-0007's stored per-question scores and answers — **$0.00**, same argument as the top-k sweep (DEC-061). Abstain before generating when top-1 retrieval score < T. Signal separates answerable from unanswerable at **AUC 0.712**. **At T=0.575 the false-answer rate HALVES, 0.2667 → 0.1333, with false-refusal unchanged at 0.0299 and no dev question lost — the only free move in the phase.** Past it the trade is steep: 0.0667 costs 3.5x the false refusals; 0.0000 costs 52%. Caveat stated: the threshold is selected on the data it is evaluated on, so 0.1333 is optimistic until P2-18 | — | — | — | — | — | — | 0.0 | VALID | [→](experiments/EXP-0038.md) |
+| EXP-0039 | `run_20260925_204905_8e9a` + `…205710_eb8f` | 2026-09-25 | generation | **citation enforcement** — every step must carry a citation or be dropped (`enforced_answer@v1`), dev + full unanswerable, no judge. **False-answer rate 0.2667 → 0.8444 (+0.578) — the largest regression on the axis's hard target in the phase.** The system **stopped refusing entirely**: 0 refusals in 145 questions. Step coverage **0.193 → 0.033**. Citation precision −0.056, recall +0.047, cited-nothing → 0.000. Mechanism: told to cite every step, the model writes a numbered cited statement *about* the articles instead of refusing — *"1. The provided articles cover currency changes for Wix products, not Squarespace…"*. **Negative; not promoted.** $0.0374 | — | — | — | — | — | — | 0.00037 | VALID | [→](experiments/EXP-0039.md) |
+| EXP-0040 | `run_20260925_210039_c048` + `…210747_6539` | 2026-09-25 | generation | **span-level vs chunk-level citation** — quote the exact words, not just the id (`span_answer@v1`). **span_support 0.7964 on dev, 0.7429 on unanswerable: one quoted span in five is NOT in the document it names**, at 4.87 spans per answer. Citation precision **0.546 → 0.435 (−0.110)**, step coverage **0.193 → 0.019** (lowest in the project), false-answer 0.2667 → 0.8889. Needed **citation-v3** to run at all — under v2 the span form matched nothing and every citation metric would have read zero. **Span citation delivers a verifiable artifact and fails its own verification 1 time in 5. Negative; not promoted.** $0.0428 | — | — | — | — | — | — | 0.00043 | VALID | [→](experiments/EXP-0040.md) |
+| EXP-0041 | `run_20260925_211103_1e43` + `…212428_6bc5` | 2026-09-25 | generation | **groundedness self-check** — a second cross-family call (`gpt-oss-20b`, DEC-067) that replaces an unsupported answer with a refusal. **False-answer 0.2667 → 0.2222 (−0.044) at a false-refusal cost of 0.0299 → 0.1212 (+0.091)** — it rejects roughly as much good work as bad (12 dev rejections, 6 of them on questions whose gold was in context). Costs **4,600 ms per answered question** and $0.0055/100q. 0 unparseable, 0 failed, all 41 refusals short-circuited without a call. **Dominated on BOTH axes by the free threshold of EXP-0038 (0.1333 / 0.0299). Not promoted.** $0.0409 | — | — | — | — | — | — | 0.00041 | VALID | [→](experiments/EXP-0041.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -406,6 +410,57 @@ it and no revert is needed.
 **Honest gap:** Phase 2 definition-of-done item 9 says the revisit pass "has been run and
 its composition verdict recorded". The verdict is recorded. The pass was not run.
 
+
+## Axis 7 scorecard — generation and grounding (P2-14, EXP-0038–0041) — CLOSED
+
+Tier 2 on the `dev` subsample **plus the full 45-question `unanswerable` set** every run,
+judge skipped (DEC-063), detector `refusal-lexical-v3` on **both arms of every
+comparison** (MIS-038). **Axis spend: $0.1211** — EXP-0038 cost nothing.
+
+The hard target is the Phase 1 false-answer rate on `unanswerable`, which is **0.2667**
+and not the 0.4222 printed in EXP-0007's row; that row was written by a detector that hid
+7 refusals of 45 (MIS-037).
+
+| EXP | Technique | False-answer ↓ | False-refusal ↓ | Cost / query | Verdict |
+|---|---|---|---|---|---|
+| — | **control** (`baseline_answer@v1`) | 0.2667 | 0.0299 | — | promoted |
+| **0038** | **abstention threshold T=0.575** | **0.1333** | **0.0299** | **$0, 0 ms** | **free; the only positive result** |
+| 0041 | groundedness self-check | 0.2222 | 0.1212 | $0.000055, **4,600 ms** | dominated on both axes |
+| 0039 | citation enforcement | **0.8444** | 0.0000 | — | **severe regression** |
+| 0040 | span-level citation | **0.8889** | 0.0000 | — | **severe regression**; span support 0.796 |
+
+What the axis established:
+
+1. **Hardening the citation requirement made the system answer questions it cannot
+   answer, three times more often.** Both citation prompts drove refusals to zero across
+   145 questions. Told that every step needs a citation, the model finds it easier to
+   write a cited sentence *describing* a document than to decline — *"1. The provided
+   articles cover currency changes for Wix products, not Squarespace."* That is cited,
+   formatted, confident, and not an answer. **A citation requirement is not a grounding
+   mechanism; it is a formatting requirement, and the model can satisfy it without being
+   grounded.**
+2. **Both citation prompts destroyed step coverage** — 0.193 → 0.033 and → 0.019, the
+   two lowest values in the project. Measured from the other side, this is the same
+   finding: the answers stopped being procedures and became descriptions of sources.
+3. **Span-level citation fails its own verification once in five.** `span_support`
+   0.7964. The technique's whole appeal is that a quote is checkable where an id is not —
+   and the check fails 20% of the time, while document-level precision *also* falls
+   0.110. A reader who trusts the quotes ends up worse informed than one who had only
+   document ids.
+4. **The cheapest technique won, and it was free.** A retrieval-score threshold needs no
+   model call and no latency, and at T=0.575 it halves false answers at zero cost in
+   false refusals. The self-check — the only technique here that costs a second LLM call
+   — is beaten on **both** axes simultaneously by a number already sitting in the results
+   store.
+5. **Three of the four techniques were measured through a broken instrument first.**
+   MIS-037 (a stale detector version left the target wrong by 15.6 points), MIS-038 (the
+   detector inverted under a prompt that demands numbered steps) and `citation-v2`'s
+   blindness to the span form would each have produced a confident false headline. The
+   axis's real lesson may be that **a generation metric is calibrated against a prompt,
+   and this is the one axis whose purpose is changing the prompt.**
+
+**Axis 7 verdict: one winner, and it is not an LLM technique.** `promoted.yaml` is
+unchanged pending the operating-point decision (DEC-068).
 
 ## Axis 4 scorecard — query transformation (P2-12, EXP-0031–0034) — CLOSED
 
@@ -809,6 +864,27 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   recorded as *neither composed nor cancelled — there were no winners to compose*, and
   that is itself the finding: the classic error of assuming one-factor winners stack was
   unavailable to us, because after six axes not one factor has won.
+
+- **EXP-0039 / EXP-0040 — citation enforcement and span-level citation.** On the full
+  `unanswerable` set, false-answer rate **0.2667 → 0.8444** and **→ 0.8889**; on `dev`,
+  step coverage **0.193 → 0.033** and **→ 0.019**; refusals **zero out of 145 questions**
+  under both. Cost they would have added: nothing per query — these are prompt changes.
+  **Decision: control retained; neither promoted.**
+  The mechanism is the finding and it generalises past this corpus. Told that every step
+  must carry a citation, the model does not refuse more carefully — it writes a numbered,
+  cited sentence *about* a document and stops answering the question. **A citation
+  requirement is a formatting requirement, and a model can satisfy it without being
+  grounded.** Span-level citation adds a verifiable artifact and then fails the
+  verification: **20% of quoted spans do not appear in the document they are attributed
+  to**, while document-level citation precision falls 0.110 as well.
+- **EXP-0041 — groundedness self-check.** False-answer **0.2667 → 0.2222** at a
+  false-refusal cost of **0.0299 → 0.1212**, plus **4,600 ms per answered question** and
+  $0.0055 per 100 questions. Of 12 dev answers it rejected, **6 had the gold document in
+  context** — it rejects about as much good work as bad. **Decision: not promoted, and
+  the reason is unusually clean: it is dominated on both axes of its own trade-off by
+  EXP-0038's free retrieval-score threshold** (0.1333 false answers at 0.0299 false
+  refusals, no call, no latency). Zero unparseable verdicts and zero failed calls across
+  both splits, so this is a judgment failure and not a plumbing one.
 
 ## Phase 1 scorecard — the controls (P1-08)
 

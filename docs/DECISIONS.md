@@ -2605,3 +2605,57 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** the rejection rate on the full split is near zero (the check is doing
   nothing for its latency) or very high (it is rejecting good answers, and its
   false-refusal contribution is the thing to look at).
+
+## DEC-068 — The abstention operating point is a retrieval-score threshold of 0.575
+- **Date:** 2026-09-25
+- **Decided by:** Krutik (proposed by Claude, from the EXP-0038 curve)
+- **Status:** Active
+- **Context:** P2-14 requires an operating point chosen **from the trade-off curve**, with
+  the reasoning about which error is worse for an enterprise support assistant recorded
+  alongside it. The curve is EXP-0038, reconstructed from two existing runs for $0.
+- **Which error is worse, and why.** For an assistant whose job is pointing a user at the
+  right help article, a **false answer is worse than a false refusal**, and not
+  symmetrically. A false refusal routes the user to a human agent: it costs money and
+  some goodwill, and the user still gets a correct answer. A false answer sends someone
+  to change a setting on a live site on the strength of a confident, cited paragraph that
+  is wrong — and because this system cites its sources, a wrong answer arrives wearing
+  the appearance of evidence. The asymmetry is not just in the outcome but in
+  *recoverability*: a refused user knows they have not been helped, an over-answered one
+  does not.
+- **What that implies, and where it stops.** It implies buying false-answer reductions
+  wherever they are cheap — but "worse" is not "worth any price". At T = 0.625 the false
+  answer rate quarters, and **15% of dev questions stop being answered at all**. An
+  assistant that declines one question in six is not an assistant; the support queue
+  absorbs the difference, and the user-visible failure just moves.
+- **Decision: T = 0.575.** Abstain before generating when the top-1 retrieval score is
+  below 0.575.
+
+  | | control | T = 0.575 |
+  |---|---|---|
+  | False-answer rate (`unanswerable`) | 0.2667 | **0.1333** |
+  | False-refusal rate (`dev`) | 0.0299 | **0.0299** |
+  | Dev questions answered | 0.930 | **0.930** |
+
+  **It halves the false-answer rate and costs nothing measurable** — no false refusals, no
+  dev questions lost, no LLM call, no added latency. Every unanswerable question it newly
+  declines scored below every answerable question's top-1, so nothing was traded. It is
+  chosen not because 0.1333 is a good number but because it is the last point on the curve
+  that is **free**, and the reasoning above only justifies paying past that point if the
+  payment is small. It is not: the next halving costs a **3.5x rise in false refusals**.
+- **Evidence:** EXP-0038, `run_20260913_205058_dc03` and `run_20260913_060733_6a9b`,
+  recounted under `refusal-lexical-v3`. **No quality prediction** is made for any
+  configuration not in that table.
+- **Consequences and the caveat that limits this entry.**
+  - **The threshold is selected on the same data it is evaluated on.** Tuning on `dev` is
+    permitted and declared, but `unanswerable` is being used here to *choose* the point
+    and to *report* its performance, so **0.1333 is optimistic**. This entry is a chosen
+    operating point, not a measured production number.
+  - **`promoted.yaml` is not changed by this decision.** The threshold is not implemented
+    in the pipeline — EXP-0038 evaluated it by reconstruction, not by running it — so
+    promoting it would record a configuration that has never executed. Implementing and
+    running it is the follow-up, tracked as OQ-046.
+  - It must be re-read on the held-out split in P2-18 before it is trusted. If the
+    dev-to-test gap is large on this curve, the operating point moves with it.
+- **Revisit if:** the retriever or the embedding model changes — the threshold is a raw
+  cosine score and has no meaning across a change of either; or P2-18 shows the curve
+  does not hold out of sample.
