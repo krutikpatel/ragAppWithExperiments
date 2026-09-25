@@ -2514,3 +2514,68 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** the fallback rate on a full 200-question run exceeds ~2%, or the
   step-back product-hallucination rate proves high enough to make EXP-0034 a test of the
   prompt rather than of the technique.
+
+## DEC-066 — P2-11 is priced and not bought; the composition question is unanswerable as posed
+- **Date:** 2026-09-25
+- **Decided by:** Krutik (proposed by Claude, with the estimate and the arithmetic)
+- **Status:** Active
+- **Context:** P2-11 asks for the **top 3 chunking configurations re-run under the
+  winning reranker from P2-10**, to test whether a strong reranker erases chunking
+  differences. Its premise does not survive contact with Axis 5's result.
+- **The premise failed before the runs:** **P2-10 closed with no winner** (DEC-060).
+  Three cross-encoders were measured on `dev` and the best of them, `cohere/rerank-4-fast`,
+  moved strict recall@5 from 0.7200 to **0.7300 — Δ +0.010, 95% CI [−0.055, +0.080],
+  p = 0.887** (EXP-0025). The revisit asks whether chunking differences *survive* a strong
+  reranker. A reranker that moves the metric by one point at p = 0.887 is not a strong
+  reranker on this corpus, so the question becomes "do chunking differences survive an
+  intervention that does nothing", whose answer is arithmetic rather than empirical.
+- **What was priced:** three runs — parent-document, semantic and structure-aware
+  chunking, the top 3 by multi-document strict recall@5 — each with `cohere/rerank-4-fast`
+  at 50 candidate documents. Indexes for all three are already on disk, so nothing is
+  re-embedded. **`--estimate-only`: $0.4681 each, $1.4043 for the three**, gate $2.00.
+  Configs are committed unrun as `configs/exp_0035..0037_*.yaml`.
+  A caveat that would have needed watching: the rerank estimator's search-unit
+  calibration was measured on `fixed_token`'s 309-word chunks (MIS-028), and these
+  chunkers cut very differently — parent-document is 18,884 chunks at 124 words. The
+  estimate is stable across them because 50 candidate *documents* is roughly 50
+  documents' worth of text however it is cut, but that is reasoning, not measurement, and
+  the plan was to check run 1's actual before launching runs 2 and 3.
+- **Options considered:**
+  1. Run all three with `cohere/rerank-4-fast` ($1.40). Rejected: buys a composition
+     test whose stronger arm is a measured null.
+  2. Run with `qwen/qwen3-reranker-8b` instead ($1.21/run, ~$3.63 plus a fourth run for
+     the control arm), on the argument that its depth behaviour — recall@20 0.950, the
+     highest in the project — is the property that would erase chunking differences.
+     Rejected on the same ground at 2.6x the price: its recall@5 is 0.720, *exactly* the
+     control's.
+  3. Run with `cohere/rerank-v3.5` ($0.70). Rejected: at recall@5 0.665 it is below the
+     control, and calling it "the winning reranker" in a writeup would be false.
+  4. **Price it, decline it, and record the verdict — chosen.** P2-17 explicitly provides
+     for "any axis that was priced, gated at $2, and deliberately not run, with its
+     estimate attached."
+- **The composition verdict P2-11 asks for, stated explicitly: neither. The winners did
+  not compose, partially compose, or cancel, because there were no winners to compose.**
+  Axis 1 produced no chunker that beat the control and Axis 5 produced no reranker that
+  did. Composition is a question about two positive results and this phase has none.
+  That is the finding, and it is a real one — it says the most common error in this kind
+  of programme (assuming one-factor winners stack) could not be committed here for want
+  of any one-factor winner.
+- **The story's last criterion is already satisfied, and was before it was asked.**
+  P2-11 says that if chunking differences collapse, `promoted.yaml` reverts to the
+  **simplest** chunking strategy statistically indistinguishable from the best. The
+  simplest strategy — `fixed_token` 600/100 — **is** the best: every alternative is at or
+  below it, and two are significantly below (sentence-window −0.190 at p = 0.0001,
+  structure-aware −0.055 at p = 0.0325). `promoted.yaml` already names it. No revert is
+  needed because nothing ever displaced it.
+- **Evidence:** measured, all from the results store — the four Axis 1 `dev` runs, the
+  three Axis 5 `dev` runs, EXP-0025's paired test, and the three `--estimate-only`
+  outputs. No outcome is predicted for the unrun configs.
+- **Consequences:**
+  - **Phase 2 definition-of-done item 9 — "the chunking revisit pass (P2-11) has been run
+    and its composition verdict recorded" — is NOT fully met.** The verdict is recorded;
+    the pass was not run. That gap is stated here rather than papered over by calling a
+    declined run a completed one.
+  - If a later axis produces a reranker or a chunker that actually beats the control, this
+    decision should be revisited: the configs are committed and cost $1.40 to execute.
+- **Revisit if:** any technique in Phase 2 achieves a significant positive result on
+  `dev` strict recall@5, which would give composition something to test.

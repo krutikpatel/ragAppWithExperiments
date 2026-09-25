@@ -1,0 +1,47 @@
+# ============================================================================
+# NOT RUN. Priced at $0.4681 and deliberately not bought — see DEC-066.
+# Kept, not deleted: the estimate is only checkable if the config it priced
+# still exists, and P2-11 can be executed later by running these three.
+# ============================================================================
+# EXP-0037 — structure-aware chunking under the reranker (P2-11)
+#
+# P2-11 — the revisit pass. Does the Axis 1 chunking difference survive a reranker?
+#
+# This is the ONE question P2-11 asks: a strong reranker is often said to erase the
+# differences between chunking strategies, and if that is true here it is a headline
+# finding. It only exists if the revisit is planned rather than hoped for.
+#
+# `axis: combination` because this run genuinely changes TWO dimensions against
+# promoted.yaml — the chunker and the reranker — and `combination` is the one axis
+# allowed to. It is NOT a P2-16 combination and does not count against that story's
+# 3-5 slots; see DEC-066.
+#
+# The comparison that matters is not against promoted.yaml. It is:
+#   run_20260919_014505_4c6e  (this chunker, NO reranker)
+#   run_20260923_054802_6566                      (control chunking, THIS reranker = EXP-0025)
+# and the question is whether the first gap survives in the second's presence.
+#
+# The index for this chunker is already on disk, so nothing is re-embedded.
+name: "EXP-0037 P2-11 revisit: structure-aware chunking + cohere/rerank-4-fast, dev"
+axis: combination
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: structure
+chunker_params:
+  max_words: 600
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+reranker: openrouter
+reranker_params:
+  model: cohere/rerank-4-fast
+  provider: Cohere
+rerank_candidates: 50
+doc_pooling: max
+seed: 1

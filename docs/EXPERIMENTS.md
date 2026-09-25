@@ -366,6 +366,47 @@ means more tokens to dilute, more opportunity to cite the wrong article, and mor
 money per query. Faithfulness and citation precision at k=10 or k=20 against EXP-0006
 are unmeasured, and that is the experiment worth buying here (OQ-040).
 
+## P2-11 revisit pass — priced at $1.40 and not bought (DEC-066)
+
+P2-11 asks for the top 3 chunking configurations re-run under **the winning reranker from
+P2-10**. Axis 5 closed with **no winner**, so the pass was priced, declined and recorded
+per P2-17's provision for an axis that was costed and deliberately not run.
+
+**The side-by-side table the story asks for, with the column that exists.** All on `dev`,
+strict recall@5, paired against the control (`rag compare`, 10,000 resamples):
+
+| Chunking | Without reranker | p | multi-doc | With `rerank-4-fast` |
+|---|---|---|---|---|
+| **fixed_token 600/100** (control) | **0.7200** | — | 0.350 | **0.7300** (+0.010, p=0.887) — EXP-0025 |
+| parent-document (150/600) | 0.6950 | 0.457 | 0.350 | _not bought — $0.4681_ |
+| semantic (95th pct) | 0.6750 | 0.078 | 0.300 | _not bought — $0.4681_ |
+| structure-aware | 0.6650 | **0.0325** | 0.300 | _not bought — $0.4681_ |
+| sentence-window | 0.5300 | **0.0001** | 0.250 | _excluded: 4th by multi-doc_ |
+
+**Why the right-hand column was not bought.** The revisit's question is whether chunking
+differences *survive* a strong reranker. The strongest reranker measured here moved the
+metric by **+0.010 at p = 0.887** — it is not a strong reranker on this corpus. Asking
+whether chunking differences survive an intervention that does nothing is arithmetic, not
+an experiment. The three configs are committed unrun (`exp_0035..0037`) so the estimate
+stays checkable and the pass can be executed later for $1.40.
+
+**Composition verdict, which P2-11 requires to be stated explicitly: neither composed,
+partially composed, nor cancelled — there were no winners to compose.** Axis 1 produced
+no chunker that beat the control; Axis 5 produced no reranker that beat it. Composition
+is a question about two positive results and this phase has none. The most common error
+in this kind of programme — assuming one-factor winners stack — could not be committed
+here for want of any one-factor winner.
+
+**And the tie-break rule was already satisfied.** P2-11 says that if chunking differences
+collapse, `promoted.yaml` reverts to the simplest strategy statistically indistinguishable
+from the best. The simplest strategy *is* the best: `fixed_token` 600/100 is at or above
+every alternative, two of which are significantly below it. `promoted.yaml` already names
+it and no revert is needed.
+
+**Honest gap:** Phase 2 definition-of-done item 9 says the revisit pass "has been run and
+its composition verdict recorded". The verdict is recorded. The pass was not run.
+
+
 ## Axis 4 scorecard — query transformation (P2-12, EXP-0031–0034) — CLOSED
 
 `dev` decides (DEC-055); every run is Tier 1, cache-backed and repeated warm so the
@@ -755,6 +796,19 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   (23%) named a Wix product the original never mentioned**, the model's default guess
   being "Bookings". That is a real and large failure of the (prompt, corpus) pair — and
   it explains only **6 of the 25 losses**. The rest is the axis's common failure, below.
+
+- **P2-11 — the chunking revisit pass, priced at $1.4043 and deliberately not run
+  (DEC-066).** Three configs (parent-document, semantic, structure-aware chunking, each
+  under `cohere/rerank-4-fast` at 50 candidate documents), indexes already cached so
+  nothing re-embedded, `--estimate-only` $0.4681 each, gate $2.00. **What was tried: the
+  premise.** P2-11 tests whether a *strong* reranker erases chunking differences; the
+  strongest of the three cross-encoders measured in Axis 5 moved `dev` strict recall@5 by
+  **+0.010, 95% CI [−0.055, +0.080], p = 0.887**. There is no strong reranker here for
+  chunking differences to survive. **Decision: priced, declined, configs committed unrun
+  so the estimate remains checkable.** The composition verdict the story demands is
+  recorded as *neither composed nor cancelled — there were no winners to compose*, and
+  that is itself the finding: the classic error of assuming one-factor winners stack was
+  unavailable to us, because after six axes not one factor has won.
 
 ## Phase 1 scorecard — the controls (P1-08)
 
