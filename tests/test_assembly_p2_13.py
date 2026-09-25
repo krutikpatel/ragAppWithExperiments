@@ -192,13 +192,32 @@ def test_compressor_caches_per_chunk_not_per_question(tmp_path):
 
 
 def test_extractive_check_ignores_layout_but_not_content():
-    passage = "Open  Settings.\nClick Domains."
-    assert ContextCompressor._is_extractive("Open Settings.", passage)
-    assert ContextCompressor._is_extractive("Open Settings. Click Domains.", passage)
+    passage = "Open  Settings and go.\nClick the Domains tab."
+    assert ContextCompressor._is_extractive("Open Settings and go.", passage)
+    assert ContextCompressor._is_extractive("Open Settings and go. Click the Domains tab.", passage)
     # Short fragments are skipped rather than judged; a model that returns "Save."
     # has not invented anything, it has over-trimmed, which min_keep_ratio handles.
     assert ContextCompressor._is_extractive("Save.", passage)
-    assert not ContextCompressor._is_extractive("Navigate to the domain settings.", passage)
+    assert not ContextCompressor._is_extractive("Navigate to the domain settings page now.", passage)
+
+
+def test_extractive_check_survives_the_model_reflowing_lines(tmp_path):
+    """MIS-035: the line-based version of this check compared line against line, so a
+    model that joined a multi-line passage into one line was called a rewriter. On
+    stored output that rejected 81 chunks of which only 5 were actually paraphrased."""
+    passage = (
+        "Wix Media: Adding the Right Click Protect App\n"
+        "Protect your site from right-click downloads with a custom copyright notice.\n"
+        "This is a great option if you want to prevent visitors from downloading images."
+    )
+    reflowed = (
+        "Protect your site from right-click downloads with a custom copyright notice. "
+        "This is a great option if you want to prevent visitors from downloading images."
+    )
+    assert ContextCompressor._is_extractive(reflowed, passage)
+    assert not ContextCompressor._is_extractive(
+        "You can stop people saving your pictures by turning on protection.", passage
+    )
 
 
 def test_build_compressor_refuses_an_unknown_name(tmp_path):
@@ -710,3 +729,44 @@ def test_a_failed_prefix_call_does_not_abandon_a_paid_index_build(tmp_path):
     assert out[1].context_text is None and not out[1].text.startswith("Open Settings.")
     # The successful ones still carry their prefix.
     assert out[0].text.startswith("Open Settings.\n\n")
+
+
+def test_extractive_check_disagreement_rate_on_stored_output():
+    """MIS-035 / preflight 45: exercise the check itself against every stored
+    completion and bound how often it rejects. The old line-based check rejected 81 of
+    313 non-empty outputs (26%); at that rate the fallback dominates the technique."""
+    import sqlite3
+
+    from rag.paths import GENERATION_CACHE
+
+    if not GENERATION_CACHE.exists():
+        pytest.skip("no generation cache on this machine")
+    conn = sqlite3.connect(GENERATION_CACHE)
+    rows = conn.execute(
+        "SELECT question_id, output FROM generations WHERE prompt_id = 'compress_context'"
+    ).fetchall()
+    conn.close()
+    if not rows:
+        pytest.skip("no compress_context completions recorded yet")
+
+    from rag.runner.config import load_config_file
+    from rag.runner.run import build_index
+
+    _, chunk_text = build_index(load_config_file("configs/exp_0029_compress_dev.yaml"))
+    judged = rejected = 0
+    for key, output in rows:
+        if not output.strip() or EMPTY_MARKER in output:
+            continue
+        original = chunk_text.get(key.split(":", 1)[1])
+        if not original:
+            continue
+        judged += 1
+        if not ContextCompressor._is_extractive(output, original):
+            rejected += 1
+    assert judged > 100, "too few stored outputs to bound the rate"
+    rate = rejected / judged
+    assert rate < 0.10, (
+        f"the extractive check rejects {rate:.0%} of stored model output "
+        f"({rejected}/{judged}). Above 10% the uncompressed fallback, not the "
+        "compressor, is deciding what the generator sees (MIS-035)."
+    )

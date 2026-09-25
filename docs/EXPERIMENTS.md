@@ -46,6 +46,7 @@ produced one.
 | EXP-0027 | `run_20260924_041357_ebc5` (+λ 0.5/0.7/0.9/1.0) | 2026-09-24 | assembly | **MMR diversity sweep**, λ = 0.3/0.5/0.7/0.9/1.0 over 50 candidate docs → top-5 (P2-13, DEC-062). **Monotone and monotonically harmful**: 0.335 / 0.360 / 0.570 / 0.685 / 0.715 against the control's 0.720. λ=0.3 vs promoted **Δ −0.385, CI [−0.460, −0.315], p=0.0001 (3 gained / 80 lost)**; λ=0.9 **Δ −0.035, p=0.039**. **multi-doc 0.350 → 0.000** at λ=0.3 (14 lost / 0 gained, p=0.0002) — the slice MMR exists to serve, hurt worst. λ=1.0 reproduces the control (0.715, collapse 1.107), so the machinery is verified. Collapse falls to **1.000** — perfect diversity, halved recall. Measured cause: candidate-candidate cosine spans 0.5–0.87 while relevance spans 0.173, so diversity out-leverages relevance and selects semantic outliers; and **two golds of one question are +0.095 MORE similar to each other (0.788) than to an average candidate (0.693)**, so MMR penalises the second gold hardest. **Negative; not promoted.** Whole sweep cost **$0.0005** | 0.335 | 0.440 | 0.381 | 0.415 (n=160) | — | 6454 | 0.0000004 | VALID | [→](experiments/EXP-0027.md) |
 | EXP-0028 | `run_20260925_014154_2d6b` | 2026-09-25 | assembly | **lost-in-the-middle reordering** — the five selected documents written into the prompt as rank 1, 3, 5, 4, 2 (P2-13). Tier 2, **no judge (DEC-063)**. **Retrieval columns are deliberately blank: this technique is a permutation of the same chunks and cannot change a retrieval metric** (asserted in tests; P2-13 forbids reporting one). Deterministic generation metrics, paired test vs `run_20260913_205058_dc03`: citation precision 0.525→0.513 (Δ −0.021, p=0.558), citation recall Δ −0.005 **p=1.000**, step coverage Δ −0.008 (p=0.792), refusal Δ −0.010 p=1.000 — **every metric inside its MDD, nothing significant on any slice** (lowest p anywhere 0.106). The finding is the churn: **15 questions changed citations, and for 13 of them the retrieved set AND ranking were identical** — 6 up, 7 down, net zero. One question (`3f42c8a9`) flipped to the **opposite factual claim** on identical evidence. Measured cause of the null: the assembled context is **1,712 words ≈ 2,174 tokens**, below the **2,700-token floor** of the range Liu et al. 2023 measured the effect over. **No measurable difference; not promoted.** $0.0278 vs $0.0341 est | — | — | — | — | — | 5441 | 0.00034 | VALID | [→](experiments/EXP-0028.md) |
 | EXP-0029 | `run_20260925_015243_dd41` | 2026-09-25 | assembly | **contextual compression** attempt 1 — died on call ~222 of ~500 with `EmptyGenerationError`: `openai/gpt-oss-20b` returned `finish_reason='length'`, `completion_tokens=1000`, **`reasoning_tokens=1000`** — the whole budget spent reasoning before any output. **221 calls had succeeded (~$0.009) and all are in the generation cache, so nothing was wasted.** Two faults: the model was licensed on a probe of a *different prompt* (DEC-064 tested `contextual_chunk`, not `compress_context`), and a per-chunk failure was allowed to VOID a 100-question run. The same input **succeeds on retry** (123 reasoning tokens) — the failure is non-deterministic at temperature 0. See MIS-034 | — | — | — | — | — | — | — | VOID (MIS-034) | [→](experiments/EXP-0029.md) |
+| EXP-0029 | `run_20260925_025103_28d7` | 2026-09-25 | assembly | **contextual compression** — each retrieved chunk trimmed by `gpt-oss-20b` to the sentences bearing on the question (P2-13, DEC-063/064). Tier 2, no judge. **Retrieval columns blank by construction: compression runs after the document walk.** Prompt went **1,712 → 912 words (reduction 0.467)** and **5.00 → 3.13 documents**; 187 of 500 chunks dropped entirely. Paired test: **citation recall 0.598 → 0.522, Δ −0.0883, CI [−0.168, −0.010], p = 0.0358, MDD 0.040 — significant and negative**, the first significant deterministic result in Axis 6. Citation precision −0.051 (p=0.21), **step coverage +0.019 (p=0.73)**, refusal **Δ 0.0000 p=1.000**. The compressor discriminates well — drops **43.9% of non-gold vs 8.7% of gold chunks** — yet of the 17 questions that lost citation recall, only 6 lost a gold chunk: **11 kept every gold chunk and lost the citation anyway.** Reduction is understated by my own checker (MIS-035; 0.542 corrected, simulated on the same completions) — a bug that worked *against* this finding. **Negative; not promoted.** $0.0306 actual vs $0.0566 est (221 calls replayed free) | — | — | — | — | — | 18440 | 0.00031 | VALID | [→](experiments/EXP-0029.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -581,6 +582,30 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   prompt. The technique moves this system's individual answers around measurably while
   moving none of its metrics, which is a useful thing to know about the generator's
   stability and a poor reason to adopt the reordering.
+
+- **EXP-0029 — contextual compression, one extractive LLM call per retrieved chunk.**
+  Tier 2 on `dev`. The only technique in Axis 6 that moved a metric, and it moved it the
+  wrong way: **citation recall 0.5978 → 0.5217, Δ −0.0883, 95% CI [−0.168, −0.010],
+  p = 0.0358, against an MDD of 0.040 — significant and negative.** Citation precision
+  −0.051 (p = 0.21) and step coverage +0.019 (p = 0.73) stayed inside their floors, and
+  refusal did not move at all (Δ exactly 0.0000, p = 1.000). What it bought: the
+  generator's prompt fell from **1,712 to 912 words (−46.7%)** and from 5.00 to 3.13
+  documents. Cost it would have added: **$0.0224 per 100 questions**, one call per
+  retrieved chunk, on top of a 4x slower p50.
+  **Decision: control retained; not promoted.** For an assistant whose job is to point
+  the user at the right help article, 0.088 of citation recall is the wrong thing to
+  trade for a shorter prompt.
+  The diagnosis is worth more than the verdict. The compressor is **good at its stated
+  task** — it dropped 43.9% of non-gold chunks against only 8.7% of gold ones, a
+  five-fold discrimination ratio measured against the labels. But of the 17 questions
+  whose citation recall fell, only 6 had a gold chunk dropped; **11 kept every gold chunk
+  and lost the citation anyway.** The relevant sentences were still in the prompt.
+  Shortening the document around them made the generator less likely to cite it, and
+  `cited_nothing` rose from 0.057 to 0.090 on the same retrieved documents. **The failure
+  is not information loss, it is that this generator's willingness to cite a document
+  depends on how much of that document it is shown.** That is a fact about the
+  generation step, not about compression, and it would apply to any technique that
+  shortens a retrieved document in place.
 
 ## Phase 1 scorecard — the controls (P1-08)
 

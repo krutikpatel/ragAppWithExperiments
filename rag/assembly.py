@@ -196,21 +196,37 @@ class ContextCompressor:
         # the row without a 500-entry blob if every call fails.
         self.failures: list[dict[str, str]] = []
 
-    @staticmethod
-    def _is_extractive(kept: str, original: str) -> bool:
-        """Every non-trivial line of `kept` appears in `original`.
+    # A kept text is extractive when at least this share of its substantial pieces
+    # appear verbatim in the original. Not 100%: the model legitimately joins two
+    # sentences across a line break, which makes the joined pair absent as a unit
+    # while both halves are present. Measured on stored output (MIS-035): at 1.0 this
+    # check rejected 81 chunks of which only 5 were actually paraphrased.
+    EXTRACTIVE_THRESHOLD = 0.8
 
-        Whitespace is normalised on both sides because the model reflows lines; the
-        check is on content, not on layout.
+    @staticmethod
+    def _pieces(text: str) -> list[str]:
+        """Sentence-ish pieces of at least four words, whitespace normalised."""
+        flat = " ".join(text.split())
+        return [p.strip().rstrip(".") for p in flat.split(". ") if len(p.split()) >= 4]
+
+    @classmethod
+    def _is_extractive(cls, kept: str, original: str) -> bool:
+        """Whether `kept` was copied out of `original` rather than rewritten.
+
+        Compares **sentences against the whole normalised original**, not line against
+        line. The line-based version of this check (MIS-035) failed whenever the model
+        reflowed a multi-line passage into one line — which it does routinely — and so
+        rejected 43% of perfectly extractive output, keeping 9,803 words of context
+        that did not need keeping. Tested against stored model output, not against the
+        format the prompt asked for (preflight 21).
         """
         haystack = " ".join(original.split())
-        for line in kept.splitlines():
-            piece = " ".join(line.split())
-            if len(piece.split()) < 3:
-                continue
-            if piece not in haystack:
-                return False
-        return True
+        pieces = cls._pieces(kept)
+        if not pieces:
+            # Too short to judge; over-trimming is `min_keep_ratio`'s job, not this one.
+            return True
+        hits = sum(1 for piece in pieces if piece in haystack)
+        return hits >= max(1, int(cls.EXTRACTIVE_THRESHOLD * len(pieces)))
 
     def compress(
         self, *, question_id: str, question: str, chunks: list[ScoredChunk], chunk_text: dict[str, str]

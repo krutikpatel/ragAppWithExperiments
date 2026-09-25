@@ -169,6 +169,12 @@ Derived from the prevention rules below. Run through it and say in chat that you
     its budget once succeeded on retry. Assert the token behaviour you assumed; never
     infer it from the parameter you sent. (MIS-034)
 
+45. **A parser test that reads stored output must exercise the PARSER, not a
+    neighbouring branch of it.** Name the decision under test and count its
+    disagreements against the stored corpus. "I ran it over real data" is not "I
+    measured what it got wrong" — a stored-output test that only checked the empty
+    marker left a 43% false-positive rate in the extractive check unseen. (MIS-035)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1138,3 +1144,48 @@ Derived from the prevention rules below. Run through it and say in chat that you
   - **`reasoning_effort` is a request, not a guarantee.** Assert the reasoning-token
     count you assumed; do not infer it from the parameter you sent.
 - **Added to preflight:** yes — items 42, 43 and 44.
+
+## MIS-035 — The extractive checker compared line against line, and rejected 43% of correct output
+- **Date:** 2026-09-25
+- **Severity:** Medium — EXP-0029 stays VALID, but its headline compression number is
+  7.5 points lower than the same completions would have produced
+- **What happened:** `ContextCompressor._is_extractive` decided whether the model had
+  copied text or rewritten it by checking **each line** of the output against the
+  original. The model routinely reflows a multi-line passage into one line, which makes
+  the joined text absent as a line while every sentence in it is present. Those chunks
+  were treated as rewrites and kept **uncompressed**.
+- **How it was caught:** the run reported `chunks_kept_verbatim_check_failed = 81` of
+  500 — a 16% disobedience rate that did not match the probe, where this model had
+  obeyed its prompt 10 times out of 10. Reading the flagged output showed why. One
+  example, flagged as a rewrite: the model returned *"Protect your site from
+  right-click downloads with a custom copyright notice. This is a great option if you
+  want to prevent visitors from downloading images…"* — which is the original,
+  verbatim, minus the article's title line and with the line breaks removed.
+- **Measured, over all 500 stored completions:** of the 81 the checker rejected, **35
+  were fully extractive** (layout-only failure), 41 were extractive in at least 80% of
+  their sentences, and **only 5 were genuinely paraphrased**. The false-positive rate
+  was 43%, or 94% counting the near-misses.
+- **Root cause:** preflight item 21 says to test every parser of model output **on
+  stored model output**, not on the format the prompt asked for, and to count what the
+  parser drops. I wrote `_is_extractive` against synthetic strings in the test file and
+  wrote a stored-output test that only exercised the **empty marker**, not the
+  extractive check itself. Half the rule applied is not the rule. This is the third
+  parser in this project to fail this way: the citation parser dropped `[doc: id]`
+  (MIS-016), the refusal detector missed a curly apostrophe (DEC-045), and now this.
+- **Impact:** 9,803 words of context were kept that did not need keeping. Simulated
+  over the same cached completions — the compression calls are unchanged, so this is
+  arithmetic on recorded data, not a re-run: reduction **0.467 → 0.542**, with 208
+  chunks compressed instead of 150.
+  **The bug worked *against* the run's finding**, which is why EXP-0029 stands: it made
+  the context *longer* and more like the control's, and citation recall still fell
+  significantly (Δ −0.088, p = 0.036). A conservative bug cannot manufacture that loss.
+- **Fix applied:** the check now compares **sentence-sized pieces against the whole
+  whitespace-normalised original**, and accepts at 80% rather than 100%, because the
+  model legitimately joins two sentences across a line break so the joined pair is
+  absent as a unit while both halves are present. On the stored output it now accepts
+  297 and rejects 16. A test pins the exact reflow case that caused this.
+- **Prevention rule:** **a parser test that reads stored output must exercise the
+  parser, not a neighbouring branch of it.** Name the specific decision under test and
+  count its disagreements against the stored corpus; "I ran it over real data" is not
+  the same as "I measured what it got wrong."
+- **Added to preflight:** yes — item 45.

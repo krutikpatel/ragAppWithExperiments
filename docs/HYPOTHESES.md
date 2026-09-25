@@ -487,7 +487,24 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
 - **Tested by:** EXP-0029's `context_word_reduction` for part 1; step coverage and
   citation precision/recall against EXP-0006, MDD-labelled, for part 2. No retrieval
   delta is reported.
-- **Resolution:** _pending EXP-0029._
+- **Resolution:** **part 1 confirmed, part 2 wrong — and wrong about the mechanism,
+  which is the more useful half of the miss.**
+  1. Word reduction **0.467**, above the 0.40 I named. (0.542 under the checker fixed in
+     MIS-035, simulated over the same cached completions.)
+  2. Step coverage did **not** fall. It rose, +0.0191 at p = 0.734, and step order was
+     preserved slightly more often. The prompt's instruction to keep whole procedures
+     including their lead-in lines was evidently obeyed — my reasoning that "an
+     extractive filter has no way to see that step 4 matters only because steps 1 to 3
+     preceded it" was a real risk that the prompt had already covered.
+  What actually broke is a thing I never named: **citation recall, −0.0883 at p = 0.0358
+  (MDD 0.040)** — the first significant deterministic result in Axis 6. The mechanism is
+  not lost steps but **lost documents**: the compressor dropped 37.4% of retrieved chunks
+  entirely. It dropped them well (43.9% of non-gold against 8.7% of gold, a five-fold
+  discrimination ratio), and still, of the 17 questions whose citation recall fell, 6 had
+  a gold chunk dropped and **11 kept every gold chunk and lost the citation anyway**.
+  Shortening the text around a relevant passage makes this generator less likely to cite
+  the document it came from. I predicted the wrong metric via the wrong mechanism and got
+  the direction right by accident. `run_20260925_025103_28d7`.
 
 ## H-022 — Contextual retrieval is the first Phase 2 technique to beat the dense control
 - **Date written:** 2026-09-24, before EXP-0030 ran
