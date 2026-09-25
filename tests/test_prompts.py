@@ -26,6 +26,12 @@ PINNED_HASHES = {
     # version-skew in the project, at one LLM call per chunk to discover.
     "compress_context@v1": "sha256:f372591e7e06721",
     "contextual_chunk@v1": "sha256:b4f446a0b0ccec7",
+    # P2-12 (Axis 4). Each is sent once per question, so an edit without a version
+    # bump changes every future retrieval while the cache still replays the old one.
+    "query_decompose@v1": "sha256:e7f2e681d94ad4d",
+    "query_hyde@v1": "sha256:a49d4b8d2bec73e",
+    "query_multi@v1": "sha256:cc5424b96c1dd02",
+    "query_step_back@v1": "sha256:6d4745041ad8a64",
 }
 
 

@@ -1,0 +1,37 @@
+# EXP-0032 — Axis 4 (query transformation): HyDE, Tier 1 dev.
+#
+# P2-12. Gao et al. 2022: instead of embedding the question, generate the help article
+# that would answer it and embed THAT, on the claim that a plausible fake answer sits
+# closer in embedding space to the real answer than the question does. The generated
+# passage is never shown to anyone — it is only a query vector.
+#
+# One query per question, so there is nothing to fuse and the dense ranking passes
+# through with its own scores.
+#
+# A design choice worth naming: the hypothetical passage is embedded with the QUERY
+# prefix, because it is the query, even though it is written to look like a passage.
+# qwen3's query prefix is an instruct prefix, so embedding document-shaped text under
+# it is not obviously right and the alternative is untested here (OQ-044).
+name: "EXP-0032 HyDE — embed a generated answer instead of the question, dev"
+axis: query_transform
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+query_transform: hyde
+query_transform_params:
+  model: openai/gpt-oss-20b
+  max_words: 120

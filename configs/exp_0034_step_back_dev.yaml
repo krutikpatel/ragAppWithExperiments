@@ -1,0 +1,36 @@
+# EXP-0034 — Axis 4 (query transformation): step-back prompting, Tier 1 dev.
+#
+# P2-12. Zheng et al. 2023: derive the more general question that the specific one is an
+# instance of, retrieve for both, fuse by RRF. The claim is that a specific phrasing
+# walks past the overview article that a general one would find.
+#
+# The prompt insists the Wix product name survives the step back. On a single-product
+# help centre, stepping "Why did my Wix Bookings payment fail" back to "how do booking
+# systems work" would retrieve nothing useful — the generality has to be about the
+# symptom, not about the product.
+#
+# The story expects step-back to help single-document recall more than multi-hop. The
+# single-document slice is already at 0.8125 against a measured ceiling, so this run may
+# be uninformative in that direction; the writeup says so either way.
+name: "EXP-0034 step-back prompting — one general question plus the original, RRF fused, dev"
+axis: query_transform
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+query_transform: step_back
+query_transform_params:
+  model: openai/gpt-oss-20b

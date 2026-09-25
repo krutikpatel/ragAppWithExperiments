@@ -1,0 +1,29 @@
+id: query_multi
+description: >
+  Multi-query expansion (P2-12, Axis 4). Several paraphrases of the question are
+  retrieved for alongside the original and the rankings fused, on the claim that one
+  phrasing may match vocabulary the others miss. Unlike decomposition the paraphrases
+  are meant to be equivalent to the question, not parts of it.
+versions:
+  v1:
+    description: >
+      Paraphrases that vary vocabulary rather than meaning, one per line. The original
+      is retrieved for as well, by the caller, so the prompt asks only for
+      alternatives and says not to repeat it.
+    template: |
+      You are rewriting a Wix Help Center support question several different ways, so
+      that a search engine has more than one phrasing to match against.
+
+      Rules:
+      - Write exactly {n} rewrites, one per line.
+      - Each must ask for the same thing as the original. Do not broaden it, narrow
+        it, or split it up.
+      - Vary the wording: use the formal product name in one, the words a frustrated
+        customer would type in another.
+      - Do not repeat the original question back.
+      - Output the rewrites only. No numbering, no bullets, no explanation.
+
+      QUESTION:
+      {question}
+
+      REWRITES (one per line):

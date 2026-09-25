@@ -2483,3 +2483,34 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** the recorded prefixes show preamble, truncation or non-English text
   at a rate above ~1% when EXP-0030's `chunker_meta` is reviewed; or if a later axis
   needs a longer prefix than 60 words, which is a new workload and a new estimate.
+
+## DEC-065 — `openai/gpt-oss-20b` also writes Axis 4's query transforms
+- **Date:** 2026-09-25
+- **Decided by:** Krutik (proposed by Claude)
+- **Status:** Active. Extends DEC-064 rather than superseding it.
+- **Context:** P2-12's four techniques each send the question to a model and retrieve
+  for what comes back. DEC-064 chose `gpt-oss-20b` for the *in-pipeline prefix writer
+  and compressor*; query transformation is a third role and a fourth, fifth, sixth and
+  seventh prompt, so it is not covered by that entry.
+- **Why it needed its own probe rather than an inheritance:** MIS-034 is exactly this
+  mistake. The same model on the same settings used 54 output tokens per call on the
+  chunk-prefix prompt and 32,848 on one compression call. A model is licensed for a
+  **(model, prompt) pair**, never for a model.
+- **Evidence:** all four prompts probed on **6 real dev questions** (3 multi-gold, 3
+  single-gold) before any config was committed: **zero fallbacks, zero format
+  failures**, 46–105 output tokens per call, no reasoning blow-ups. Decomposition
+  produced a mean of 1.33 sub-questions; HyDE produced corpus-shaped passages; the
+  multi-query rewrites were faithful; step-back produced one question each time.
+- **Decision:** `openai/gpt-oss-20b`, unpinned, `max_tokens=600`, for all four Axis 4
+  transforms. Same reasoning as DEC-064 on the provider: the completions are cached and
+  a provider change can only cause a visible cache miss, never a silent number change.
+- **Recorded against it, from the same probe:** on **2 of 6** questions the step-back
+  prompt produced a question naming **"Wix Bookings"** when the original named no
+  product. That is a defect of the (prompt, corpus) pair, not a reason to reject the
+  model, and it is pre-registered as H-026 rather than fixed by tuning the prompt —
+  P2-12 allows one configuration per technique and no prompt tuning within it.
+- **Consequences:** Axis 4 costs **$0.0084** for all four runs, the cheapest axis in the
+  phase. Every run is `pipeline_nondeterministic` and cache-backed (P2-03).
+- **Revisit if:** the fallback rate on a full 200-question run exceeds ~2%, or the
+  step-back product-hallucination rate proves high enough to make EXP-0034 a test of the
+  prompt rather than of the technique.

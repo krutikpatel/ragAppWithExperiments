@@ -32,6 +32,7 @@ DIMENSIONS = {
     "chunking": ("chunker", "chunker_params"),
     "retrieval": ("retriever", "retriever_params"),
     "reranking": ("reranker", "reranker_params", "rerank_candidates"),
+    "query_transform": ("query_transform", "query_transform_params"),
     "assembly": ("top_k", "candidate_pool", "retrieval_depth", "doc_pooling", "context_max_tokens",
                  "context_order", "context_compressor", "context_compressor_params"),
     "generation": (

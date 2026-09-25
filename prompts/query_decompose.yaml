@@ -1,0 +1,30 @@
+id: query_decompose
+description: >
+  Query decomposition (P2-12, Axis 4). A multi-hop question is split into the
+  self-contained sub-questions it depends on, each retrieved for separately and the
+  rankings fused. Run first in this axis because it is aimed most directly at the
+  organizing question: whether multi-document answers can be found by asking for
+  their parts.
+versions:
+  v1:
+    description: >
+      One sub-question per line, no numbering, no prose. A question that needs no
+      decomposition is returned unchanged as a single line — that is a real answer,
+      not a failure, and the run records how often it happens. The cap is stated in
+      the prompt so the count is bounded before the parser has to bound it.
+    template: |
+      You are splitting a Wix Help Center support question into the separate
+      questions it depends on, so each can be searched for on its own.
+
+      Rules:
+      - Write at most {max_parts} sub-questions, one per line.
+      - Each sub-question must stand alone. Do not write "it", "that feature" or
+        "the above" — name the product or feature in full every time.
+      - Only split a question that genuinely asks about more than one thing. If it
+        asks about one thing, output the question unchanged as a single line.
+      - Output the sub-questions only. No numbering, no bullets, no explanation.
+
+      QUESTION:
+      {question}
+
+      SUB-QUESTIONS (one per line):

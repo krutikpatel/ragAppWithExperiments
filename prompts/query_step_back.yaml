@@ -1,0 +1,28 @@
+id: query_step_back
+description: >
+  Step-back prompting (Zheng et al. 2023), P2-12 Axis 4. A more general question is
+  derived from the specific one and retrieved for alongside it, on the claim that the
+  general question matches the overview article a specific phrasing walks past. Both
+  the original and the step-back question are retrieved for and fused.
+versions:
+  v1:
+    description: >
+      Exactly one step-back question, one line. The instruction to keep the product
+      name matters on this corpus: a step-back that drops "Wix Bookings" for "booking
+      systems" retrieves nothing useful from a single-product help centre.
+    template: |
+      You are writing the more general question that a specific Wix Help Center
+      support question is an instance of, so that overview articles can be found too.
+
+      Rules:
+      - Write exactly one question, on one line.
+      - Make it broader than the original: ask about the feature or the task rather
+        than the specific symptom, error or setting.
+      - Keep the Wix product name. "How do I fix X in Wix Bookings" steps back to
+        "How does Wix Bookings handle X", never to "How do booking systems work".
+      - Output the question only. No preamble, no explanation.
+
+      QUESTION:
+      {question}
+
+      GENERAL QUESTION:

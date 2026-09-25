@@ -546,6 +546,84 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   add information that discriminates *between candidates*?" A uniform lift cannot
   re-rank. `run_20260925_045759_b1c7`.
 
+## H-023 — Decomposition helps multi-document questions, and mostly declines to fire
+- **Date written:** 2026-09-25, before EXP-0031 ran
+- **Source:** Claude, and the P2-12 story, which orders decomposition first on the
+  ground that it is aimed most directly at the organizing question.
+- **Hypothesis, in two separable halves.**
+  1. `multi_doc` strict recall@5 improves by **more than +0.05**, against the control's
+     0.350. Reasoning: this is the only technique in the project that lets one question
+     issue more than one retrieval, and the measured failure on multi-document questions
+     is that one query cannot rank two different articles into the top five at once.
+  2. **Overall strict recall@5 does not move**, because the transform will decline to
+     split most questions. A 6-question probe produced a mean of **1.33 sub-questions**,
+     with 4 of 6 returned unsplit — and 160 of the 200 dev questions have a single gold
+     document, so for most of the split there is nothing to decompose.
+- **The part I expect to be wrong:** that the sub-queries retrieve *different*
+  documents. On a single-product help centre two sub-questions about one task may pull
+  back the same articles, in which case RRF over near-identical rankings reproduces the
+  control. `distinct_doc_yield_per_query` is recorded to settle exactly this, and it is
+  the number I care about most in this run.
+- **Tested by:** `rag compare promoted <run> --metric strict_recall@5` on `dev`, per
+  slice; plus `mean_generated_per_question` and `mean_new_docs_per_extra_query`.
+- **Resolution:** _pending EXP-0031._
+
+## H-024 — HyDE helps single-document recall and this split cannot show it
+- **Date written:** 2026-09-25, before EXP-0032 ran
+- **Source:** Claude, and the P2-12 story's note that HyDE and step-back are expected to
+  help single-doc recall more than multi-hop.
+- **Hypothesis:** overall strict recall@5 lands **within ±0.03 of the control**, i.e. no
+  measurable difference, and the `gold_docs:single` slice moves less than the story
+  expects because it is close to its ceiling: single-gold recall@5 is already **0.8125**,
+  and the measured ceiling for the whole split at candidate depth 50 is 0.985. There is
+  about 0.17 of headroom on that slice and 40 questions' worth of noise around it.
+- **Mechanism worth naming:** HyDE replaces a 20-word question with a ~120-word generated
+  passage, so the query vector is dominated by generic help-article phrasing ("Log in to
+  your Wix account and go to…") that every article in this corpus shares. On a
+  single-product corpus that may be *anti*-discriminating, which is the same failure MMR
+  had in EXP-0027 — a technique whose premise is variety, applied to a corpus with none.
+- **Tested by:** `rag compare` per slice on `dev`, reporting single-doc explicitly
+  against its ceiling.
+- **Resolution:** _pending EXP-0032._
+
+## H-025 — Multi-query expansion is the one most likely to do nothing at all
+- **Date written:** 2026-09-25, before EXP-0033 ran
+- **Source:** Claude.
+- **Hypothesis:** overall strict recall@5 within **±0.02** of the control, and
+  `mean_new_docs_per_extra_query` **below 1.0** — each paraphrase finds less than one
+  document the original did not. Reasoning: the probe's rewrites are faithful and
+  fluent, and that is precisely the problem. *"How do I change my domain?"* rewritten as
+  *"How can I switch the web address of my Wix site?"* is a different sentence with the
+  same content words after embedding. Dense retrieval is not keyword matching; a
+  paraphrase that preserves meaning should retrieve nearly the same ranking, and RRF over
+  near-identical rankings returns the original.
+- **What would falsify it:** a high new-document yield per rewrite. If paraphrases *do*
+  pull back different articles, the embedding space is more phrasing-sensitive than
+  assumed, which would be a more interesting finding than the recall number.
+- **Tested by:** `rag compare` on `dev`, plus `mean_new_docs_per_extra_query`.
+- **Resolution:** _pending EXP-0033._
+
+## H-026 — Step-back hurts, because it invents a product the question never named
+- **Date written:** 2026-09-25, before EXP-0034 ran
+- **Source:** Claude, from a measured defect in the 6-question probe.
+- **Hypothesis:** overall strict recall@5 **falls**, by more than the re-embedding floor
+  of 0.010 (EXP-0023). This is the only technique in the axis I expect to be actively
+  negative, and the reason is not the technique but its interaction with this corpus.
+- **Measured in the probe, not predicted:** on **2 of 6** dev questions the step-back
+  question named **"Wix Bookings"** when the original mentioned no product at all —
+  *"How to make the published changes draft?"* became *"How does Wix Bookings handle
+  published changes draft?"*, and a payment-settings question became *"How does Wix
+  Bookings handle payouts being on hold?"*. The prompt instructs the model to keep the
+  product name; when there is none to keep, it supplies one. A fabricated product name
+  is a strong retrieval signal pointing at the wrong articles, and RRF will promote
+  whatever that ranking agrees with.
+- **The honest caveat:** 2 of 6 is a rate measured on six questions and could be
+  anywhere from rare to typical. `n_queries`, the per-question rankings and the failure
+  list are recorded; if the rate is low the effect may be invisible.
+- **Tested by:** `rag compare` on `dev`, plus a count of step-back questions naming a
+  product absent from the original.
+- **Resolution:** _pending EXP-0034._
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /

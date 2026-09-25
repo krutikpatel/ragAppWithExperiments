@@ -16,6 +16,12 @@ from rag.assembly import CONTEXT_ORDERS, COMPRESSORS
 from rag.hashing import canonical_json, short_id
 from rag.retrieval.pooling import DEFAULT_POOLING, POOLING_RULES
 
+# Named here rather than imported from rag.retrieval.query_transform: that module
+# imports the hybrid retriever, which imports the registry, which imports this file.
+# The list is asserted against the registry in tests/test_query_transform_p2_12.py,
+# so it cannot drift.
+QUERY_TRANSFORM_NAMES = ("decompose", "hyde", "multi_query", "step_back")
+
 
 # Phase 2 axes (P2-07 … P2-16). `axis` places a run under the split policy (P2-04),
 # the promotion rule (P2-05) and the per-axis experiment cap (P2-06). Empty means a
@@ -93,6 +99,13 @@ class RunConfig:
     reranker: str = ""
     reranker_params: dict[str, Any] = field(default_factory=dict)
     rerank_candidates: int = 50
+
+    # Axis 4 (P2-12). Empty means no transform, which is the absence of the dimension
+    # rather than a setting of it — see `_ABSENT_DIMENSIONS`. Unlike the Axis 6 fields
+    # this one IS in TIER1_FIELDS: a query transform changes what is retrieved.
+    # Its `model` param is Krutik's choice.
+    query_transform: str = ""
+    query_transform_params: dict[str, Any] = field(default_factory=dict)
 
     # Tier 2 only. Empty by default: model choice is Krutik's call, not a default
     # this file gets to make. See CLAUDE.md section 10.
@@ -200,6 +213,11 @@ class RunConfig:
             raise ValueError("eval_subsample_size must be at least 1")
         if "@" not in self.generator_prompt:
             raise ValueError(f"generator_prompt must be '<id>@<version>', got {self.generator_prompt!r}")
+        if self.query_transform and self.query_transform not in QUERY_TRANSFORM_NAMES:
+            raise ValueError(
+                f"unknown query_transform {self.query_transform!r}; "
+                f"registered: {QUERY_TRANSFORM_NAMES}"
+            )
         if self.context_order not in CONTEXT_ORDERS:
             raise ValueError(
                 f"unknown context_order {self.context_order!r}; known: {CONTEXT_ORDERS}"
@@ -256,6 +274,7 @@ class RunConfig:
         ("context_order", "rank", ("context_order",)),
         ("context_compressor", "", ("context_compressor", "context_compressor_params")),
         ("skip_judge", False, ("skip_judge",)),
+        ("query_transform", "", ("query_transform", "query_transform_params")),
     )
 
     @classmethod
@@ -287,6 +306,9 @@ class RunConfig:
         "split", "eval_tier", "retriever", "retriever_params", "chunker", "chunker_params",
         "retrieval_depth", "top_k", "candidate_pool", "doc_pooling", "seed", "harness_smoke_test",
         "reranker", "reranker_params", "rerank_candidates",
+        # A query transform changes the query the retriever sees, so it changes a
+        # Tier 1 number. Unlike Axis 6's fields, it belongs here.
+        "query_transform", "query_transform_params",
     )
 
     @property

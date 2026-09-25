@@ -1,0 +1,40 @@
+# EXP-0031 — Axis 4 (query transformation): decomposition, Tier 1 dev.
+#
+# P2-12, and the story says run this one FIRST: it is aimed most directly at the
+# organizing question, whether multi-document answers can be found by asking for their
+# parts. The model splits each question into at most 4 self-contained sub-questions;
+# each is retrieved for separately and the rankings are fused by RRF (k=60, the same
+# fusion Axis 3 used — sub-query scores are no more comparable than two retrievers'
+# are, so only ranks are read).
+#
+# The original question is NOT retrieved for. A decomposition that still searches the
+# whole question is not being tested; the parts replace it. A question the model
+# judges indivisible comes back as a single line, which is the model obeying the
+# prompt, not a failure, and is counted separately from the fallback rate.
+#
+# Recorded per question, per the story's acceptance criteria: sub-queries generated,
+# and the distinct-document yield of each sub-query — how many documents it found that
+# no earlier sub-query had.
+name: "EXP-0031 query decomposition — multi-hop split into sub-questions, RRF fused, dev"
+axis: query_transform
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+query_transform: decompose
+query_transform_params:
+  model: openai/gpt-oss-20b
+  max_parts: 4

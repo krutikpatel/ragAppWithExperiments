@@ -618,6 +618,53 @@ def estimate_compression_cost(
     return estimate
 
 
+def estimate_query_transform_cost(
+    *,
+    query_transform: str,
+    transform_params: dict[str, Any] | None,
+    n_questions: int,
+    prompt_overhead_words: int,
+    question_words: int,
+    output_words: int,
+    queries_per_question: float,
+    pricing: PricingTable | None = None,
+) -> dict[str, Any]:
+    """Cost of a query transform: one LLM call per question (P2-12, Axis 4).
+
+    Billed per query like reranking, so it scales with the split and not with the
+    corpus — the same config is cents on `dev` and dollars on `dev_large` (MIS-028's
+    lesson, applied before the fact this time). The extra query *embeddings* are
+    counted too: a transform that produces 4 queries embeds 4 times per question.
+    """
+    if not query_transform:
+        return {}
+    pricing = pricing or PricingTable.load()
+    model = (transform_params or {}).get("model", "")
+    tokens_in = int(n_questions * (prompt_overhead_words + question_words) * WORDS_TO_TOKENS)
+    tokens_out = int(n_questions * output_words * WORDS_TO_TOKENS)
+    estimate: dict[str, Any] = {
+        "calls": n_questions,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "model": model,
+        "queries_per_question": queries_per_question,
+        "extra_query_embeddings": int(n_questions * max(0.0, queries_per_question - 1)),
+        "is_estimate": True,
+    }
+    if not model:
+        estimate["price_unavailable"] = f"query_transform {query_transform!r} has no model"
+        return estimate
+    price = pricing.price("chat", model)
+    if not price:
+        estimate["price_unavailable"] = f"no chat price for {model}"
+        return estimate
+    estimate["query_transform_usd"] = round(
+        tokens_in / 1e6 * price["in"] + tokens_out / 1e6 * price["out"], 4
+    )
+    estimate["price_per_mtok"] = {"in": price["in"], "out": price["out"]}
+    return estimate
+
+
 def estimate_run_cost(
     *,
     tier2: dict[str, Any] | None,
@@ -626,6 +673,7 @@ def estimate_run_cost(
     rerank: dict[str, Any] | None = None,
     chunker_llm: dict[str, Any] | None = None,
     compression: dict[str, Any] | None = None,
+    query_transform: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Total pre-run estimate with the breakdown of what drives it."""
     parts: dict[str, float] = {}
@@ -649,6 +697,7 @@ def estimate_run_cost(
     for name, part, key in (
         ("chunker_llm", chunker_llm, "chunker_llm_usd"),
         ("compression", compression, "compression_usd"),
+        ("query_transform", query_transform, "query_transform_usd"),
     ):
         if part:
             if key in part:

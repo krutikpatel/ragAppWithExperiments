@@ -31,6 +31,7 @@ from rag.hashing import short_id
 from rag.prompts import load_prompt
 from rag.runner.config import EvalTier, RunConfig
 from rag.runner.cost import (
+    estimate_query_transform_cost,
     estimate_chunker_llm_cost,
     estimate_compression_cost,
     COST_GATE_USD,
@@ -45,6 +46,7 @@ from rag.runner.cost import (
     format_run_estimate,
 )
 from rag.runner.promoted import check_split_policy, config_diff, load_promoted
+from rag.retrieval.query_transform import TransformingRetriever, build_transform
 from rag.runner.registry import build_reranker, build_retriever, reranker_class, retriever_class
 from rag.runner.store import ResultsStore
 from rag.runner.subsample import build_subsample
@@ -307,12 +309,17 @@ def _run(
         if config.eval_tier is EvalTier.TIER_2
         else {}
     )
+    # P2-12: one LLM call per question, billed per query like reranking, so it scales
+    # with the split. `queries_per_question` is what the transform will send to the
+    # retriever, which drives the extra query embeddings.
+    transform_estimate = _query_transform_estimate(config, frame, pricing)
     run_estimate = estimate_run_cost(
         tier2=cost_estimate or None,
         index=index_estimate,
         rerank=rerank_estimate,
         chunker_llm=chunker_llm_estimate,
         compression=compression_estimate,
+        query_transform=transform_estimate,
     )
     run_estimate["index"] = index_estimate
     if config.reranker:
@@ -321,6 +328,8 @@ def _run(
         run_estimate["chunker_llm"] = chunker_llm_estimate
     if compression_estimate:
         run_estimate["compression"] = compression_estimate
+    if transform_estimate:
+        run_estimate["query_transform"] = transform_estimate
     print(format_run_estimate(run_estimate, pricing_version=pricing.pricing_version))
     _print_running_totals(store)
     if estimate_only:
@@ -499,6 +508,47 @@ _COMPRESSOR_PROMPT_WORDS = len(
 )
 
 
+# Words the model is asked to produce, per transform. Measured from the prompts'
+# own caps rather than guessed, and replaced by an actual after the first run.
+_TRANSFORM_OUTPUT_WORDS = {
+    "decompose": 60,      # up to max_parts short questions
+    "hyde": 120,          # the prompt's max_words
+    "multi_query": 60,    # n rewrites
+    "step_back": 20,      # one question
+}
+# How many query strings each transform sends to the retriever, including the
+# original where it keeps it. Drives the extra query-embedding count.
+_TRANSFORM_QUERIES = {"decompose": 2.5, "hyde": 1.0, "multi_query": 4.0, "step_back": 2.0}
+
+
+def _query_transform_estimate(config: RunConfig, frame, pricing: PricingTable) -> dict[str, Any]:
+    if not config.query_transform:
+        return {}
+    from rag.retrieval.query_transform import QUERY_TRANSFORMS
+
+    transform_cls = QUERY_TRANSFORMS[config.query_transform]
+    prompt = load_prompt(transform_cls.prompt_id, transform_cls.prompt_version)
+    # The scaffolding, measured off the rendered template with the fields blank.
+    fields = {"question": ""} | {
+        k: 0 for k in ("max_parts", "max_words", "n") if "{" + k + "}" in prompt.template
+    }
+    overhead = len(prompt.render(**fields).split())
+    questions = [str(q) for q in frame["question"]] if "question" in frame else []
+    mean_question_words = (
+        round(sum(len(q.split()) for q in questions) / len(questions)) if questions else 20
+    )
+    return estimate_query_transform_cost(
+        query_transform=config.query_transform,
+        transform_params=config.query_transform_params,
+        n_questions=len(frame),
+        prompt_overhead_words=overhead,
+        question_words=mean_question_words,
+        output_words=_TRANSFORM_OUTPUT_WORDS[config.query_transform],
+        queries_per_question=_TRANSFORM_QUERIES[config.query_transform],
+        pricing=pricing,
+    )
+
+
 def _merge_pipeline_stats(stats: list[dict[str, Any]]) -> dict[str, Any]:
     """One summary row for however many in-pipeline LLMs a run held (P2-03).
 
@@ -631,6 +681,24 @@ def _execute(
         generation_cache=generation_cache,
         **config.retriever_params,
     )
+    # P2-12, Axis 4. A query transform wraps the retriever rather than replacing it:
+    # `config.retriever` still names the real one, so the axis diff is one dimension
+    # and pooling, the document walk and the collapse ratio stay the base class's.
+    if config.query_transform:
+        params = dict(config.query_transform_params)
+        model = params.pop("model", "")
+        workers = int(params.pop("prewarm_workers", 16))
+        transform = build_transform(
+            config.query_transform,
+            PipelineLLM(model, cache=generation_cache, max_tokens=int(params.pop("max_tokens", 600))),
+            **params,
+        )
+        # Generate every question's transform in one concurrent batch BEFORE the loop
+        # (MIS-036): 200 sequential round trips is 15+ minutes a run, and the loop then
+        # runs entirely from cache.
+        transform.prewarm([row["question"] for row in frame.to_dict("records")], workers=workers)
+        retriever = TransformingRetriever(retriever, transform)
+
     store.update_run(run_id, retriever_meta=json.dumps(retriever.provenance(), default=str))
     # P2-10, Axis 5. The reranker is the runner's, not the retriever's: it re-orders
     # a candidate set that any retriever produced, and pooling, the distinct-document
@@ -714,6 +782,28 @@ def _execute(
                 "context_docs": float(len(selection.doc_ids)),
                 "gold_in_context": (float(gold <= set(selection.doc_ids)) if gold else None),
             }
+        )
+    # P2-12: sub-queries per question and the distinct-document yield per sub-query,
+    # both required by the story, recorded per question rather than as an average.
+    if config.query_transform:
+        by_question = getattr(retriever, "per_question", {})
+        for row in rows:
+            record = by_question.get(row["question"])
+            if record:
+                per_question[row["question_id"]].update({
+                    "n_queries": float(record["n_queries"]),
+                    "n_generated": float(record["n_generated"]),
+                    "transform_fell_back": record["fell_back"],
+                    "distinct_docs_total": float(record["distinct_docs_total"]),
+                })
+        aggregate["query_transform"] = config.query_transform
+        aggregate["query_transform_profile"] = retriever.transform.provenance()
+        yields = [
+            y for record in by_question.values()
+            for y in record["distinct_doc_yield_per_query"][1:]
+        ]
+        aggregate["mean_new_docs_per_extra_query"] = (
+            round(sum(yields) / len(yields), 3) if yields else None
         )
     for question_id, record in rerank_records.items():
         per_question[question_id].update(record)

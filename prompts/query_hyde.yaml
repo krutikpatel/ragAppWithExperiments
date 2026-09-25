@@ -1,0 +1,32 @@
+id: query_hyde
+description: >
+  HyDE — Hypothetical Document Embeddings (Gao et al. 2022), P2-12 Axis 4. Instead of
+  embedding the question, generate the help article that would answer it and embed
+  that, on the claim that a fake answer sits closer in embedding space to the real
+  answer than the question does. The generated text is never shown to anyone: it is
+  used only as the query vector, and the generator still sees the retrieved chunks.
+versions:
+  v1:
+    description: >
+      Written to look like this corpus: a short Wix Help Center passage, numbered
+      steps, no preamble and no hedging. Accuracy is explicitly NOT required — a
+      plausible fake in the right vocabulary is the technique. Saying so in the
+      prompt stops the model refusing when it does not know the answer, which would
+      leave the query vector empty.
+    template: |
+      Write a short passage from the Wix Help Center that would answer the question
+      below.
+
+      Rules:
+      - Write it as help documentation: a sentence of context, then numbered steps.
+      - Use the vocabulary a Wix help article would use.
+      - At most {max_words} words.
+      - It does NOT need to be correct. Write the most plausible passage you can even
+        if you are unsure. Never refuse, never say you do not know, never mention
+        that this is hypothetical.
+      - Output the passage only. No preamble, no title, no explanation.
+
+      QUESTION:
+      {question}
+
+      PASSAGE:
