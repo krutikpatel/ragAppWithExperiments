@@ -809,7 +809,22 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   any two of its techniques are independent.
 - **Tested by:** `rag compare promoted <run> --metric strict_recall@5` per slice, plus a
   question-level intersection of which multi-doc questions each of the three runs rescues.
-- **Resolution:** _pending EXP-0042._
+- **Resolution:** **confirmed, including the mechanism and the magnitude — the first
+  hypothesis in this project to get all three right.**
+  Multi-doc landed at **0.450**, inside the "at or below 0.500" I named and nowhere near
+  the additive 0.575–0.600. Overall strict recall@5 reached **0.7500**, the highest in
+  the project, at the edge of the ±0.03 band I gave around HyDE's 0.735 — and at
+  p = 0.444, so not a finding.
+  The mechanism was measured directly rather than inferred. I predicted the two
+  techniques "rescue the same questions"; question by question on the 40 multi-document
+  questions, HyDE rescues 7 the control misses, the reranker rescues 7, and **4 of those
+  are the same 4**. The union is 10, so even a perfect combination was capped at 0.600.
+  What I did **not** predict is the second half of the shortfall: the combination
+  captures 8 of those 10 and **loses 6 questions that at least one arm had already
+  solved**, some of which the plain control got right. I expected sub-additivity and got
+  sub-additivity *plus* interference. Two techniques that each improve a ranking do not
+  leave each other's improvements intact, and nothing in my reasoning anticipated that.
+  `run_20260925_223023_fbcd`.
 
 ## H-031 — The two free techniques compose no better, and HyDE hurts BM25
 - **Date written:** 2026-09-26, before EXP-0043 ran
@@ -830,7 +845,20 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   that BM25 contributed nothing either way.
 - **Tested by:** overall and per-slice strict recall@5 against EXP-0032 (HyDE alone) and
   EXP-0018 (hybrid alone), not only against promoted.
-- **Resolution:** _pending EXP-0043._
+- **Resolution:** **wrong on the headline, and right on the branch I called less likely.**
+  I predicted EXP-0043 would land **below HyDE alone (0.735)** — actively worse, not
+  merely sub-additive. It landed **above, at 0.7400**.
+  The reasoning was that hybrid gives BM25 20% of the fused score and HyDE hands BM25 a
+  120-word generated passage of this corpus's most common terms, diluting the rare terms
+  that made the question findable. I also wrote: *"the part I expect to be wrong is the
+  magnitude — 20% weight on a degraded ranking may simply not matter, in which case this
+  reproduces HyDE alone and the interesting fact is that BM25 contributed nothing either
+  way."* That is exactly what happened: 0.740 against HyDE's 0.735 is within the
+  run-to-run noise this project has measured repeatedly at 0.005–0.010.
+  One thing neither half of the hypothesis covered: this run has the **highest nDCG@10 in
+  the project (0.6819)** while sitting third on strict recall@5. It ranks gold documents
+  better and gets *all* of them inside five no more often — a distinction worth keeping
+  in view whenever nDCG and strict recall disagree. `run_20260925_223430_553c`.
 
 ## H-032 — Two generated-text techniques at opposite ends of retrieval overlap almost completely
 - **Date written:** 2026-09-26, before EXP-0044 ran
@@ -845,7 +873,19 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   is **perfectly inert on one-chunk articles** (0.780 → 0.780, 4 gained / 4 lost), which
   is 79% of the corpus, so there is little for it to contribute on top of anything.
 - **Tested by:** per-slice comparison against EXP-0030 and EXP-0032 individually.
-- **Resolution:** _pending EXP-0044._
+- **Resolution:** **right on overall, wrong on the slice, and wrong in the more
+  interesting direction.**
+  Overall came in at **0.7250** against HyDE alone's 0.735 — inside the ±0.03 I named.
+  Multi-doc came in at **0.375**, a 0.050 miss on the "within ±0.05 of contextual
+  retrieval alone (0.425)" boundary, and **below both components**: contextual retrieval
+  alone reaches 0.400 and HyDE alone reaches 0.450.
+  I predicted the two would overlap and therefore add nothing, on the reasoning that both
+  close the same vocabulary gap and a gap can only be closed once. They overlapped —
+  **destructively**. Stacking two generated-text techniques on the same slice each
+  improves alone produced a result worse than either. My model of the interaction was
+  "redundant, therefore neutral"; the measured interaction is "redundant, therefore
+  mutually disruptive", which is the same thing EXP-0042 showed at larger scale.
+  `run_20260925_223951_153c`.
 
 ## H-033 — Stacking three null techniques produces a null, and the frontier has one point on it
 - **Date written:** 2026-09-26, before EXP-0045 ran
@@ -865,7 +905,20 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   individually too weak to detect but compose", which is a materially different finding
   from "nothing works here".
 - **Tested by:** `rag compare` for all four combinations, plus the frontier table.
-- **Resolution:** _pending EXP-0045._
+- **Resolution:** **confirmed on both halves.**
+  Overall strict recall@5 came in at **0.7100** — within the ±0.03 of the control's 0.720
+  I named, and on the wrong side of it. And **no combination in EXP-0042 to EXP-0045
+  reached significance** (p = 0.444, 0.683, 1.000, 0.885), so the cost/quality frontier
+  collapses to a single point exactly as predicted: the control, at $0.0000000 per query.
+  The compounding risk I named — "HyDE degrades the BM25 half, contextual retrieval adds
+  60 words of restatement to every chunk, and both perturb the ranking the other is
+  trying to improve" — shows up as a clean monotone: **0.750 / 0.740 / 0.725 at two
+  components, 0.710 at three**, with the multi-document slice returning to **exactly**
+  the control's 0.350 after passing through three techniques that each raised it alone.
+  The falsifying condition I set — any combination reaching p < 0.05 positive, which
+  would have made the phase's conclusion "individually too weak to detect but they
+  compose" — did not occur. The conclusion stays "nothing here beats the control".
+  `run_20260925_224144_bebc`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

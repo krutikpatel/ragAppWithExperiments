@@ -58,6 +58,10 @@ produced one.
 | EXP-0039 | `run_20260925_204905_8e9a` + `…205710_eb8f` | 2026-09-25 | generation | **citation enforcement** — every step must carry a citation or be dropped (`enforced_answer@v1`), dev + full unanswerable, no judge. **False-answer rate 0.2667 → 0.8444 (+0.578) — the largest regression on the axis's hard target in the phase.** The system **stopped refusing entirely**: 0 refusals in 145 questions. Step coverage **0.193 → 0.033**. Citation precision −0.056, recall +0.047, cited-nothing → 0.000. Mechanism: told to cite every step, the model writes a numbered cited statement *about* the articles instead of refusing — *"1. The provided articles cover currency changes for Wix products, not Squarespace…"*. **Negative; not promoted.** $0.0374 | — | — | — | — | — | — | 0.00037 | VALID | [→](experiments/EXP-0039.md) |
 | EXP-0040 | `run_20260925_210039_c048` + `…210747_6539` | 2026-09-25 | generation | **span-level vs chunk-level citation** — quote the exact words, not just the id (`span_answer@v1`). **span_support 0.7964 on dev, 0.7429 on unanswerable: one quoted span in five is NOT in the document it names**, at 4.87 spans per answer. Citation precision **0.546 → 0.435 (−0.110)**, step coverage **0.193 → 0.019** (lowest in the project), false-answer 0.2667 → 0.8889. Needed **citation-v3** to run at all — under v2 the span form matched nothing and every citation metric would have read zero. **Span citation delivers a verifiable artifact and fails its own verification 1 time in 5. Negative; not promoted.** $0.0428 | — | — | — | — | — | — | 0.00043 | VALID | [→](experiments/EXP-0040.md) |
 | EXP-0041 | `run_20260925_211103_1e43` + `…212428_6bc5` | 2026-09-25 | generation | **groundedness self-check** — a second cross-family call (`gpt-oss-20b`, DEC-067) that replaces an unsupported answer with a refusal. **False-answer 0.2667 → 0.2222 (−0.044) at a false-refusal cost of 0.0299 → 0.1212 (+0.091)** — it rejects roughly as much good work as bad (12 dev rejections, 6 of them on questions whose gold was in context). Costs **4,600 ms per answered question** and $0.0055/100q. 0 unparseable, 0 failed, all 41 refusals short-circuited without a call. **Dominated on BOTH axes by the free threshold of EXP-0038 (0.1333 / 0.0299). Not promoted.** $0.0409 | — | — | — | — | — | — | 0.00041 | VALID | [→](experiments/EXP-0041.md) |
+| EXP-0042 | `run_20260925_223023_fbcd` | 2026-09-25 | combination | **HyDE + cohere/rerank-4-fast** (P2-16). **R@5 0.7500 — the highest in the project — at Δ +0.0300, p = 0.444, so not a finding.** multi-doc 0.450. **The sub-additivity result:** control solves 14/40 multi-doc, HyDE 18, rerank 19, **additive prediction 24 (0.600), measured 18 (0.450)** — the combination equals its *weaker* component. Decomposes into overlap (**4 of each technique's 7 gains are the same questions**) and interference (the combination **loses 6 questions an arm had solved**). Costs **$0.0022918/query forever** against the control's $0.0000000. **Not promoted** | 0.750 | 0.845 | 0.676 | 0.588 (n=160) | — | 2980 | 0.0022918 | VALID | [→](experiments/EXP-0042.md) |
+| EXP-0043 | `run_20260925_223430_553c` | 2026-09-25 | combination | **HyDE + hybrid weighted α=0.8** — the deliberately cheap arm. R@5 0.7400 (+0.0200, p = 0.683), multi-doc 0.425, **$0.0000018/query**. Highest **nDCG@10 in the project (0.6819)** while third on strict recall@5 — better at ranking, no better at the deciding metric. H-031 predicted it would land *below* HyDE alone because HyDE feeds BM25 a 120-word passage of high-frequency corpus vocabulary; it landed above. **Not promoted** | 0.740 | 0.840 | 0.682 | 0.582 (n=160) | — | 6444 | 0.0000018 | VALID | [→](experiments/EXP-0043.md) |
+| EXP-0044 | `run_20260925_223951_153c` | 2026-09-25 | combination | **contextual retrieval + HyDE** — index-side + query-side, both 'write text with a model then embed it'. R@5 0.7250 (+0.0050, **p = 1.000**), multi-doc **0.375 — below contextual retrieval alone (0.400) and HyDE alone (0.450)**. The two overlap destructively on the slice both improve individually. **Not promoted** | 0.725 | 0.830 | 0.646 | 0.571 (n=160) | — | 2299 | 0.0000018 | VALID | [→](experiments/EXP-0044.md) |
+| EXP-0045 | `run_20260925_224144_bebc` | 2026-09-25 | combination | **contextual retrieval + HyDE + hybrid α=0.8** — all three free positives stacked, and EXP-0042 minus its paid component. **R@5 0.7100 — BELOW the control (Δ −0.0100, p = 0.885) — and multi-doc lands on exactly 0.350, the control's value**, after passing through three techniques each of which raised it alone. **Adding components degrades monotonically: 0.750 / 0.740 / 0.725 at two components, 0.710 at three.** **Not promoted** | 0.710 | 0.830 | 0.664 | 0.569 (n=160) | — | 1167 | 0.0000018 | VALID | [→](experiments/EXP-0045.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -410,6 +414,54 @@ it and no revert is needed.
 **Honest gap:** Phase 2 definition-of-done item 9 says the revisit pass "has been run and
 its composition verdict recorded". The verdict is recorded. The pass was not run.
 
+
+## P2-16 combination set — sub-additivity, and the frontier (EXP-0042–0045) — CLOSED
+
+P2-16 asks whether the per-axis winners compose. **There were none to compose**: six axes
+produced a single positive result and it is not a retrieval technique (DEC-068). So the
+four combinations pair the techniques that were individually **positive but null** on the
+multi-document slice — the organizing question's slice — and ask whether their gains add.
+**Axis spend: $0.4594** against a $0.9762 estimate; every contextual prefix and HyDE
+transform was already cached.
+
+| Config | R@5 | Δ | p | multi-doc | $/query |
+|---|---|---|---|---|---|
+| control | 0.7200 | — | — | 0.350 | $0.0000000 |
+| **EXP-0042** HyDE + rerank | **0.7500** | +0.0300 | 0.444 | 0.450 | $0.0022918 |
+| EXP-0043 HyDE + hybrid | 0.7400 | +0.0200 | 0.683 | 0.425 | $0.0000018 |
+| EXP-0044 ctx + HyDE | 0.7250 | +0.0050 | 1.000 | 0.375 | $0.0000018 |
+| EXP-0045 ctx + HyDE + hybrid | 0.7100 | −0.0100 | 0.885 | 0.350 | $0.0000018 |
+
+**The sub-additivity result, question by question on the 40 multi-document questions:**
+
+| | solved | rate |
+|---|---|---|
+| control | 14 | 0.350 |
+| HyDE alone | 18 | 0.450 |
+| `rerank-4-fast` alone | 19 | 0.475 |
+| **additive prediction** | **24** | **0.600** |
+| **measured combination** | **18** | **0.450** |
+
+1. **Overlap.** Each technique rescues 7 questions the control misses, and **4 of those
+   are the same 4 questions**. The union is 10, not 14 — a perfect combination could
+   never have exceeded 0.600, and the two techniques were far less independent than
+   their separate scores implied.
+2. **Interference.** The combination captures 8 of those 10 and **loses 6 questions that
+   an arm had already solved**, some of which the plain control got right. Two techniques
+   that each improve a ranking do not leave each other's improvements intact.
+3. **Monotone degradation with component count.** 0.750 / 0.740 / 0.725 at two
+   components; **0.710 at three — below the control**. The three-way stack's multi-doc
+   slice returns to exactly 0.350 after passing through three techniques that each raised
+   it alone.
+
+**The cost/quality frontier** (`docs/figures/p2_16_frontier.png`) is nearly flat. A
+**1,300x** price difference between the cheapest and dearest configuration buys +0.030
+strict recall@5 at p = 0.444. The only large real separation on it is the one Phase 1
+established — dense over BM25, 0.720 against 0.410 — and both of those points cost
+nothing per query.
+
+**Verdict: no combination promoted. `promoted.yaml` unchanged.** The phase's most
+expensive configuration is also its best-scoring and its least justifiable.
 
 ## Axis 7 scorecard — generation and grounding (P2-14, EXP-0038–0041) — CLOSED
 
@@ -885,6 +937,20 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   EXP-0038's free retrieval-score threshold** (0.1333 false answers at 0.0299 false
   refusals, no call, no latency). Zero unparseable verdicts and zero failed calls across
   both splits, so this is a judgment failure and not a plumbing one.
+
+- **EXP-0042 to EXP-0045 — the P2-16 combination set.** Four combinations of the
+  individually positive-but-null techniques. Best: **0.7500, the highest strict recall@5
+  in the project, at p = 0.444.** Worst: 0.7100, below the control. Cost they would have
+  added: **$0.0022918 per query, forever**, for the best one; the other three are free.
+  **Decision: none promoted.**
+  The finding is the interaction, not the scores. On the multi-document slice HyDE and
+  `rerank-4-fast` each rescue 7 questions the control misses — and **4 of those are the
+  same questions**, so the most an ideal combination could reach is 0.600 rather than the
+  0.600+ their separate deltas imply. The measured combination reaches **0.450**: it
+  captures 8 of the 10 available and **loses 6 questions an arm had already solved.**
+  Stacking is sub-additive *and* lossy. Adding a third component takes the multi-doc
+  slice back to **exactly the control's 0.350**, having passed through three techniques
+  that each raised it alone.
 
 ## Phase 1 scorecard — the controls (P1-08)
 
