@@ -155,6 +155,20 @@ Derived from the prevention rules below. Run through it and say in chat that you
 
 ---
 
+42. **Probe every (model, prompt) PAIR, not every model.** A model that obeys one
+    prompt at 54 output tokens can spend 32,848 completion tokens on another — the same
+    model, the same settings. Read `reasoning_tokens` off a real response for the prompt
+    you are about to use, not for a neighbouring one. (MIS-034)
+43. **A per-unit provider failure is recorded per unit and the loop continues.** If a
+    loop of N paid calls can be killed by call k, the money spent on the first k−1 is at
+    risk. Keep the fallback that equals the control's behaviour, count the failure, put
+    it on the row. VOID is for failures of the run itself. (MIS-034, preflight 15 again)
+44. **`reasoning_effort` is a request, not a guarantee, and at temperature 0 a
+    reasoning model is still not deterministic.** `"minimal"` and `"low"` produced
+    identical reasoning-token counts on `gpt-oss-20b`, and the same input that emptied
+    its budget once succeeded on retry. Assert the token behaviour you assumed; never
+    infer it from the parameter you sent. (MIS-034)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1065,3 +1079,62 @@ Derived from the prevention rules below. Run through it and say in chat that you
   action as the config, before the run — not before the writeup. A free run is the
   most likely one to skip it, because nothing forces a pause.
 - **Added to preflight:** yes (item 42)
+
+## MIS-034 — A probe on one prompt licensed a model for another, and one empty completion VOIDed a 100-question run
+- **Date:** 2026-09-25
+- **Severity:** High — VOIDed EXP-0029 attempt 1 after 221 of ~500 paid calls (~$0.009 spent, recoverable from cache)
+- **What happened:** two distinct failures, and it is worth keeping them apart.
+
+  **(a) The model was licensed on the wrong evidence.** DEC-064 chose
+  `openai/gpt-oss-20b` off a 30-call probe that used the **`contextual_chunk`** prompt
+  at `max_tokens=200`. It passed cleanly: 0/10 flagged, 54 output tokens per call, no
+  reasoning. I then used the same model for the **`compress_context`** prompt without
+  re-probing, and that prompt behaves completely differently on the same model.
+  EXP-0029 died on call ~222 with `EmptyGenerationError`: `finish_reason='length'`,
+  `completion_tokens=1000`, **`reasoning_tokens=1000`** — the entire budget spent
+  reasoning before a single output token.
+
+  **(b) A per-chunk provider failure killed the whole run.** My `ContextCompressor` let
+  the exception propagate, so the runner did the right thing with the wrong input and
+  marked the run VOID. One passage out of 500 that could not be shortened is not a
+  failure of the run.
+- **How it was caught:** the run's traceback. Then, digging: the same input **succeeds
+  on a retry** — 123 reasoning tokens, 170 out — so the failure is not input-specific,
+  it is **non-deterministic at temperature 0**. Reading the cache showed the real
+  shape: of 221 successful calls, p50 output was 102 tokens, p95 576, and **one call
+  reported 32,848 completion tokens for a 60-word answer** — ~32,788 of them reasoning,
+  blowing straight through `max_tokens=1000`. And `reasoning_effort` does nothing here:
+  `"minimal"` and `"low"` both produced exactly 123 reasoning tokens on the same input,
+  so the parameter is not being honoured by this model.
+- **Root cause:** I treated "model" as the unit of validation when the unit is
+  **(model, prompt)**. A reasoning model's token behaviour is a property of the task it
+  is given, not of the model alone. Preflight item 11 already says to check whether a
+  new model spends completion tokens on reasoning before setting its budget — I checked
+  it for the prefix prompt and carried the conclusion to a prompt I had not tested.
+  Preflight item 15 already says to fail at the unit that failed; I wrote the compressor
+  without applying it.
+- **Impact:** EXP-0029 attempt 1 VOID. ~$0.009 of the ~$0.023 compression budget spent;
+  **none of it wasted** — all 221 completions are in the generation cache and replay
+  free, so the re-run resumes rather than restarts. That is the cache earning its keep
+  (DEC-049), and it is the only reason this cost cents instead of the whole run.
+- **Fix applied:**
+  1. `ContextCompressor.compress` catches a failed call per chunk, keeps the
+     **retrieved text uncompressed** (the control's behaviour), and records
+     `chunks_call_failed`, `call_failure_rate` and the first 20 errors on the row. The
+     failed chunk's full word count is still counted in `words_out`, so the reduction
+     number cannot be flattered by a failure.
+  2. `ContextualChunker._prefix_for` does the same: a failed prefix call returns `""`,
+     the chunk indexes as the control's chunk, and `prefix_calls_failed` /
+     `prefix_call_failure_rate` go on the row. Without this, one bad completion at call
+     7,000 of 8,218 would have abandoned an index build already paid for.
+  3. Three tests, including that the word accounting includes the failed chunk.
+- **Prevention rules:**
+  - **Probe every (model, prompt) pair, not every model.** A model that behaves on one
+    prompt can spend 30,000 reasoning tokens on another. Read `reasoning_tokens` off a
+    real response for the *actual* prompt before committing a loop to it.
+  - **A per-unit provider failure is recorded per unit and the run continues.** Only a
+    failure of the run itself is VOID. If a loop of N paid calls can be killed by call
+    number k, the money for the first k−1 is at risk.
+  - **`reasoning_effort` is a request, not a guarantee.** Assert the reasoning-token
+    count you assumed; do not infer it from the parameter you sent.
+- **Added to preflight:** yes — items 42, 43 and 44.

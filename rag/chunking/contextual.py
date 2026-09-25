@@ -98,9 +98,11 @@ class ContextualChunker(Chunker):
             "chunks": 0,
             "prefixes_generated": 0,
             "prefixes_empty": 0,
+            "prefix_calls_failed": 0,
             "prefix_words_total": 0,
             "llm_seconds": 0.0,
         }
+        self.failures: list[dict[str, str]] = []
 
     @property
     def params(self) -> dict[str, Any]:
@@ -148,18 +150,36 @@ class ContextualChunker(Chunker):
     # --- chunking -----------------------------------------------------------------
 
     def _prefix_for(self, doc_id: str, document: str, chunk: Chunk) -> str:
+        """The prefix for one chunk, or "" when the call failed.
+
+        A failed call returns empty rather than raising (MIS-034). One bad completion
+        out of 8,218 must not abandon an index build that has already been paid for:
+        the chunk falls back to indexing as the control's chunk, the failure is
+        counted, and the 8,217 prefixes already bought stay in the cache. A reasoning
+        model can spend its whole budget before emitting anything, and on this model
+        that happens unpredictably — measured, MIS-034.
+        """
         rendered = self.prompt.render(
             document=document, chunk=chunk.text, max_words=self.context_max_words
         )
         started = time.perf_counter()
-        output = self.llm.complete(
-            # The cache key is per chunk, and `chunk_id` already covers the chunker's
-            # identity, the document and the ordinal.
-            question_id=f"chunk:{chunk.chunk_id}",
-            prompt_id=PROMPT_ID,
-            prompt_version=PROMPT_VERSION,
-            prompt_text=rendered,
-        ).strip()
+        try:
+            output = self.llm.complete(
+                # The cache key is per chunk, and `chunk_id` already covers the
+                # chunker's identity, the document and the ordinal.
+                question_id=f"chunk:{chunk.chunk_id}",
+                prompt_id=PROMPT_ID,
+                prompt_version=PROMPT_VERSION,
+                prompt_text=rendered,
+            ).strip()
+        except Exception as exc:  # noqa: BLE001 - counted and reported, not swallowed
+            self.stats["prefix_calls_failed"] += 1
+            if len(self.failures) < 20:
+                self.failures.append(
+                    {"chunk_id": chunk.chunk_id, "doc_id": doc_id,
+                     "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+                )
+            output = ""
         self.stats["llm_seconds"] = round(self.stats["llm_seconds"] + time.perf_counter() - started, 2)
         return " ".join(output.split())
 
@@ -195,5 +215,10 @@ class ContextualChunker(Chunker):
                 round(self.stats["prefix_words_total"] / generated, 2) if generated else None
             ),
             "llm": self.llm.stats(),
+            "prefix_call_failures": self.failures,
+            "prefix_call_failure_rate": (
+                self.stats["prefix_calls_failed"] / self.stats["chunks"]
+                if self.stats["chunks"] else None
+            ),
             **self.stats,
         }

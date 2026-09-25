@@ -169,6 +169,13 @@ class ContextCompressor:
     faithfulness was scored against text retrieval never returned. The count goes on
     the row rather than into an exception, because one disobedient chunk is a
     per-question fact, not a failure of the run (preflight 15).
+
+    **A call that fails outright is the same kind of fact** (MIS-034). One chunk out of
+    500 whose completion came back empty — a reasoning model spending its whole budget
+    before emitting anything — must not VOID a 100-question run. The chunk is kept
+    uncompressed, which is exactly the control's behaviour, and the failure is counted
+    on the row. VOID is for failures of the *run*, and "the compressor could not
+    shorten one passage" is not one.
     """
 
     name = "llm_extract"
@@ -181,9 +188,13 @@ class ContextCompressor:
             "chunks_seen": 0,
             "chunks_dropped": 0,
             "chunks_kept_verbatim_check_failed": 0,
+            "chunks_call_failed": 0,
             "words_in": 0,
             "words_out": 0,
         }
+        # Bounded: the first 20 distinct failures, so a systematic fault is legible on
+        # the row without a 500-entry blob if every call fails.
+        self.failures: list[dict[str, str]] = []
 
     @staticmethod
     def _is_extractive(kept: str, original: str) -> bool:
@@ -215,12 +226,25 @@ class ContextCompressor:
             )
             # The cache key's question_id has to separate the chunks of one question,
             # or every chunk after the first would replay the first one's compression.
-            output = self.llm.complete(
-                question_id=f"{question_id}:{chunk.chunk_id}",
-                prompt_id=COMPRESSOR_PROMPT_ID,
-                prompt_version=COMPRESSOR_PROMPT_VERSION,
-                prompt_text=rendered,
-            ).strip()
+            try:
+                output = self.llm.complete(
+                    question_id=f"{question_id}:{chunk.chunk_id}",
+                    prompt_id=COMPRESSOR_PROMPT_ID,
+                    prompt_version=COMPRESSOR_PROMPT_VERSION,
+                    prompt_text=rendered,
+                ).strip()
+            except Exception as exc:  # noqa: BLE001 - recorded, not swallowed
+                # Keep the retrieved text and say so. Counted per reason, because
+                # "empty completion" and "provider refused" want different fixes.
+                self.stats["chunks_call_failed"] += 1
+                self.failures.append(
+                    {"question_id": question_id, "chunk_id": chunk.chunk_id,
+                     "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+                )
+                kept_chunks.append(chunk)
+                kept_text[chunk.chunk_id] = original
+                self.stats["words_out"] += len(original.split())
+                continue
 
             if not output or EMPTY_MARKER in output:
                 self.stats["chunks_dropped"] += 1
@@ -262,6 +286,11 @@ class ContextCompressor:
             # The runner reads this to mark the run `pipeline_nondeterministic` and
             # to price the compression calls (P2-03).
             "llm": self.llm.stats(),
+            "call_failures": self.failures[:20],
+            "call_failure_rate": (
+                self.stats["chunks_call_failed"] / self.stats["chunks_seen"]
+                if self.stats["chunks_seen"] else None
+            ),
             **self.stats,
         }
 

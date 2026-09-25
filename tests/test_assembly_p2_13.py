@@ -633,3 +633,80 @@ def test_skip_judge_zeroes_the_judge_half_of_the_estimate():
     # The generator is unchanged: the same answers are still generated and still
     # scored by the deterministic metrics.
     assert unjudged["generator_usd"] == judged["generator_usd"]
+
+
+# --- MIS-034: a failed call is a per-unit fact, not a dead run ------------------
+
+def _exploding_backend(exc: Exception, fail_on: int = 1):
+    """A backend that raises on the nth call and succeeds otherwise."""
+    calls = []
+
+    def backend(prompt_text: str) -> Completion:
+        calls.append(prompt_text)
+        if len(calls) == fail_on:
+            raise exc
+        return Completion(text="Open Settings.", tokens_in=5, tokens_out=3,
+                          reasoning_tokens=0, finish_reason="stop")
+
+    return backend, calls
+
+
+def test_a_failed_compression_call_keeps_the_chunk_and_counts_it(tmp_path):
+    """MIS-034: one empty completion out of 500 VOIDed a whole 100-question run.
+    The chunk must fall back to the retrieved text, which is the control's behaviour."""
+    from rag.generation.base import EmptyGenerationError
+
+    text = {"c0": "Open Settings. Click Domains.", "c1": "Second passage here entirely."}
+    backend, calls = _exploding_backend(EmptyGenerationError("no content"), fail_on=1)
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        compressor = ContextCompressor(PipelineLLM("m/x", cache=cache, backend=backend))
+        out = compressor.compress(
+            question_id="q1", question="Q", chunks=chunks(2), chunk_text=text,
+        )
+    # Both chunks survive: the failed one uncompressed, the other compressed.
+    assert len(out.chunks) == 2 and len(calls) == 2
+    assert out.chunk_text["c0"] == "Open Settings. Click Domains."
+    assert out.chunk_text["c1"] == "Open Settings."
+    prov = compressor.provenance()
+    assert prov["chunks_call_failed"] == 1
+    assert prov["call_failure_rate"] == 0.5
+    assert prov["call_failures"][0]["chunk_id"] == "c0"
+    assert "EmptyGenerationError" in prov["call_failures"][0]["error"]
+
+
+def test_compression_word_accounting_includes_the_failed_chunk(tmp_path):
+    """The failed chunk reached the generator in full, so the reduction number must
+    count its words. Excluding them would overstate the saving."""
+    from rag.generation.base import EmptyGenerationError
+
+    text = {"c0": " ".join(["word"] * 10), "c1": " ".join(["word"] * 10)}
+    backend, _ = _exploding_backend(EmptyGenerationError("no content"), fail_on=1)
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        compressor = ContextCompressor(PipelineLLM("m/x", cache=cache, backend=backend))
+        compressor.compress(question_id="q1", question="Q", chunks=chunks(2), chunk_text=text)
+    assert compressor.stats["words_in"] == 20
+    assert compressor.stats["words_out"] == 12  # 10 uncompressed + 2 kept
+
+
+def test_a_failed_prefix_call_does_not_abandon_a_paid_index_build(tmp_path):
+    """An 8,218-call index build must not die on call 7,000. The chunk indexes as the
+    control's chunk and the failure is counted."""
+    from rag.chunking.contextual import ContextualChunker
+    from rag.generation.base import EmptyGenerationError
+
+    backend, calls = _exploding_backend(EmptyGenerationError("no content"), fail_on=2)
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        chunker = ContextualChunker(
+            chunk_size=10, overlap=0, llm=PipelineLLM("m/x", cache=cache, backend=backend)
+        )
+        out = chunker.split("doc1", " ".join(f"w{i}" for i in range(25)))
+
+    assert len(out) == 3 and len(calls) == 3
+    prov = chunker.provenance()
+    assert prov["prefix_calls_failed"] == 1
+    assert prov["prefix_call_failure_rate"] == pytest.approx(1 / 3)
+    assert "EmptyGenerationError" in prov["prefix_call_failures"][0]["error"]
+    # The failed chunk indexes as the control's chunk: no prefix, no context split.
+    assert out[1].context_text is None and not out[1].text.startswith("Open Settings.")
+    # The successful ones still carry their prefix.
+    assert out[0].text.startswith("Open Settings.\n\n")
