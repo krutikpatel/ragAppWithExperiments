@@ -33,7 +33,7 @@ import time
 from typing import Any
 
 from rag.chunking.base import Chunk, Chunker, FixedTokenChunker, register_chunker
-from rag.generation.pipeline_llm import PipelineLLM
+from rag.generation.pipeline_llm import PipelineLLM, Request
 from rag.prompts import load_prompt
 
 PROMPT_ID = "contextual_chunk"
@@ -64,6 +64,11 @@ class ContextualChunker(Chunker):
         context_model: str = "",
         context_max_words: int = 60,
         max_tokens: int = 200,
+        # How many prefix calls are in flight at once. Deliberately NOT part of
+        # `params`: it changes how long the pass takes and nothing about its output, so
+        # putting it in the chunker's identity would change every chunk_id and strand
+        # every prefix already paid for in the cache.
+        prefix_workers: int = 16,
         generation_cache: Any | None = None,
         llm: PipelineLLM | None = None,
     ) -> None:
@@ -75,6 +80,9 @@ class ContextualChunker(Chunker):
         self.context_model = context_model
         self.context_max_words = context_max_words
         self.max_tokens = max_tokens
+        if prefix_workers < 1:
+            raise ValueError("prefix_workers must be at least 1")
+        self.prefix_workers = prefix_workers
         self.prompt = load_prompt(PROMPT_ID, PROMPT_VERSION)
         if llm is not None:
             self.llm = llm
@@ -149,48 +157,62 @@ class ContextualChunker(Chunker):
 
     # --- chunking -----------------------------------------------------------------
 
-    def _prefix_for(self, doc_id: str, document: str, chunk: Chunk) -> str:
-        """The prefix for one chunk, or "" when the call failed.
-
-        A failed call returns empty rather than raising (MIS-034). One bad completion
-        out of 8,218 must not abandon an index build that has already been paid for:
-        the chunk falls back to indexing as the control's chunk, the failure is
-        counted, and the 8,217 prefixes already bought stay in the cache. A reasoning
-        model can spend its whole budget before emitting anything, and on this model
-        that happens unpredictably — measured, MIS-034.
-        """
-        rendered = self.prompt.render(
-            document=document, chunk=chunk.text, max_words=self.context_max_words
+    def _request_for(self, document: str, chunk: Chunk) -> Request:
+        return Request(
+            # The cache key is per chunk, and `chunk_id` already covers the chunker's
+            # identity, the document and the ordinal.
+            question_id=f"chunk:{chunk.chunk_id}",
+            prompt_id=PROMPT_ID,
+            prompt_version=PROMPT_VERSION,
+            prompt_text=self.prompt.render(
+                document=document, chunk=chunk.text, max_words=self.context_max_words
+            ),
         )
-        started = time.perf_counter()
-        try:
-            output = self.llm.complete(
-                # The cache key is per chunk, and `chunk_id` already covers the
-                # chunker's identity, the document and the ordinal.
-                question_id=f"chunk:{chunk.chunk_id}",
-                prompt_id=PROMPT_ID,
-                prompt_version=PROMPT_VERSION,
-                prompt_text=rendered,
-            ).strip()
-        except Exception as exc:  # noqa: BLE001 - counted and reported, not swallowed
-            self.stats["prefix_calls_failed"] += 1
-            if len(self.failures) < 20:
-                self.failures.append(
-                    {"chunk_id": chunk.chunk_id, "doc_id": doc_id,
-                     "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
-                )
-            output = ""
-        self.stats["llm_seconds"] = round(self.stats["llm_seconds"] + time.perf_counter() - started, 2)
-        return " ".join(output.split())
 
     def split(self, doc_id: str, text: str) -> list[Chunk]:
-        base = self.splitter.split(doc_id, text)
-        if not base:
-            return []
-        self.stats["docs"] += 1
+        return self.split_corpus([(doc_id, text)])
+
+    def split_corpus(self, docs: list[tuple[str, str]]) -> list[Chunk]:
+        """Two phases: split every document for free, then fetch every prefix at once.
+
+        The split is free, so it all happens first and the LLM pass sees the whole
+        corpus as one batch. That is what lets the calls run concurrently and the cache
+        be consulted for all of them in one sweep — sequentially this measured 8.3 s per
+        call, or 16 hours for 8,218 chunks (P2-13).
+        """
+        plan: list[tuple[str, Chunk]] = []
+        requests: list[Request] = []
+        for doc_id, text in docs:
+            base = self.splitter.split(doc_id, text)
+            if not base:
+                continue
+            self.stats["docs"] += 1
+            for chunk in base:
+                plan.append((doc_id, chunk))
+                requests.append(self._request_for(text, chunk))
+
+        started = time.perf_counter()
+        outcomes = self.llm.complete_many(requests, workers=self.prefix_workers)
+        self.stats["llm_seconds"] = round(time.perf_counter() - started, 2)
+
         out: list[Chunk] = []
-        for ordinal, chunk in enumerate(base):
-            prefix = self._prefix_for(doc_id, text, chunk)
+        ordinals: dict[str, int] = {}
+        for (doc_id, chunk), outcome in zip(plan, outcomes):
+            if isinstance(outcome, Exception):
+                # A failed call is a per-chunk fact, not a dead run (MIS-034). The
+                # chunk indexes as the control's chunk and the failure is counted, so
+                # one bad completion at call 7,000 of 8,218 cannot abandon an index
+                # build that has already been paid for.
+                self.stats["prefix_calls_failed"] += 1
+                if len(self.failures) < 20:
+                    self.failures.append(
+                        {"chunk_id": chunk.chunk_id, "doc_id": doc_id,
+                         "error": f"{type(outcome).__name__}: {str(outcome)[:200]}"}
+                    )
+                prefix = ""
+            else:
+                prefix = " ".join(outcome.split())
+
             if prefix:
                 self.stats["prefixes_generated"] += 1
                 self.stats["prefix_words_total"] += len(prefix.split())
@@ -202,9 +224,9 @@ class ContextualChunker(Chunker):
                 self.stats["prefixes_empty"] += 1
                 indexed = chunk.text
             self.stats["chunks"] += 1
-            out.append(
-                self.make_chunk(doc_id, ordinal, indexed, context_text=chunk.text)
-            )
+            ordinal = ordinals.get(doc_id, 0)
+            ordinals[doc_id] = ordinal + 1
+            out.append(self.make_chunk(doc_id, ordinal, indexed, context_text=chunk.text))
         return out
 
     def provenance(self) -> dict[str, Any]:

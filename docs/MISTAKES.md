@@ -175,6 +175,12 @@ Derived from the prevention rules below. Run through it and say in chat that you
     measured what it got wrong" — a stored-output test that only checked the empty
     marker left a 43% false-positive rate in the extractive check unseen. (MIS-035)
 
+46. **Estimate WALL-CLOCK time alongside dollars for any loop of N per-item network
+    calls, and state both when asking for approval.** One real call gives the per-call
+    latency; N times it is the run. EXP-0030 was 0.3% of the money gate and 16 hours of
+    wall clock, and nothing in the harness would have said so. If the answer is hours,
+    parallelise or cut N before launching. (MIS-036)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1189,3 +1195,46 @@ Derived from the prevention rules below. Run through it and say in chat that you
   count its disagreements against the stored corpus; "I ran it over real data" is not
   the same as "I measured what it got wrong."
 - **Added to preflight:** yes — item 45.
+
+## MIS-036 — Priced a run and never estimated its wall-clock time; killed it three hours in
+- **Date:** 2026-09-25
+- **Severity:** Medium — no money wasted, three hours of elapsed time and a killed run
+- **What happened:** EXP-0030 was estimated, gated and approved on **cost** — $0.2861
+  against a $2 gate — and launched. Three hours later it had completed **1,264 of 8,218**
+  prefix calls. Measured rate: **8.3 s per call**, because `ContextualChunker` generated
+  prefixes one at a time. Remaining: **16 hours**.
+- **How it was caught:** Krutik asked what was happening. I had no ETA to give him
+  because I had never computed one, so I derived the rate from the cache's `created_at`
+  timestamps and found it.
+- **Root cause:** I treated "estimate before you run" as "estimate the dollars."
+  CLAUDE.md permits reasoning about **cost, latency and implementation effort** before a
+  run, and the cost estimator, the $2 gate and the running totals are all about money.
+  Nothing in the harness asks how long a run will take, so nothing did. For a loop of N
+  per-item network calls, wall-clock is the binding constraint long before the budget is:
+  this run was 0.3% of the money gate and 16 hours of wall clock.
+- **Impact:** the run was killed and restarted. **Nothing was lost**: all 1,265 prefixes
+  were in the generation cache (DEC-049) and reachable after the refactor — verified
+  against the real corpus before spending anything further, because the cache key is the
+  *splitter's* `chunk_id` and it was not obvious the refactor had preserved it.
+- **Fix applied:**
+  1. `PipelineLLM.complete_many(requests, workers=N)` — cache reads, cache writes and
+     the counters stay on the calling thread and only the HTTP calls run in a pool, so
+     the SQLite connection is never shared and the hit rate stays truthful. A failed
+     call is returned as its exception rather than losing the batch (preflight 43).
+  2. `ContextualChunker` now splits the whole corpus first (free) and fetches every
+     prefix in one batch at `prefix_workers=16`. **Measured on 48 cold chunks: 0.45 s
+     per chunk, an 18x speedup, projecting 52 minutes instead of 16 hours.**
+     `prefix_workers` is deliberately **not** in `params`: it changes how long the pass
+     takes and nothing about its output, and in the chunker's identity it would change
+     every `chunk_id` and strand every prefix already paid for.
+  3. MIS-024's rule finally applied to the **generator**, not just the embedder: 429
+     gets its own budget of 8 attempts, honours `Retry-After`, and is counted. It had
+     never mattered because a Tier 2 run is 100 sequential calls; a 16-worker pool over
+     8,218 calls is exactly the traffic that produced MIS-024.
+  4. A test asserts serial and concurrent prefixing produce identical chunks, so the
+     speedup cannot change what is measured.
+- **Prevention rule:** **for any loop of N per-item network calls, estimate wall-clock
+  time alongside dollars, from a measured per-call latency, and say both numbers when
+  asking for approval.** One real call gives the rate; N times it is the run. If the
+  answer is hours, parallelise or reduce N *before* launching, not after.
+- **Added to preflight:** yes — item 46.

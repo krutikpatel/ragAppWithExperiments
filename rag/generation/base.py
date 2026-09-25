@@ -80,6 +80,15 @@ class GeneratorConfig:
     # attempt count travels on every answer so a run that needed them is visible.
     max_attempts: int = 4
     backoff_s: float = 2.0
+    # 429 gets its own budget, on top of the ordinary attempts, and honours
+    # `Retry-After`. MIS-024's prevention rule was applied to the embedder and not
+    # here, because until P2-13 nothing sent this path concurrent traffic: a Tier 2
+    # run is 100 sequential calls and never saw a rate limit. Contextual retrieval
+    # sends 8,218 with a worker pool, where 2/4/8 s of backoff expires inside a
+    # per-minute window exactly as it did for the two index builds MIS-024 killed.
+    rate_limit_attempts: int = 8
+    rate_limit_backoff_s: float = 15.0
+    rate_limit_max_wait_s: float = 300.0
 
 
 class Generator(ABC):
@@ -131,6 +140,10 @@ def extract_citations(text: str) -> list[str]:
 class OpenRouterGenerator(Generator):
     name = "openrouter"
 
+    # How many retries were 429s (MIS-024): counted so a slow pass is legible as
+    # rate limiting rather than as a slow provider.
+    rate_limited = 0
+
     # Transient by nature: retry. Anything else — auth, bad request, empty content —
     # is not, and is raised on the first occurrence.
     _RETRY_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
@@ -139,7 +152,10 @@ class OpenRouterGenerator(Generator):
         import httpx
 
         last_error: Exception | None = None
-        for attempt in range(1, self.config.max_attempts + 1):
+        attempt = 0
+        rate_limited = 0
+        while attempt < self.config.max_attempts + rate_limited:
+            attempt += 1
             try:
                 completion = self._complete_once(prompt)
                 return Completion(**{**completion.__dict__, "attempts": attempt})
@@ -151,12 +167,31 @@ class OpenRouterGenerator(Generator):
                 if exc.response.status_code not in self._RETRY_STATUS:
                     raise
                 last_error = exc
-            if attempt < self.config.max_attempts:
+                if exc.response.status_code == 429 and rate_limited < self.config.rate_limit_attempts:
+                    # Its own budget, not one of the ordinary attempts (MIS-024).
+                    rate_limited += 1
+                    self.rate_limited += 1
+                    time.sleep(self._rate_limit_wait(exc.response.headers.get("Retry-After"), rate_limited))
+                    continue
+            if attempt < self.config.max_attempts + rate_limited:
                 time.sleep(self.config.backoff_s * (2 ** (attempt - 1)))
         raise RuntimeError(
-            f"{self.config.model}: {self.config.max_attempts} attempts failed; "
+            f"{self.config.model}: {attempt} attempts failed ({rate_limited} rate-limited); "
             f"last error {type(last_error).__name__}: {last_error}"
         ) from last_error
+
+    def _rate_limit_wait(self, retry_after: str | None, nth: int) -> float:
+        """Seconds to wait after the nth consecutive 429: the provider's `Retry-After`
+        when it is a number of seconds, else 15 s doubling, capped."""
+        if retry_after:
+            try:
+                return min(float(retry_after), self.config.rate_limit_max_wait_s)
+            except ValueError:
+                pass  # an HTTP-date; fall through to the schedule
+        return min(
+            self.config.rate_limit_backoff_s * (2 ** (nth - 1)),
+            self.config.rate_limit_max_wait_s,
+        )
 
     def _complete_once(self, prompt: str) -> Completion:
         import httpx

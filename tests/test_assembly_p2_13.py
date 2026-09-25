@@ -770,3 +770,130 @@ def test_extractive_check_disagreement_rate_on_stored_output():
         f"({rejected}/{judged}). Above 10% the uncompressed fallback, not the "
         "compressor, is deciding what the generator sees (MIS-035)."
     )
+
+
+# --- P2-13: concurrent prefix generation ---------------------------------------
+
+def test_complete_many_replays_cache_and_preserves_order(tmp_path):
+    from rag.generation.pipeline_llm import Request
+
+    def backend(prompt_text: str) -> Completion:
+        return Completion(text=f"ctx-{prompt_text[-1]}", tokens_in=3, tokens_out=1,
+                          reasoning_tokens=0, finish_reason="stop")
+
+    reqs = [Request(f"q{i}", "p", "v1", f"prompt {i}") for i in range(6)]
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        llm = PipelineLLM("m/x", cache=cache, backend=backend)
+        first = llm.complete_many(reqs, workers=4)
+        assert first == [f"ctx-{i}" for i in range(6)], "results must be in request order"
+        assert llm.stats()["cache_misses"] == 6
+
+        again = PipelineLLM("m/x", cache=cache, backend=backend)
+        assert again.complete_many(reqs, workers=4) == first
+        assert again.stats()["hit_rate"] == 1.0
+
+
+def test_complete_many_hands_back_the_failure_instead_of_losing_the_batch(tmp_path):
+    """Preflight 43: one bad call must not cost the other 8,217."""
+    from rag.generation.pipeline_llm import Request
+
+    def backend(prompt_text: str) -> Completion:
+        if prompt_text.endswith("3"):
+            raise RuntimeError("provider said no")
+        return Completion(text="ok", tokens_in=1, tokens_out=1, reasoning_tokens=0,
+                          finish_reason="stop")
+
+    reqs = [Request(f"q{i}", "p", "v1", f"prompt {i}") for i in range(6)]
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        out = PipelineLLM("m/x", cache=cache, backend=backend).complete_many(reqs, workers=3)
+    assert isinstance(out[3], RuntimeError) and "provider said no" in str(out[3])
+    assert [o for i, o in enumerate(out) if i != 3] == ["ok"] * 5
+    # The failure must not be cached — a retry has to be able to succeed.
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        retry = PipelineLLM("m/x", cache=cache, backend=lambda t: Completion(
+            text="ok-now", tokens_in=1, tokens_out=1, reasoning_tokens=0, finish_reason="stop"))
+        assert retry.complete_many([reqs[3]], workers=1) == ["ok-now"]
+
+
+def test_prefix_workers_is_not_part_of_the_chunker_identity(tmp_path):
+    """Concurrency changes how long the pass takes and nothing about its output. In
+    `params` it would change every chunk_id and strand every prefix already paid for."""
+    from rag.chunking.contextual import ContextualChunker
+
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        a = ContextualChunker(llm=PipelineLLM("m/x", cache=cache, backend=fixed_backend("c")[0]),
+                              prefix_workers=1)
+        b = ContextualChunker(llm=PipelineLLM("m/x", cache=cache, backend=fixed_backend("c")[0]),
+                              prefix_workers=32)
+    assert a.chunker_id == b.chunker_id
+    assert "prefix_workers" not in a.params
+    with pytest.raises(ValueError, match="prefix_workers must be at least 1"):
+        ContextualChunker(llm=a.llm, prefix_workers=0)
+
+
+def test_concurrent_and_serial_prefixing_produce_identical_chunks(tmp_path):
+    """The speedup must not change what is measured."""
+    from rag.chunking.contextual import ContextualChunker
+
+    text = " ".join(f"w{i}" for i in range(2500))
+    outs = []
+    for workers in (1, 8):
+        backend, _ = fixed_backend("situating statement here")
+        with GenerationCache(tmp_path / f"c{workers}.sqlite") as cache:
+            ch = ContextualChunker(
+                chunk_size=100, overlap=0, prefix_workers=workers,
+                llm=PipelineLLM("m/x", cache=cache, backend=backend),
+            )
+            outs.append(ch.split_corpus([("doc1", text), ("doc2", text)]))
+    serial, parallel = outs
+    assert len(serial) == len(parallel) == 50
+    assert [(c.chunk_id, c.text, c.context) for c in serial] == \
+           [(c.chunk_id, c.text, c.context) for c in parallel]
+    assert [c.ordinal for c in serial if c.doc_id == "doc1"] == list(range(25))
+
+
+def test_prefix_cache_key_is_the_splitters_chunk_id(tmp_path):
+    """Pinned because it is subtle and expensive to get wrong: the key comes from the
+    SPLITTER's chunk id, not the contextual chunker's, so the cache survives changes to
+    the contextual chunker's own identity. The model id and the rendered prompt are
+    still part of the cache key, so a model or prompt change correctly misses."""
+    import sqlite3
+
+    from rag.chunking.contextual import ContextualChunker
+
+    backend, _ = fixed_backend("ctx")
+    with GenerationCache(tmp_path / "c.sqlite") as cache:
+        ch = ContextualChunker(chunk_size=10, overlap=0,
+                               llm=PipelineLLM("m/x", cache=cache, backend=backend))
+        ch.split("doc1", " ".join(f"w{i}" for i in range(25)))
+        expected = {f"chunk:{c.chunk_id}" for c in ch.splitter.split("doc1", " ".join(f"w{i}" for i in range(25)))}
+        conn = sqlite3.connect(tmp_path / "c.sqlite")
+        stored = {r[0] for r in conn.execute(
+            "SELECT question_id FROM generations WHERE prompt_id='contextual_chunk'")}
+    assert stored == expected
+
+
+def test_generator_gives_429_its_own_budget():
+    """MIS-024's rule, applied to the path P2-13 sends 8,218 concurrent calls down."""
+    from rag.generation.base import GeneratorConfig, OpenRouterGenerator
+
+    gen = OpenRouterGenerator(GeneratorConfig(model="m/x"))
+    assert gen.config.rate_limit_attempts >= 4
+    # Retry-After in seconds is honoured, capped at the maximum.
+    assert gen._rate_limit_wait("7", 1) == 7.0
+    assert gen._rate_limit_wait(str(10**6), 1) == gen.config.rate_limit_max_wait_s
+    # An HTTP-date falls through to the doubling schedule rather than crashing.
+    assert gen._rate_limit_wait("Wed, 21 Oct 2026 07:28:00 GMT", 1) == gen.config.rate_limit_backoff_s
+    assert gen._rate_limit_wait(None, 2) == gen.config.rate_limit_backoff_s * 2
+    # The 429 BUDGET must outlast the ordinary schedule, which is the whole point of
+    # MIS-024: 2/4/8 s expires inside a per-minute rate window. Totals, not first waits.
+    ordinary_total = sum(gen.config.backoff_s * 2 ** i for i in range(gen.config.max_attempts))
+    rate_limit_total = sum(
+        min(gen.config.rate_limit_backoff_s * 2 ** i, gen.config.rate_limit_max_wait_s)
+        for i in range(gen.config.rate_limit_attempts)
+    )
+    assert ordinary_total == 30.0
+    assert rate_limit_total > 20 * ordinary_total, (
+        f"429 budget {rate_limit_total}s barely exceeds the ordinary {ordinary_total}s; "
+        "a per-minute window would still outlast it (MIS-024)"
+    )

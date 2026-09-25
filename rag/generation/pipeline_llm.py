@@ -11,7 +11,9 @@ the text along with the ids, which are part of the cache key.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import Any
 
 from rag.generation.base import Completion, GeneratorConfig, OpenRouterGenerator
@@ -23,6 +25,16 @@ from rag.hashing import canonical_json, hash_text
 TEMPERATURE = 0.0
 
 Backend = Callable[[str], Completion]
+
+
+@dataclass(frozen=True)
+class Request:
+    """One prompt to complete, for `complete_many`."""
+
+    question_id: str
+    prompt_id: str
+    prompt_version: str
+    prompt_text: str
 
 
 class PipelineLLM:
@@ -94,6 +106,83 @@ class PipelineLLM:
         self.tokens_out += completion.tokens_out
         self.cache.put(key, completion.text, tokens_in=completion.tokens_in, tokens_out=completion.tokens_out)
         return completion.text
+
+    def complete_many(
+        self, requests: Sequence[Request], *, workers: int = 1
+    ) -> list[str | Exception]:
+        """Complete many prompts, reusing the cache, with the network calls in parallel.
+
+        Results are returned in the order of `requests`; a request whose call failed
+        yields the exception instead of a string, so the caller decides per unit what
+        to do with it (preflight 43) rather than losing the whole batch.
+
+        Concurrency is deliberately confined to the HTTP calls. Cache reads, cache
+        writes and the counters all happen on this thread, before and after the pool,
+        because the cache is one SQLite connection and the counters are plain ints —
+        sharing either across threads would corrupt the hit rate this class exists to
+        report, and SQLite connections are not safe across threads by default.
+
+        `workers=1` is the default so that no existing caller changes behaviour by
+        upgrading; only a caller that asks for parallelism gets it. Sequential prefix
+        generation for 8,218 chunks measured 8.3 s/call — 16 hours (P2-13).
+        """
+        if workers < 1:
+            raise ValueError("workers must be at least 1")
+
+        keys = [
+            CacheKey(
+                question_id=r.question_id,
+                prompt_id=r.prompt_id,
+                prompt_version=r.prompt_version,
+                model_id=self.model,
+                input_hash=self.input_hash(r.prompt_text),
+            )
+            for r in requests
+        ]
+        results: list[str | Exception | None] = [None] * len(requests)
+        misses: list[int] = []
+        for i, (request, key) in enumerate(zip(requests, keys)):
+            self.calls += 1
+            self.prompts_used.add(f"{request.prompt_id}@{request.prompt_version}")
+            cached = self.cache.get(key)
+            if cached is not None:
+                self.hits += 1
+                results[i] = cached.output
+            else:
+                self.misses += 1
+                misses.append(i)
+
+        if misses:
+            # The backend is shared across workers, which is safe here and checked
+            # rather than assumed: `_complete_once` calls `httpx.post`, which builds a
+            # client per request, and the generator's only mutable state is the
+            # `rate_limited` diagnostic counter. If a backend ever holds a shared
+            # session or a non-atomic accumulator, it needs one instance per worker.
+            def run(index: int) -> tuple[int, Any]:
+                try:
+                    return index, self._backend(requests[index].prompt_text)
+                except Exception as exc:  # noqa: BLE001 - handed back, not swallowed
+                    return index, exc
+
+            if workers == 1:
+                completed = [run(i) for i in misses]
+            else:
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    completed = list(pool.map(run, misses))
+
+            for index, outcome in completed:
+                if isinstance(outcome, Exception):
+                    results[index] = outcome
+                    continue
+                self.tokens_in += outcome.tokens_in
+                self.tokens_out += outcome.tokens_out
+                self.cache.put(
+                    keys[index], outcome.text,
+                    tokens_in=outcome.tokens_in, tokens_out=outcome.tokens_out,
+                )
+                results[index] = outcome.text
+
+        return [r if r is not None else RuntimeError("no result") for r in results]
 
     def stats(self) -> dict[str, Any]:
         """Recorded on the run row as `pipeline_llm_json` (P2-03)."""
