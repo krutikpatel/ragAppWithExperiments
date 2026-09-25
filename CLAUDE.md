@@ -392,7 +392,12 @@ rag/
   paths.py          every filesystem location, in one place
   hashing.py        canonical-JSON hashing for corpora, splits, configs
   prompts.py        versioned prompt loading by (id, version), content-hashed
-  assembly.py       ContextAssembler — retrieved chunks into the generator prompt
+  assembly.py       ContextAssembler — retrieved chunks into the generator prompt.
+                    P2-13 adds `context_order` (`lost_in_middle` puts the strongest at both
+                    prompt ends; a permutation, so it CANNOT change a retrieval metric and a
+                    test asserts it) and `ContextCompressor` (extractive per-chunk trim
+                    through PipelineLLM). Both act after the document walk, so neither is in
+                    `TIER1_FIELDS` and both are refused at Tier 1
   citations.py      P1-06: [doc:<id>] -> title, URL (doc store) and the exact retrieved
                     chunk; invented ids are shown and flagged, never hidden
   ask.py            `rag ask` — one question through the configured pipeline, rendered;
@@ -446,7 +451,12 @@ rag/
                     cache.py — GenerationCache, SQLite keyed on (question_id, prompt_id,
                     prompt_version, model_id, input_hash) for in-pipeline LLM calls;
                     pipeline_llm.py — PipelineLLM, the ONLY way retrieval-side code calls
-                    a model: temperature 0 constant, cached, hit rate counted (P2-03)
+                    a model: temperature 0 constant, cached, hit rate counted (P2-03).
+                    `complete_many(requests, workers=N)` parallelises the HTTP calls ONLY —
+                    cache reads, cache writes and the counters stay on the calling thread,
+                    because the cache is one SQLite connection and a shared one would
+                    corrupt the hit rate. A failed call comes back as its exception rather
+                    than losing the batch (MIS-036)
   runner/           config.py (RunConfig, EvalTier, AXES, config_hash = exact identity,
                     identity_hash = the tier's identity, MIS-019), run.py (run(config)
                     -> row; split policy, cost gate, promoted diff, pipeline cache
@@ -482,7 +492,8 @@ rag/
 prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0),
                     baseline_answer.yaml (the Phase 1 control, DEC-042: numbered
                     steps, English, [doc:<id>] on every claim, NO URLs) and
-                    rerank_llm.yaml (P2-10's ordering prompt) — Ragas owns
+                    rerank_llm.yaml (P2-10's ordering prompt),
+                    contextual_chunk.yaml and compress_context.yaml (P2-13) — Ragas owns
                     the judge prompts. Never inline a prompt in Python. Content hashes
                     are pinned in tests/test_prompts.py, so an edit without a version
                     bump fails the suite. The runner asserts the generator's prompt_ref
@@ -504,6 +515,9 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     builds the index, dev decides); exp_0024..0026_rerank_*_dev.yaml
                     are Axis 5 (DEC-058/059; dev only — reranking bills per query, so
                     dev_large costs 31x and is bought only for a winner, OQ-033).
+                    exp_0027_mmr_lambda*.yaml and exp_0028..0030_*.yaml are Axis 6
+                    (P2-13; DEC-062/063/064 — the two Tier 2 ones skip the judge, the two
+                    LLM-using ones run on gpt-oss-20b).
                     smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml,
                     smoke_p2_10_rerank.yaml and tier2_smoke.yaml are harness smoke
                     tests, not experiments.
@@ -649,6 +663,7 @@ Rules that outlive any particular library:
 | Embedding (Ragas `answer_relevance`) | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Embedding (dense retrieval) | `qwen/qwen3-embedding-8b` **pinned to DeepInfra** | DEC-041 | Same model as the Ragas embedder; Krutik chose hosted over the handover's local option. **Provider is part of the index key**: DeepInfra and Nebius return different vectors for the same input. Index: 8,218 × 4096 float32 = 134.6 MB, ~20 min and $0.031 to build (EXP-0005), cached under `indexes/`. Queries cost ~$0.0000004 each and are **not byte-deterministic** — three runs ranged 0.005 on strict recall@5 (OQ-023). `qwen3` prefix: instruct prefix on queries, none on passages. |
 | Reranker | `cohere/rerank-v3.5` **pinned to Cohere** — tested, **not promoted** | DEC-059 | Axis 5's only run (EXP-0024): no measurable change at any depth on `dev`, at 4x latency and ~2,900x cost per query. `promoted.yaml` has no reranker. |
+| In-pipeline prefix writer / compressor | `openai/gpt-oss-20b` | DEC-064 | $0.018/$0.090 per Mtok, 131k ctx. Writes P2-13's chunk prefixes (8,218 calls, $0.2165) and does its contextual compression. Chosen on a **30-call probe of real articles**, because the failure mode — a "Here is the statement:" preamble — gets EMBEDDED in front of every chunk. Family `openai-oss`, so distinct from the generator. **It is a reasoning model whose `reasoning_effort` is NOT honoured**: `"minimal"` and `"low"` give identical reasoning-token counts, one compression call spent 32,848 completion tokens on a 60-word answer, and the same input that empties its budget succeeds on retry. Every caller must treat a failed call as a per-unit fact (MIS-034). Emits non-ASCII punctuation (U+2011, curly quotes) into the indexed text. |
 | _(reranker availability)_ | — | DEC-059 | The rerank endpoint is `POST /api/v1/rerank` and there is no listing to browse (`/rerank/models` 404s; rerank is not a `/models` category), so availability is probed one id at a time. **Served** (measured 2026-09-22, 50 docs x 600 words): `cohere/rerank-v3.5` @Cohere $0.001/query 778 ms; `cohere/rerank-4-fast` @Cohere $0.002/query 1,298 ms; `qwen/qwen3-reranker-8b` @Fireworks $0.008125/query 1,847 ms. **Not served:** `qwen3-reranker-4b` (404), `baai/bge-reranker-v2-m3` and `mxbai-rerank-large-v2` (400, not on OpenRouter). **OpenRouter lists all of them at $0 and bills real money — cost comes from the response's `usage.cost`, never the table (MIS-025).** |
 
 An empty row is the honest state, not an omission to paper over. The benchmark's gold

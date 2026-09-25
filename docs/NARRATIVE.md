@@ -507,6 +507,103 @@ have said something about a model.
 And it cost the most of anything here: **$0.00605 a query, about fifteen thousand times
 the control**, with 31 transient retries against Cohere's one or two.
 
+### Context assembly: five ways to rearrange the answer, and what they taught (EXP-0027 to EXP-0030)
+
+Axis 6 asks a different question from the rest. Every earlier axis changed what gets
+*found*; this one changes what the found documents look like by the time the model
+writes an answer. Five techniques, and between them they cost **$0.34**.
+
+**MMR made things worse, monotonically (EXP-0027).** Maximal Marginal Relevance trades
+relevance against diversity: it demotes a candidate that looks too much like one already
+picked. It is the technique the phase handover singled out, on the reasoning that
+diversity ought to help multi-document questions. It halved recall. Strict recall@5 went
+0.720 → 0.685 → 0.570 → 0.360 → **0.335** as the diversity weight rose, every step worse,
+and the multi-document slice — the one it was chosen for — went **0.350 → 0.000**, losing
+fourteen questions and gaining none.
+
+The cause was measurable rather than guessable. Two gold documents of the same question
+are **+0.095 more similar to each other** than a gold is to an average candidate, because
+they describe the same task. So the redundancy term punishes the second gold harder than
+it punishes an irrelevant article. And candidate-to-candidate similarity has more than
+twice the dynamic range of relevance in a candidate set, so below a moderate weight the
+objective is effectively selecting semantic outliers. **On a single-product help centre,
+being unlike the other candidates is evidence of irrelevance, not of novelty.** A run at
+the identity setting reproduced the control exactly, so this was the technique and not
+the harness.
+
+**Lost-in-the-middle reordering did nothing, and the reason is a number (EXP-0028).** The
+idea, from Liu et al. 2023, is that long-context models attend to the beginning and end
+of a prompt and lose the middle, so the strongest documents should go at both ends. Every
+deterministic generation metric landed inside its noise floor; the lowest p-value
+anywhere in the per-slice breakdown was 0.106. The measured reason: this prompt averages
+**2,174 tokens**, and the paper measured that dip across roughly 2,700 to 21,000 tokens
+with ten to thirty documents. Five documents is not a long context. There was no middle
+to get lost in.
+
+It is not an inert component, though, which is the interesting part. Fifteen of a hundred
+questions changed which documents they cited, and **thirteen of those had a byte-identical
+retrieved set and ranking** — only the position in the prompt differed. Six improved,
+seven worsened. One question flipped to the *opposite factual claim*: asked about
+migrating a site between editors, the control said it was impossible and cited the article
+that says so, while the reordered run described a migration path that same article says
+does not exist. Same five documents, different order. That is worth knowing about a
+generator even when the metric shrugs.
+
+**Compression bought a 47% shorter prompt and paid for it in citations (EXP-0029).** An
+extractive pass trimmed each retrieved chunk to the sentences bearing on the question.
+The prompt fell from 1,712 to 912 words and from five documents to 3.13. Citation recall
+fell **0.598 → 0.522, p = 0.036** — the only significant result in the axis, and negative.
+
+The diagnosis is the part I would keep. The compressor is *good*: measured against the
+labels it dropped 43.9% of non-gold chunks and only 8.7% of gold ones, a five-fold
+discrimination ratio. It is genuinely reading the question. But of the seventeen questions
+that lost citation recall, only six had a gold chunk dropped — **eleven kept every gold
+chunk and lost the citation anyway**. The relevant sentences were still sitting in the
+prompt. Shortening the document *around* them made the model less willing to cite it, and
+the rate of citing nothing at all rose from 5.7% to 9.0% on the same retrieved documents.
+**That is a fact about the generation step, not about compression**, and it would apply to
+any technique that shortens a retrieved document in place.
+
+**Contextual retrieval was inert exactly where the corpus said it must be (EXP-0030).**
+This is the technique from Anthropic's September 2024 post, and the most expensive thing
+in the phase: one model call per chunk across the whole corpus — 8,218 calls — writing a
+sentence that situates each chunk inside its article, with the *prefixed* text indexed and
+the original chunk still shown to the generator. Strict recall@5 went 0.720 → 0.725,
+**p = 1.000**, sixteen questions gained and fifteen lost.
+
+Before running it I wrote down that if the effect were real it should concentrate in the
+21% of articles too long to fit in one chunk, since for the rest the prefix restates text
+the chunk already contains — and that I cared about that split more than the headline. It
+was the right thing to have written:
+
+| Gold article | n | Control | Contextual | Δ | gained / lost |
+|---|---|---|---|---|---|
+| Fits in one chunk | 100 | 0.780 | 0.780 | **+0.000** | **4 / 4** |
+| Spans several chunks | 100 | 0.660 | 0.670 | +0.010 | 12 / 11 |
+
+The one-chunk half is *perfectly* inert — four up, four down, delta exactly zero. And the
+dev split turns out to be **50% multi-chunk against the corpus's 21%**, because longer
+articles attract more questions, so the technique was measured on a subset two and a half
+times enriched for the condition it needs, and still returned +0.010.
+
+Where it works, it works cleanly: asked *"do I have to give my login to a website designer
+to work on my site"*, the control never surfaced the right article in five; the prefixed
+index put it at rank 1, because the generated sentence named "collaborators" and "Roles &
+Permissions" — vocabulary the question never used and the chunk never contained.
+
+Why that does not add up to a gain is the lesson. The losses are **not** bad prefixes. One
+gold article with an accurate, well-written prefix fell from rank 1 to outside the top
+five. Every competing document was prefixed too, so the lift is near-uniform across the
+index and relative ordering barely moves. I had framed the question as *does the prefix
+add discriminating information?* The right question was *does it discriminate between
+candidates?* A technique that improves every candidate equally cannot re-rank them.
+
+At 6,221 articles this cost **$0.25** and twenty-one minutes. At six million documents the
+same technique is roughly **$250 per index build**, repeated every time the chunking, the
+prompt or the model changes. It is bounded and affordable here, and a standing budget line
+there. That difference belongs with the result rather than in a footnote.
+
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control
