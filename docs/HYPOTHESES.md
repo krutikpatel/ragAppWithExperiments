@@ -454,7 +454,20 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   three runs, labelled by `rag/eval/noise_floor.py`. **No retrieval delta may be
   reported for this run**, by construction (P2-13); `tests/test_assembly_p2_13.py`
   proves the reordering is a permutation.
-- **Resolution:** _pending EXP-0028._
+- **Resolution:** **confirmed, and the reasoning held rather than merely the
+  conclusion.** Every deterministic generation metric landed inside its MDD: citation
+  precision Δ −0.021 (p = 0.558), citation recall Δ −0.005 (p = 1.000), step coverage
+  Δ −0.008 (p = 0.792), refusal Δ −0.010 (p = 1.000), step order Δ 0.000 (p = 1.000).
+  Nothing significant on any slice, lowest p anywhere 0.106. The stated mechanism was
+  also measured: the assembled context came in at **1,712 words ≈ 2,174 tokens**,
+  *below* the 2,700-token floor of the range Liu et al. measured — so "there may be no
+  middle to get lost in at that length" was checkable and checked, not a hedge.
+  The part I flagged as most likely wrong — "citation **recall** is where it would
+  show" — was the right thing to flag: recall is exactly where the churn appeared.
+  **15 questions changed citations and 13 of them had an identical retrieved set and
+  ranking**, six up and seven down, netting −0.005 at p = 1.000. I predicted no metric
+  movement and got it; I did not predict that 13% of answers would change underneath a
+  flat number. `run_20260925_014154_2d6b`.
 
 ## H-021 — Compression buys a large token reduction and loses procedure steps doing it
 - **Date written:** 2026-09-24, before EXP-0029 ran
