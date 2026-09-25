@@ -2376,3 +2376,110 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   (lost-in-the-middle reorders the *assembled context* without changing which
   documents are in it, and so does NOT belong in this slot — it changes no retrieval
   metric by construction and is Tier 2 only).
+
+## DEC-063 — Run the two Tier 2 assembly experiments without the judge
+- **Date:** 2026-09-24
+- **Decided by:** Krutik (proposed by Claude)
+- **Status:** Active
+- **Context:** EXP-0028 (lost-in-the-middle reordering) and EXP-0029 (contextual
+  compression) are Tier 2 by necessity — they change only what the generator sees, so
+  no retrieval metric can move and there is nothing for Tier 1 to measure. The
+  `--estimate-only` output put each run at **$0.9102**, of which **$0.8760 was the
+  judge** and $0.0341 the generator. The judge is still the placeholder of DEC-018,
+  whose scores "must not reach EXPERIMENTS.md or NARRATIVE.md."
+- **The problem stated plainly:** 96% of the cost of each run buys three numbers
+  (faithfulness, answer relevance, answer correctness) that the documentation contract
+  forbids reporting, that will be superseded the moment a real judge is chosen, and
+  that would require re-running both experiments at that point anyway. The metrics
+  that actually decide this axis — citation precision and recall, refusal rate, URL
+  count, step coverage, and for EXP-0029 the word-reduction ratio — are deterministic,
+  label-based and free.
+- **Options considered:**
+  1. Pay it. $1.82 for the pair, and the judged scores sit in the results store
+     alongside EXP-0006's three runs with a valid `dense-control-v1` MDD. Rejected:
+     comparability with numbers nobody may quote is not worth 96% of a run.
+  2. **Skip the judge on these two runs — chosen.** $0.0341 each instead of $0.9102,
+     a 27x reduction, with every reportable metric unchanged.
+  3. Choose a real judge now and end the placeholder problem. Rejected *for this
+     story*, not on the merits: it is a separate model decision with unmeasured bias
+     tradeoffs (OQ-014), and it starts a new comparison family that strands every
+     judged number recorded so far. It should be its own decision, not a side effect
+     of an assembly experiment.
+- **Decision:** `RunConfig.skip_judge` — an **affirmative flag**, not an empty
+  `judge_model`. Setting the tier to 2 with no judge model and no flag still fails, so
+  a typo cannot silently turn a $0.91 run into a $0.03 one that looks judged in the
+  ledger; setting both the flag and a judge model is also refused, because guessing
+  which was intended would decide the run's cost. When set, all three judged criteria
+  are recorded per question as `None` (never zero — preflight 6) and the run row
+  carries `skip_judge`, `skipped_criteria` and a `judge_skipped_by_config` count.
+- **Evidence:** the two `--estimate-only` outputs above ($0.9102 vs $0.0341,
+  pricing 2026-09-16). No quality claim is made or implied by this entry.
+- **Consequences:**
+  - EXP-0028 and EXP-0029 produce **no** faithfulness, answer-relevance or
+    answer-correctness values at all. Their rows show those criteria as skipped rather
+    than empty, so the gap is visibly deliberate.
+  - They are **not comparable to EXP-0006 on judged metrics** — there is nothing to
+    compare. They remain fully comparable on every deterministic metric, which is what
+    P2-13 asks these two experiments to decide.
+  - A latent bug was found and fixed while implementing this: `estimate_tier2_cost`
+    returned no `judge_usd` when there was no judge price to look up, and
+    `estimate_run_cost` correctly reads a *missing* price as "unavailable" and halts at
+    the gate (MIS-025). Zero judge tokens is a cost of exactly zero at any price, so
+    that case is now stated explicitly rather than falling through the
+    price-unavailable path. An absent price is not free; an absent **call** is.
+- **Revisit if:** a real judge is chosen (P1-11 / OQ-014). At that point these two
+  experiments are re-run under it if a judged number is wanted for them, and this entry
+  is what says why they lack one.
+
+## DEC-064 — `openai/gpt-oss-20b` writes the chunk prefixes and does the compression
+- **Date:** 2026-09-24
+- **Decided by:** Krutik (proposed by Claude, after a probe Krutik asked for)
+- **Status:** Active
+- **Context:** P2-13's two remaining LLM-using techniques need a model in a role
+  nothing in this project had filled: contextual retrieval writes one situating
+  statement per chunk (8,218 calls, and the output is **indexed**), and contextual
+  compression trims each retrieved chunk per question (500 calls at Tier 2 on `dev`).
+- **Why the choice was not obvious:** the failure mode lands inside the index. If the
+  model prepends "Here is the statement:", that text is embedded in front of 8,218
+  chunks and there is no cheap way to find it afterwards. Before the probe, this repo
+  had measured instruction-following evidence for exactly two models — `gpt-5-nano`
+  (obeys `[doc:<id>]` 96–98.5% of the time) and `gpt-oss-120b` as judge — so every
+  cheaper candidate was an assumption.
+- **Options considered:** priced live off `/api/v1/models` on 2026-09-24 against the
+  counted workload (10,616,375 tokens in), then the top three probed with **10 real
+  calls each on real corpus articles**, six of them chunks of multi-chunk articles:
+  1. **`openai/gpt-oss-20b` ($0.018/$0.090) — chosen.** 0/10 flagged. Output names the
+     product *and* what the chunk covers, in 22–47 words: *"This Wix Bookings article
+     explains payment options in the Wix app, and the chunk details manual card entry,
+     tap-to-pay, gift card, and split payment methods."* Measured 66.3 output tokens
+     per call. A different model family from the generator (`openai-oss`, not
+     `openai`), which costs nothing here and removes a question.
+  2. `openai/gpt-5-nano` ($0.050/$0.400). 0/10 flagged and equally usable, but padded
+     — *"It pertains to…", "It sits inside the article about…"* — carrying the same
+     information in 39–59 words at 79 output tokens per call. **$0.790 against
+     $0.240** for the same experiment. Rejected on price for no measured benefit.
+  3. `mistralai/mistral-nemo` ($0.019/$0.030), the cheapest with a usable context.
+     Rejected on the probe: it wrote **titles, not situating statements**
+     (*"Wix Groups: Monetization via Pricing Plans"*, 6–14 words), and **2 of 10 came
+     wrapped in quote marks**, which would have been embedded verbatim. It is a
+     different technique at a $0.02 saving.
+- **Decision:** `openai/gpt-oss-20b` for both roles, unpinned (model-level price).
+  Provider is **not** pinned here, unlike the judge (DEC-032): the prefixes are cached
+  in the generation cache and the index is keyed on the chunker id, so a provider
+  change cannot silently move a recorded number — it can only cause a cache miss,
+  which is visible as a hit rate below 100% on the row.
+- **Evidence:** the 30-call probe above, ~$0.002, output read by hand. Prices from
+  `/api/v1/models` on 2026-09-24. **No quality prediction is made:** the probe tested
+  whether the model obeys the prompt's format, not whether prefixing helps retrieval.
+  That is EXP-0030 and is pre-registered as H-022.
+- **Consequences:**
+  - `openai/gpt-oss-20b` is added to `configs/pricing.yaml` by hand and its numbers
+    fetched by `rag pricing refresh`, per that file's rule (the model list is curated,
+    the numbers never are).
+  - Its non-ASCII punctuation (`tap‑to‑pay` with U+2011, curly quotes) goes into the
+    indexed text. Harmless for embedding, recorded because a curly apostrophe has
+    already cost this project 13–18 hidden refusals once (DEC-045).
+  - EXP-0030's total drops to ~$0.28 and Axis 6's three remaining runs to ~$0.37.
+- **Revisit if:** the recorded prefixes show preamble, truncation or non-English text
+  at a rate above ~1% when EXP-0030's `chunker_meta` is reviewed; or if a later axis
+  needs a longer prefix than 60 words, which is a new workload and a new estimate.

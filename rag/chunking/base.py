@@ -37,6 +37,10 @@ class Chunker(ABC):
     """Splits a document's indexed text into chunks."""
 
     name: str
+    # Set by chunkers that call an LLM to build the index (contextual retrieval,
+    # P2-13). `build_chunker` hands those the generation cache, so the calls are
+    # cached and a rebuild is free (DEC-049).
+    needs_generation_cache = False
 
     @property
     @abstractmethod
@@ -57,6 +61,15 @@ class Chunker(ABC):
         """Embedder settings this chunker would spend on *before* any chunk exists
         (the semantic chunker embeds every sentence to find boundaries), or None.
         The runner estimates and gates that spend from this (P2-06, P2-07)."""
+        return None
+
+    def llm_workload(self, docs: dict[str, str]) -> dict[str, Any] | None:
+        """Calls and tokens this chunker would spend on an LLM *before* any chunk
+        exists, or None when it calls no model. Contextual retrieval (P2-13) makes one
+        call per chunk across the corpus; the runner estimates and gates that from
+        here, so the money is approved before the first call rather than after
+        (P2-06). Counted from a free split of `docs`, never guessed.
+        """
         return None
 
     def provenance(self) -> dict[str, Any]:
@@ -105,17 +118,24 @@ def _ensure_builtins() -> None:
     if _BUILTINS_LOADED:
         return
     _BUILTINS_LOADED = True
+    import rag.chunking.contextual  # noqa: F401
     import rag.chunking.parent_document  # noqa: F401
     import rag.chunking.semantic  # noqa: F401
     import rag.chunking.sentence_window  # noqa: F401
     import rag.chunking.structure  # noqa: F401
 
 
-def build_chunker(name: str, **params: Any) -> Chunker:
+def build_chunker(name: str, *, generation_cache: Any | None = None, **params: Any) -> Chunker:
+    """Build a chunker by name. The generation cache is injected only into chunkers
+    that declared they call a model, so no other chunker's signature has to know
+    about it."""
     _ensure_builtins()
     if name not in _CHUNKERS:
         raise KeyError(f"unknown chunker {name!r}; registered: {sorted(_CHUNKERS)}")
-    return _CHUNKERS[name](**params)
+    cls = _CHUNKERS[name]
+    if cls.needs_generation_cache:
+        return cls(generation_cache=generation_cache, **params)
+    return cls(**params)
 
 
 def chunker_class(name: str) -> type[Chunker]:

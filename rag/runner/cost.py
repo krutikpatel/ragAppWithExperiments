@@ -348,8 +348,16 @@ def estimate_tier2_cost(
         )
         estimate["generator_price_source"] = "model-level (unpinned; routing may charge more)"
 
+    # Zero judge tokens is a judge cost of exactly zero, at any price — no lookup
+    # needed and none attempted. Without this branch a `skip_judge` run (DEC-063) or a
+    # split with no reference answers at all would come back with no `judge_usd`, and
+    # `estimate_run_cost` would correctly read a MISSING price as "unavailable" and
+    # halt at the gate. An absent price is not free (MIS-025); an absent *call* is.
+    if judge_in == 0 and judge_out == 0:
+        estimate["judge_usd"] = 0.0
+        estimate["judge_price_source"] = "no judge calls (0 judged questions)"
     # Judge is pinned, so the price is the pinned provider's, and nothing else.
-    if judge_provider_order:
+    elif judge_provider_order:
         judge_price = pricing.pinned_price("chat", judge_model, judge_provider_order)
         if judge_price.get("provider"):
             estimate["judge_usd"] = round(
@@ -525,12 +533,99 @@ def estimate_rerank_cost(
     return estimate
 
 
+# --- Axis 6 (P2-13) -------------------------------------------------------------
+# Two LLM spends that are not the generator's and not the judge's.
+#
+# The contextual chunker's is a **pre-spend**: one call per chunk across the whole
+# corpus, before a single chunk exists, so it is estimated from a free split and
+# gated before any call is made. It is priced at the model level like the generator,
+# which is the floor of what routing may charge.
+#
+# The compressor's is **per query per retrieved chunk** at Tier 2. Its output length
+# is the one quantity here with no measurement behind it: an extractive call cannot
+# return more than the passage it was given, so the passage length is used as the
+# upper bound and labelled as such. The first run replaces it with an actual.
+
+COMPRESSION_OUTPUT_BOUND = "upper bound: an extractive call cannot exceed its passage"
+
+
+def estimate_chunker_llm_cost(
+    workload: dict[str, Any] | None, *, pricing: PricingTable | None = None
+) -> dict[str, Any]:
+    """Cost of a chunker's pre-chunk LLM spend, from its counted workload (P2-13)."""
+    if not workload:
+        return {}
+    pricing = pricing or PricingTable.load()
+    model = workload["model"]
+    estimate: dict[str, Any] = {
+        "calls": workload["calls"],
+        "tokens_in": workload["tokens_in"],
+        "tokens_out": workload["tokens_out"],
+        "model": model,
+        "prompt_caching": workload.get("prompt_caching", False),
+        "source": "counted from a free split of the corpus, one call per chunk",
+        "is_estimate": True,
+    }
+    price = pricing.price("chat", model)
+    if not price:
+        estimate["price_unavailable"] = f"no chat price for {model}"
+        return estimate
+    estimate["chunker_llm_usd"] = round(
+        workload["tokens_in"] / 1e6 * price["in"] + workload["tokens_out"] / 1e6 * price["out"], 4
+    )
+    estimate["price_source"] = "model-level (unpinned; routing may charge more)"
+    estimate["price_per_mtok"] = {"in": price["in"], "out": price["out"]}
+    return estimate
+
+
+def estimate_compression_cost(
+    *,
+    compressor: str,
+    compressor_params: dict[str, Any] | None,
+    n_questions: int,
+    chunks_per_question: int,
+    chunk_words: int,
+    prompt_overhead_words: int = 0,
+    pricing: PricingTable | None = None,
+) -> dict[str, Any]:
+    """Cost of contextual compression: one call per retrieved chunk per question."""
+    if not compressor:
+        return {}
+    pricing = pricing or PricingTable.load()
+    model = (compressor_params or {}).get("model", "")
+    calls = n_questions * chunks_per_question
+    tokens_in = int(calls * (chunk_words + prompt_overhead_words) * WORDS_TO_TOKENS)
+    tokens_out = int(calls * chunk_words * WORDS_TO_TOKENS)
+    estimate: dict[str, Any] = {
+        "calls": calls,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "model": model,
+        "output_basis": COMPRESSION_OUTPUT_BOUND,
+        "is_estimate": True,
+    }
+    if not model:
+        estimate["price_unavailable"] = f"context_compressor {compressor!r} has no model"
+        return estimate
+    price = pricing.price("chat", model)
+    if not price:
+        estimate["price_unavailable"] = f"no chat price for {model}"
+        return estimate
+    estimate["compression_usd"] = round(
+        tokens_in / 1e6 * price["in"] + tokens_out / 1e6 * price["out"], 4
+    )
+    estimate["price_per_mtok"] = {"in": price["in"], "out": price["out"]}
+    return estimate
+
+
 def estimate_run_cost(
     *,
     tier2: dict[str, Any] | None,
     index: dict[str, Any],
     pipeline_llm_usd: float = 0.0,
     rerank: dict[str, Any] | None = None,
+    chunker_llm: dict[str, Any] | None = None,
+    compression: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Total pre-run estimate with the breakdown of what drives it."""
     parts: dict[str, float] = {}
@@ -551,6 +646,15 @@ def estimate_run_cost(
             parts["rerank"] = rerank["rerank_usd"]
         elif "price_unavailable" in rerank:
             unavailable.append(rerank["price_unavailable"])
+    for name, part, key in (
+        ("chunker_llm", chunker_llm, "chunker_llm_usd"),
+        ("compression", compression, "compression_usd"),
+    ):
+        if part:
+            if key in part:
+                parts[name] = part[key]
+            elif "price_unavailable" in part:
+                unavailable.append(part["price_unavailable"])
     if pipeline_llm_usd:
         parts["pipeline_llm"] = pipeline_llm_usd
     total = round(sum(parts.values()), 4)
@@ -591,7 +695,7 @@ def actual_run_cost(
     generator_tokens_out: int,
     generator_model: str,
     judge_estimate_usd: float | None,
-    pipeline_llm_stats: dict[str, Any] | None,
+    pipeline_llm_stats: dict[str, Any] | list[dict[str, Any]] | None,
     pricing: PricingTable,
 ) -> dict[str, Any]:
     """What the run spent, from provider-reported usage where it exists.
@@ -629,14 +733,29 @@ def actual_run_cost(
     if judge_estimate_usd is not None:
         parts["judge"] = judge_estimate_usd
         estimated.append("judge")
-    if pipeline_llm_stats:
-        price = pricing.price("chat", pipeline_llm_stats.get("model", ""))
+    # A run can hold more than one in-pipeline LLM since P2-13 (the contextual
+    # chunker's and the compressor's are different call sites), and they need not
+    # share a model, so each one is priced with its own and the results summed.
+    # Summing tokens across models first would charge one model's rate for the
+    # other's tokens.
+    stats_list = (
+        [] if not pipeline_llm_stats
+        else [pipeline_llm_stats] if isinstance(pipeline_llm_stats, dict)
+        else list(pipeline_llm_stats)
+    )
+    pipeline_usd = 0.0
+    priced_any = False
+    for stats in stats_list:
+        price = pricing.price("chat", stats.get("model", ""))
         if price:
-            parts["pipeline_llm"] = round(
-                pipeline_llm_stats.get("tokens_in", 0) / 1e6 * price["in"]
-                + pipeline_llm_stats.get("tokens_out", 0) / 1e6 * price["out"], 5
+            priced_any = True
+            pipeline_usd += (
+                stats.get("tokens_in", 0) / 1e6 * price["in"]
+                + stats.get("tokens_out", 0) / 1e6 * price["out"]
             )
-            measured.append("pipeline_llm")
+    if priced_any:
+        parts["pipeline_llm"] = round(pipeline_usd, 5)
+        measured.append("pipeline_llm")
     return {
         "total_usd": round(sum(parts.values()), 5),
         "parts_usd": parts,

@@ -4,10 +4,51 @@
 # refresh` from OpenRouter's /models and /models/<id>/endpoints; edit the model
 # list by hand, never the numbers. The estimator records pricing_version on
 # every run (P2-06, DEC-050).
-pricing_version: '2026-09-16'
+pricing_version: '2026-09-25'
 source: OpenRouter /api/v1/models (model-level) and /api/v1/models/<id>/endpoints
   (per provider)
+rerank_source: MEASURED from usage.cost on real 50-document calls, 2026-09-22 (MIS-025).
+  OpenRouter's /models/<id>/endpoints reports prompt=0, completion=0 for every rerank
+  model while the calls bill real money, so `rag pricing refresh` must never write
+  this block.
 chat:
+  openai/gpt-oss-20b:
+    _model:
+      in: 0.018
+      out: 0.09
+    Darkbloom:
+      in: 0.018
+      out: 0.09
+    AkashML:
+      in: 0.02
+      out: 0.1
+    DekaLLM:
+      in: 0.029
+      out: 0.14
+    CoreWeave:
+      in: 0.03
+      out: 0.13
+    DeepInfra:
+      in: 0.03
+      out: 0.14
+    Parasail:
+      in: 0.03
+      out: 0.15
+    Novita:
+      in: 0.04
+      out: 0.15
+    SiliconFlow:
+      in: 0.04
+      out: 0.18
+    Amazon Bedrock:
+      in: 0.07
+      out: 0.15
+    Google:
+      in: 0.07
+      out: 0.25
+    Groq:
+      in: 0.075
+      out: 0.3
   openai/gpt-5-nano:
     _model:
       in: 0.05
@@ -20,8 +61,8 @@ chat:
       out: 0.4
   openai/gpt-oss-120b:
     _model:
-      in: 0.037
-      out: 0.17
+      in: 0.15
+      out: 0.6
     AkashML:
       in: 0.03
       out: 0.17
@@ -41,8 +82,8 @@ chat:
       in: 0.05
       out: 0.25
     Mancer 2:
-      in: 0.055
-      out: 0.5
+      in: 0.05
+      out: 0.3
     DigitalOcean:
       in: 0.06
       out: 0.42
@@ -113,10 +154,6 @@ embeddings:
       in: 0.2
     _model:
       in: 0.2
-rerank_source: MEASURED from usage.cost on real 50-document calls, 2026-09-22 (MIS-025).
-  OpenRouter's /models/<id>/endpoints reports prompt=0, completion=0 for every rerank
-  model while the calls bill real money, so `rag pricing refresh` must never write
-  this block.
 rerank:
   cohere/rerank-v3.5:
     Cohere:

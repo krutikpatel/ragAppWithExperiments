@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from typing import Any
 
+from rag.assembly import CONTEXT_ORDERS, COMPRESSORS
 from rag.hashing import canonical_json, short_id
 from rag.retrieval.pooling import DEFAULT_POOLING, POOLING_RULES
 
@@ -113,7 +114,23 @@ class RunConfig:
     # this is empty only because the model is unchosen — not because it is unavailable
     # (DEC-026 corrects DEC-022). Empty means answer_relevance is recorded as skipped.
     judge_embedding_model: str = ""
+    # P2-13 / DEC-063: run generation and the deterministic generation metrics, and
+    # skip the judge. An affirmative flag rather than an empty `judge_model`, so an
+    # accidental omission still fails the Tier 2 check instead of quietly producing a
+    # cheap run that looks like a judged one. Part of config_hash when set.
+    skip_judge: bool = False
     context_max_tokens: int = 6000
+
+    # Axis 6 (P2-13). Both act after the document walk has selected, so neither can
+    # move a retrieval metric — which is why neither appears in TIER1_FIELDS, and why
+    # the story forbids reporting retrieval deltas for them.
+    # `rank` is the control's order; `lost_in_middle` puts the strongest candidates at
+    # the two ends of the prompt. See rag/assembly.py.
+    context_order: str = "rank"
+    # Empty means no compression, which is the absence of the dimension rather than a
+    # setting of it — see `_ABSENT_DIMENSIONS`. Its `model` param is Krutik's choice.
+    context_compressor: str = ""
+    context_compressor_params: dict[str, Any] = field(default_factory=dict)
 
     # Tier 2 is expensive per question — Ragas faithfulness decomposes an answer into
     # claims and verifies each one, several LLM calls per metric. So Tier 2 scores a
@@ -144,23 +161,25 @@ class RunConfig:
                 f"({self.candidate_pool}): the walk cannot scan chunks that were never ranked"
             )
         if self.eval_tier.uses_llm and not self.harness_smoke_test:
-            missing = [
-                name
-                for name, value in (
-                    ("generator_model", self.generator_model),
-                    ("judge_model", self.judge_model),
-                )
-                if not value
-            ]
+            required = [("generator_model", self.generator_model)]
+            if not self.skip_judge:
+                required.append(("judge_model", self.judge_model))
+            missing = [name for name, value in required if not value]
             if missing:
                 raise ValueError(
                     f"Tier 2 needs {' and '.join(missing)}. Model choice is a decision "
                     "for Krutik with a DEC entry, not a default — see CLAUDE.md "
                     "section 10."
                 )
+            if self.skip_judge and self.judge_model:
+                raise ValueError(
+                    "skip_judge is set but judge_model is also set. One of them is a "
+                    "mistake, and guessing which would silently decide whether the "
+                    "run costs $0.03 or $0.91."
+                )
             # P0-07: a judge from the generator's own family grades its own lineage.
             # The bias is real and unmeasured, so it is refused rather than noted.
-            if self.generator_family == self.judge_family:
+            if not self.skip_judge and self.generator_family == self.judge_family:
                 raise ValueError(
                     f"judge and generator are both from the {self.judge_family!r} "
                     "family. Same-family judging carries self-preference bias; P0-07 "
@@ -181,6 +200,20 @@ class RunConfig:
             raise ValueError("eval_subsample_size must be at least 1")
         if "@" not in self.generator_prompt:
             raise ValueError(f"generator_prompt must be '<id>@<version>', got {self.generator_prompt!r}")
+        if self.context_order not in CONTEXT_ORDERS:
+            raise ValueError(
+                f"unknown context_order {self.context_order!r}; known: {CONTEXT_ORDERS}"
+            )
+        if (self.context_compressor or self.context_order != "rank") and not self.eval_tier.uses_llm:
+            raise ValueError(
+                "context_order and context_compressor only change what the GENERATOR "
+                "sees, so a Tier 1 run carrying them would record an identical number "
+                "under a different name. Run them at Tier 2 (P2-13)."
+            )
+        if self.context_compressor and self.context_compressor not in COMPRESSORS:
+            raise ValueError(
+                f"unknown context_compressor {self.context_compressor!r}; known: {COMPRESSORS}"
+            )
         if self.axis and self.axis not in AXES:
             raise ValueError(f"unknown axis {self.axis!r}; known: {AXES}")
 
@@ -215,13 +248,21 @@ class RunConfig:
     # ledger, including the controls' and promoted.yaml's, for configurations whose
     # numbers cannot have changed — exactly the trap MIS-019 records. Verified in
     # tests/test_reranking.py: promoted.yaml still hashes to 7c99bc8e9a88e878.
-    _ABSENT_DIMENSIONS = (("reranker", ("reranker", "reranker_params", "rerank_candidates")),)
+    # (field, its "off" value, the fields that vanish when it is off). P2-13 added
+    # `context_order`, whose off value is a non-empty string, so the rule is equality
+    # against the off value rather than falsiness.
+    _ABSENT_DIMENSIONS = (
+        ("reranker", "", ("reranker", "reranker_params", "rerank_candidates")),
+        ("context_order", "rank", ("context_order",)),
+        ("context_compressor", "", ("context_compressor", "context_compressor_params")),
+        ("skip_judge", False, ("skip_judge",)),
+    )
 
     @classmethod
     def _identity_payload(cls, data: dict[str, Any]) -> dict[str, Any]:
         payload = {k: v for k, v in data.items() if k not in ("name", "axis")}
-        for switch, keys in cls._ABSENT_DIMENSIONS:
-            if not data.get(switch):
+        for switch, off, keys in cls._ABSENT_DIMENSIONS:
+            if switch in data and data.get(switch) == off:
                 for key in keys:
                     payload.pop(key, None)
         return payload

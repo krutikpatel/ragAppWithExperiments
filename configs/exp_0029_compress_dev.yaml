@@ -1,0 +1,46 @@
+# EXP-0029 — Axis 6 (assembly): contextual compression, Tier 2 dev.
+#
+# P2-13. Exactly EXP-0006 with one field moved: before the five selected documents
+# are concatenated, each is passed through a model that copies out only the sentences
+# bearing on the question. A chunk with nothing relevant is dropped from the context
+# entirely, so this changes what the generator sees; it still cannot change what was
+# retrieved, so no retrieval delta is reported.
+#
+# The trade being measured is a ratio, not a numerator: one extra LLM call per
+# retrieved chunk (5 per question) buys a shorter generator prompt. The run reports
+# `context_word_reduction` next to the quality numbers, per the story's acceptance
+# criterion.
+#
+# DEC-063: the judge is SKIPPED. Its scores cannot be reported anyway while the judge
+# is a placeholder (DEC-018), it was $0.876 of a $0.91 run, and a real judge later
+# would mean re-running this regardless. What decides this experiment is deterministic
+# and free: citation precision/recall, refusal rate, URL count and step coverage.
+#
+# `min_keep_ratio` is a floor, not a target: a chunk trimmed below 15% of its words
+# is kept in full rather than handed to the generator as a fragment.
+name: "EXP-0029 contextual compression — extractive trim per retrieved chunk, Tier 2 dev"
+axis: assembly
+split: dev
+eval_tier: tier2
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+context_compressor: llm_extract
+context_compressor_params:
+  model: openai/gpt-oss-20b
+  min_keep_ratio: 0.15
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+skip_judge: true

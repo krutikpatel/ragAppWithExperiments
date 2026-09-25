@@ -1,0 +1,40 @@
+# EXP-0030 — Axis 6 (assembly): Anthropic-style contextual retrieval, Tier 1 dev.
+#
+# P2-13, and the most expensive experiment in Phase 2: one LLM call per chunk across
+# the whole corpus (8,218 calls) to write a sentence situating each chunk inside its
+# own article, indexed in front of the chunk.
+#
+# One dimension, deliberately: the chunk BOUNDARIES are the control's 600/100, so
+# this isolates the prefix rather than confounding it with a re-chunk the way every
+# Axis 1 chunker did. And only the INDEXED text carries the prefix — `context_text`
+# stays the original chunk, so the generator sees exactly what the control's
+# generator sees and only retrieval can move. Tier 1 accordingly.
+#
+# Two costs, both gated before anything is spent (P2-06): the LLM pre-spend, counted
+# from a free split rather than guessed, and a full re-embed of the prefixed index
+# (a new chunker_id is a new index key). The writeup states that ~$0.7 is affordable
+# at 6k documents and would not be at 6M — that scale honesty is part of the finding.
+#
+# What bounds it here: 79% of articles are a single chunk (DEC-038), so for most
+# chunks the prefix summarises a document the chunk already contains in full.
+name: "EXP-0030 contextual retrieval — LLM-generated chunk prefixes, indexed only, dev"
+axis: assembly
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: contextual
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+  context_model: openai/gpt-oss-20b
+  context_max_words: 60
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

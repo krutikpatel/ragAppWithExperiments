@@ -621,3 +621,32 @@ person to propose a diversity method finds the measurement rather than repeating
 experiment. It becomes live only if a future chunker or retriever pushes the collapse
 ratio materially above 1.2, which would mean the context has real redundancy to remove.
 **Status:** open, **not queued** — parked with its decision rule.
+
+## OQ-042 — Should a Tier 2 axis experiment be diffed against `promoted.yaml` or against the Tier 2 control?
+- **Status:** open. Surfaced 2026-09-24 while building the Axis 6 configs.
+- **What happened:** `configs/promoted.yaml` is a **Tier 1** config — no generator,
+  no judge, because those fields are empty until a model decision fills them. P2-05's
+  rule is that every axis experiment is a one-dimension diff against promoted.yaml.
+  A Tier 2 experiment therefore differs from it on *two* dimensions: its own axis and
+  `generation` (the generator and judge model fields going from empty to set). The
+  runner warns accordingly. Axis 6 is the first Tier 2 axis, so it is the first to
+  meet this; every P2-14 config will meet it too.
+- **Why it is not a bug to fix quietly:** the warning is literally true — the config
+  does change two dimensions against that file. What is wrong is the comparison, not
+  the check. The honest baseline for a Tier 2 assembly run is
+  `configs/baseline_dense_tier2.yaml` (EXP-0006), which is the same retrieval with
+  the generation dimension already set.
+- **Decided by:** a judgment call, not a measurement. Three options, none yet chosen:
+  1. Leave it. The warning fires on every Tier 2 axis run and is explained in each
+     EXP file. Cheapest, and it trains whoever reads the logs to ignore a warning,
+     which is how a real one gets missed.
+  2. Teach `config_diff` to compare against the promoted config *upgraded to the
+     candidate's tier*, so Tier 2 fields are only a dimension change when they
+     differ from the Tier 2 control's. Correct, and it changes the promotion rule's
+     meaning, so it needs a DEC entry.
+  3. Promote a Tier 2 config. Rejected on sight: `promoted.yaml` is the current best
+     *retrieval* configuration and nothing has earned promotion yet anyway.
+- **Current handling:** option 1, documented. `tests/test_assembly_p2_13.py` pins
+  both behaviours — the one-dimension diff against the Tier 2 control, and the
+  two-dimension diff against promoted — so whichever way this is decided, a test
+  states what changed.

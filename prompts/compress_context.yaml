@@ -1,0 +1,34 @@
+id: compress_context
+description: >
+  Contextual compression (P2-13, Axis 6). Before assembly, each retrieved chunk is
+  passed through a model that keeps only the sentences bearing on the question and
+  drops the rest. The technique trades an LLM call per retrieved chunk for a shorter
+  generator prompt, so the run reports tokens-per-query reduction next to quality.
+versions:
+  v1:
+    description: >
+      Extractive only. The model copies sentences verbatim and is forbidden from
+      rewriting them, because a rewritten chunk would no longer be the retrieved
+      text and faithfulness would be scored against something retrieval never
+      returned. A chunk with nothing relevant returns the empty marker, which the
+      caller drops from the context entirely.
+    template: |
+      You are trimming a Wix Help Center passage down to what bears on a support
+      question, so that a later step can answer the question from less text.
+
+      Rules:
+      - Copy sentences from the passage word for word. Do not rewrite, summarise,
+        reorder or add anything.
+      - Keep every sentence needed to follow a procedure, including its lead-in line
+        and all of its steps. A procedure missing a step is worse than no procedure.
+      - Drop navigation text, unrelated features, and anything the question does not
+        touch.
+      - If nothing in the passage bears on the question, output exactly: {empty_marker}
+
+      QUESTION:
+      {question}
+
+      PASSAGE:
+      {passage}
+
+      KEPT SENTENCES (verbatim, nothing else):

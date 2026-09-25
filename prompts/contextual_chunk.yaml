@@ -1,0 +1,33 @@
+id: contextual_chunk
+description: >
+  Anthropic-style contextual retrieval (P2-13, Axis 6). Each chunk is prefixed with
+  a short generated statement that situates it inside its own article, and the
+  PREFIXED text is what gets indexed. The generator still sees the original chunk,
+  so this changes retrieval only. One LLM call per chunk across the whole corpus,
+  which is why it is the most expensive experiment in the phase.
+versions:
+  v1:
+    description: >
+      The situating prompt from Anthropic's September 2024 contextual-retrieval post,
+      adapted to this corpus's vocabulary (Wix Help Center articles rather than
+      financial filings). Output is the context statement alone, because the caller
+      concatenates it in front of the chunk verbatim — any preamble would be indexed
+      as if it were article text.
+    template: |
+      Here is a Wix Help Center article.
+
+      <article>
+      {document}
+      </article>
+
+      Here is one chunk taken from that article.
+
+      <chunk>
+      {chunk}
+      </chunk>
+
+      Write a short statement, at most {max_words} words, that situates this chunk
+      inside the article so the chunk can be found by search on its own. Say what
+      product or feature the article is about and what part of it this chunk covers.
+
+      Answer with the statement only. No preamble, no quotes, no explanation.

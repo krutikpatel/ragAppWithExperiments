@@ -435,6 +435,69 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   The finding stands on the runs (`run_20260924_041357_ebc5` and the λ curve); the
   calibration value of this entry is zero, which is the cost of having skipped it.
 
+## H-020 — Lost-in-the-middle reordering does nothing here, because the prompt is too short for it
+- **Date written:** 2026-09-24, before EXP-0028 ran
+- **Source:** Claude.
+- **Hypothesis:** reordering changes **no** deterministic generation metric by more
+  than its noise floor — citation precision, citation recall, refusal rate and step
+  coverage all land inside the `dense-control-v1` MDD. Reasoning, and this is an
+  engineering argument rather than a quality one: Liu et al. 2023 measured the
+  mid-prompt dip across contexts of **2,700 to 21,000 tokens** with 10 to 30
+  retrieved documents. This run assembles **5** documents into a prompt whose budget
+  is 6,000 words, and the measured mean context is ~1,740 words. There may be no
+  "middle" to get lost in at that length. The part I expect to be wrong: if the
+  generator is more position-sensitive than its context window suggests, citation
+  **recall** is where it would show, because a document the model never read is a
+  document it cannot cite.
+- **What would change my mind before the run:** nothing — it is cheap and it runs.
+- **Tested by:** the deterministic generation metrics of EXP-0028 against EXP-0006's
+  three runs, labelled by `rag/eval/noise_floor.py`. **No retrieval delta may be
+  reported for this run**, by construction (P2-13); `tests/test_assembly_p2_13.py`
+  proves the reordering is a permutation.
+- **Resolution:** _pending EXP-0028._
+
+## H-021 — Compression buys a large token reduction and loses procedure steps doing it
+- **Date written:** 2026-09-24, before EXP-0029 ran
+- **Source:** Claude.
+- **Hypothesis:** two halves, and they are deliberately separable.
+  1. `context_word_reduction` is **above 0.40** — the technique removes at least 40%
+     of the words reaching the generator.
+  2. **Step coverage falls by more than its noise floor**, and falls further than
+     citation precision does. Reasoning: this corpus's answers are procedures, and a
+     procedure is the one kind of text where the *least individually relevant*
+     sentence ("Click Save.") is load-bearing. An extractive filter scoring sentences
+     against the question has no way to see that step 4 matters only because steps 1
+     to 3 preceded it. The prompt explicitly tells the model to keep whole procedures
+     including lead-in lines, so this hypothesis is also a test of whether that
+     instruction is obeyed — `chunks_kept_verbatim_check_failed` and
+     `chunks_dropped` are the diagnostic if it is not.
+- **Tested by:** EXP-0029's `context_word_reduction` for part 1; step coverage and
+  citation precision/recall against EXP-0006, MDD-labelled, for part 2. No retrieval
+  delta is reported.
+- **Resolution:** _pending EXP-0029._
+
+## H-022 — Contextual retrieval is the first Phase 2 technique to beat the dense control
+- **Date written:** 2026-09-24, before EXP-0030 ran
+- **Source:** Claude, and OQ-021 (the external claim this run converts into a measurement).
+- **Hypothesis:** `dev` strict recall@5 improves by **more than +0.03 at p < 0.05**
+  over the control's 0.720. Reasoning, and the reason this is worth $0.82: every Axis
+  1, 2, 3 and 5 experiment either re-cut the index or re-ordered a fixed candidate
+  set, and all of them failed. This one adds *information that is not in the chunk* —
+  the article's subject, written in the article's own vocabulary — to the thing being
+  embedded. The measured failure mode on this corpus is "right document, ranked 6th",
+  which is a discrimination problem, and a prefix naming the product is discriminating
+  information.
+- **The half I expect to be wrong, and why it is written down:** **79% of articles
+  are a single chunk** (DEC-038). For those, the prefix summarises a document the
+  chunk already contains in full, so it can add almost nothing and may actively
+  dilute the embedding by spending 60 of the chunk's words on restatement. If the
+  effect is real it should therefore be **concentrated in the 21% of chunks from
+  multi-chunk articles**, and the overall number may be flat while that subset moves.
+  That subset comparison is the measurement I care about more than the headline.
+- **Tested by:** `rag compare promoted <run> --metric strict_recall@5` on `dev`, per
+  slice, for EXP-0030. Plus the one-time index cost, recorded on the row.
+- **Resolution:** _pending EXP-0030._
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /

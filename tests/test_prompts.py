@@ -20,6 +20,12 @@ PINNED_HASHES = {
     "baseline_answer@v1": "sha256:a5e9b4d936151a8",
     # P2-10: the LLM-as-reranker's ordering prompt (Axis 5).
     "rerank_llm@v1": "sha256:c89fb05085e9b10",
+    # P2-13 (Axis 6). `contextual_chunk` is prefixed onto every chunk *before
+    # indexing*, so an edit here without a version bump would silently mean the index
+    # on disk was built by a prompt no longer in the repo — the most expensive
+    # version-skew in the project, at one LLM call per chunk to discover.
+    "compress_context@v1": "sha256:f372591e7e06721",
+    "contextual_chunk@v1": "sha256:b4f446a0b0ccec7",
 }
 
 
@@ -128,3 +134,33 @@ def test_rerank_prompt_asks_for_an_ordering_of_every_candidate():
     assert "Each number appears exactly once" in flat
     assert "Output ONLY the numbers, best first" in flat
     assert "all 2 of them" in flat
+
+
+# --- P2-13: the Axis 6 prompts -------------------------------------------------
+
+def test_contextual_chunk_prompt_asks_for_the_statement_alone():
+    """The caller concatenates the output in front of the chunk verbatim, so any
+    preamble the model adds gets indexed as if it were article text."""
+    rendered = load_prompt("contextual_chunk", "v1").render(
+        document="DOC", chunk="CHUNK", max_words=60
+    )
+    flat = " ".join(rendered.split())
+    assert "DOC" in rendered and "CHUNK" in rendered
+    assert "at most 60 words" in flat
+    assert "Answer with the statement only" in flat
+
+
+def test_compress_context_prompt_forbids_rewriting_and_names_the_empty_marker():
+    """Extractive only: a rewritten chunk would mean faithfulness was scored against
+    text retrieval never returned. The empty marker has to be the one the caller
+    matches, or a chunk with nothing relevant would be kept in full."""
+    from rag.assembly import EMPTY_MARKER
+
+    rendered = load_prompt("compress_context", "v1").render(
+        question="Q", passage="P", empty_marker=EMPTY_MARKER
+    )
+    flat = " ".join(rendered.split())
+    assert "Q" in rendered and "P" in rendered
+    assert "word for word" in flat
+    assert "Do not rewrite" in flat
+    assert f"output exactly: {EMPTY_MARKER}" in flat

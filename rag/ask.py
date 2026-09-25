@@ -77,7 +77,9 @@ def answer_question(
     # The generator sees each chunk's context, which the P2-07 "retrieve small,
     # expand" chunkers make larger than the indexed text.
     context_text = index.context_text
-    context = ConcatAssembler(max_tokens=config.context_max_tokens).assemble(context_chunks, context_text)
+    context = ConcatAssembler(
+        max_tokens=config.context_max_tokens, order=config.context_order
+    ).assemble(context_chunks, context_text)
 
     generator = OpenRouterGenerator(
         GeneratorConfig(

@@ -1,0 +1,39 @@
+# EXP-0028 — Axis 6 (assembly): lost-in-the-middle reordering, Tier 2 dev.
+#
+# P2-13. Exactly EXP-0006 (configs/baseline_dense_tier2.yaml) with one field moved:
+# the five selected documents are written into the prompt as rank 1, 3, 5, 4, 2, so
+# the strongest candidates sit at the two ends and the weakest in the middle.
+#
+# This CANNOT change a retrieval metric — it is a permutation of the same chunks, and
+# tests/test_assembly_p2_13.py asserts that — so the story forbids reporting retrieval
+# deltas for it. Decided on the generation metrics only: citation precision/recall,
+# refusal rate and step coverage are deterministic; the judged criteria carry their
+# MDD label (DEC-048) and the placeholder judge's scores are not measurements (DEC-018).
+#
+# DEC-063: the judge is SKIPPED. Its scores cannot be reported anyway while the judge
+# is a placeholder (DEC-018), it was $0.876 of a $0.91 run, and a real judge later
+# would mean re-running this regardless. What decides this experiment is deterministic
+# and free: citation precision/recall, refusal rate, URL count and step coverage.
+name: "EXP-0028 lost-in-the-middle reordering — best at both prompt ends, Tier 2 dev"
+axis: assembly
+split: dev
+eval_tier: tier2
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+context_order: lost_in_middle
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+skip_judge: true

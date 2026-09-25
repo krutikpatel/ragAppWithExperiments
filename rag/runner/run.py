@@ -14,7 +14,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
-from rag.assembly import ConcatAssembler
+from rag.assembly import ConcatAssembler, build_compressor
 from rag.chunking.base import Chunker, build_chunker, chunker_class
 from rag.chunking.index_map import ChunkIndex
 from rag.corpus.loader import load_corpus
@@ -26,9 +26,13 @@ from rag.eval.retrieval_metrics import evaluate_retrieval
 from rag.eval.slices import aggregate_by_slice, build_slices
 from rag.generation.base import CITATION_PARSER_VERSION, GeneratorConfig, OpenRouterGenerator
 from rag.generation.cache import GenerationCache
+from rag.generation.pipeline_llm import PipelineLLM
 from rag.hashing import short_id
+from rag.prompts import load_prompt
 from rag.runner.config import EvalTier, RunConfig
 from rag.runner.cost import (
+    estimate_chunker_llm_cost,
+    estimate_compression_cost,
     COST_GATE_USD,
     CostGateError,
     PricingTable,
@@ -98,13 +102,20 @@ def check_test_split_guard(
     print("    this opening will be appended to docs/DECISIONS.md.\n")
 
 
-def build_index(config: RunConfig, chunker: Chunker | None = None) -> tuple[ChunkIndex, dict[str, str]]:
+def build_index(
+    config: RunConfig,
+    chunker: Chunker | None = None,
+    *,
+    generation_cache: GenerationCache | None = None,
+) -> tuple[ChunkIndex, dict[str, str]]:
     """Chunk the frozen corpus with the configured chunker (P2-07: named in
     `config.chunker`, built through the chunker registry). Returns the index and
     the text the retriever indexes; the generator's per-chunk context is
     `index.context_text`."""
     corpus = load_corpus()
-    chunker = chunker or build_chunker(config.chunker, **config.chunker_params)
+    chunker = chunker or build_chunker(
+        config.chunker, generation_cache=generation_cache, **config.chunker_params
+    )
     chunks = chunker.split_corpus(list(zip(corpus.frame["id"], corpus.frame["indexed_text"])))
     index = ChunkIndex(
         chunks=chunks,
@@ -206,7 +217,9 @@ def _run(
 
     slices = build_slices(frame)
     judge_meta = (
-        judge_provenance(_judge_config(config)) if config.eval_tier is EvalTier.TIER_2 else {}
+        judge_provenance(_judge_config(config))
+        if config.eval_tier is EvalTier.TIER_2 and not config.skip_judge
+        else {}
     )
 
     # P2-06 — the whole-run estimate, printed with what drives it, gated at $2.
@@ -219,10 +232,20 @@ def _run(
     # chunker runs — otherwise the gate would fire after the money was spent.
     # Chunkers that embed nothing are chunked first and the index estimate uses
     # the exact indexed word count, as before.
-    chunker = build_chunker(config.chunker, **config.chunker_params)
+    #
+    # P2-13: a chunker may instead spend on an **LLM** before any chunk exists
+    # (contextual retrieval makes one call per chunk across the corpus). Same shape
+    # of problem, same answer: the workload is counted from a free split, estimated,
+    # and gated before the first call. Getting this wrong would mean the gate fires
+    # after the most expensive spend in the phase had already happened.
+    chunker = build_chunker(
+        config.chunker, generation_cache=generation_cache, **config.chunker_params
+    )
     chunker_embeds = chunker_class(config.chunker).embedding_params(config.chunker_params)
     corpus_docs = dict(zip(load_corpus().frame["id"], load_corpus().frame["indexed_text"]))
     corpus_words = sum(len(t.split()) for t in corpus_docs.values())
+    chunker_workload = chunker.llm_workload(corpus_docs)
+    chunker_llm_estimate = estimate_chunker_llm_cost(chunker_workload, pricing=pricing)
     chunker_estimate: dict[str, Any] = {}
     if chunker_embeds is not None:
         chunker_estimate = estimate_index_cost(
@@ -233,14 +256,16 @@ def _run(
             n_questions=0,
             pricing=pricing,
         )
-    if chunker_embeds is None:
+    if chunker_embeds is None and chunker_workload is None:
         index, chunk_text = build_index(config, chunker)
         indexed_words = sum(len(text.split()) for text in chunk_text.values())
     else:
         index, chunk_text = None, None
         # Every chunker in this axis that embeds has no overlap, so its indexed
-        # words equal the corpus words; that is the estimate's basis.
-        indexed_words = corpus_words
+        # words equal the corpus words; that is the estimate's basis. A chunker that
+        # spends on an LLM counts its own indexed words instead, because contextual
+        # retrieval indexes the chunks *plus* every generated prefix.
+        indexed_words = (chunker_workload or {}).get("indexed_words") or corpus_words
     index_estimate = estimate_index_cost(
         retriever=config.retriever,
         retriever_params=retriever_class(config.retriever).embedding_params(config.retriever_params),
@@ -267,12 +292,35 @@ def _run(
         candidate_words=_mean_candidate_words(config, chunk_text),
         pricing=pricing,
     )
+    # P2-13: contextual compression bills one call per retrieved chunk per question,
+    # so like reranking it scales with the split rather than with the corpus.
+    compression_estimate = (
+        estimate_compression_cost(
+            compressor=config.context_compressor,
+            compressor_params=config.context_compressor_params,
+            n_questions=len(frame),
+            chunks_per_question=config.top_k,
+            chunk_words=_mean_candidate_words(config, chunk_text),
+            prompt_overhead_words=_COMPRESSOR_PROMPT_WORDS,
+            pricing=pricing,
+        )
+        if config.eval_tier is EvalTier.TIER_2
+        else {}
+    )
     run_estimate = estimate_run_cost(
-        tier2=cost_estimate or None, index=index_estimate, rerank=rerank_estimate
+        tier2=cost_estimate or None,
+        index=index_estimate,
+        rerank=rerank_estimate,
+        chunker_llm=chunker_llm_estimate,
+        compression=compression_estimate,
     )
     run_estimate["index"] = index_estimate
     if config.reranker:
         run_estimate["rerank"] = rerank_estimate
+    if chunker_llm_estimate:
+        run_estimate["chunker_llm"] = chunker_llm_estimate
+    if compression_estimate:
+        run_estimate["compression"] = compression_estimate
     print(format_run_estimate(run_estimate, pricing_version=pricing.pricing_version))
     _print_running_totals(store)
     if estimate_only:
@@ -285,7 +333,7 @@ def _run(
             "docs/DECISIONS.md, and re-run with --approve-cost '<DEC-NNN or reason>' (P2-06)."
         )
     if index is None:
-        index, chunk_text = build_index(config, chunker)
+        index, chunk_text = build_index(config, chunker, generation_cache=generation_cache)
     chunking_profile = index.profile(corpus_docs)
     if config.axis and not config.harness_smoke_test:
         n_axis = len(store.axis_experiments(config.axis))
@@ -374,7 +422,7 @@ def _run(
     try:
         row = _execute(
             config, run_id, frame, index, chunk_text, slices, store, reason, cost_estimate,
-            generation_cache, pricing, chunking_profile,
+            generation_cache, pricing, chunking_profile, chunker,
         )
     except Exception as exc:
         # An abandoned run is recorded as VOID rather than left out. Silent gaps in
@@ -433,13 +481,47 @@ def _cost_estimate(config: RunConfig, frame, pricing: PricingTable) -> dict:
     n_judged = int((frame["answer"].fillna("").str.strip() != "").sum()) if "answer" in frame else len(frame)
     return estimate_tier2_cost(
         n_questions=len(frame),
-        n_judged=n_judged,
+        # DEC-063: no judge means no judged questions, so the estimate's judge half is
+        # zero rather than a cost nobody will be charged.
+        n_judged=0 if config.skip_judge else n_judged,
         context_words=context_words,
         generator_model=config.generator_model,
         judge_model=config.judge_model,
         judge_provider_order=tuple(config.judge_provider_order),
         pricing=pricing,
     )
+
+
+# Words of scaffolding in the compressor's prompt, measured from the rendered
+# template rather than guessed, so the per-call estimate is the real input size.
+_COMPRESSOR_PROMPT_WORDS = len(
+    load_prompt("compress_context", "v1").render(question="", passage="", empty_marker="").split()
+)
+
+
+def _merge_pipeline_stats(stats: list[dict[str, Any]]) -> dict[str, Any]:
+    """One summary row for however many in-pipeline LLMs a run held (P2-03).
+
+    Calls, hits and tokens add up; `model` is a list when they differ, because
+    reporting one model's id over another's tokens would be a false provenance.
+    """
+    if len(stats) == 1:
+        return stats[0]
+    models = sorted({s["model"] for s in stats})
+    calls = sum(s["calls"] for s in stats)
+    hits = sum(s["cache_hits"] for s in stats)
+    return {
+        "model": models[0] if len(models) == 1 else models,
+        "temperature": stats[0]["temperature"],
+        "calls": calls,
+        "cache_hits": hits,
+        "cache_misses": sum(s["cache_misses"] for s in stats),
+        "hit_rate": (hits / calls) if calls else None,
+        "tokens_in": sum(s["tokens_in"] for s in stats),
+        "tokens_out": sum(s["tokens_out"] for s in stats),
+        "prompts": sorted({p for s in stats for p in s["prompts"]}),
+        "sources": len(stats),
+    }
 
 
 def _mean_candidate_words(config: RunConfig, chunk_text: dict[str, str] | None) -> int:
@@ -536,6 +618,9 @@ def _execute(
     generation_cache: GenerationCache,
     pricing: PricingTable,
     chunking_profile: dict[str, Any] | None = None,
+    # P2-13: only for its `pipeline_llm` — the contextual chunker calls a model to
+    # build the index, so the chunker is a call site like the retriever and reranker.
+    chunker: Chunker | None = None,
 ) -> dict[str, Any]:
     retriever = build_retriever(
         config.retriever,
@@ -657,9 +742,21 @@ def _execute(
         aggregate["retrieval_notes"] = notes
 
     generated: dict[str, Any] = {}
+    compression_llms: list[dict[str, Any]] = []
     if config.eval_tier is EvalTier.TIER_2:
-        generated = _tier2(config, rows, results_by_question, context_text, per_question)
+        generated = _tier2(
+            config, rows, results_by_question, context_text, per_question, generation_cache
+        )
         judge_failures = generated.pop("__judge_failures__", [])
+        # P2-13 — assembly's own record. Popped before `generated` is read per
+        # question, since these keys are not question ids.
+        aggregate["assembly_profile"] = generated.pop("__assembly__", {})
+        compression_profile = generated.pop("__compression__", None)
+        if compression_profile is not None:
+            aggregate["compression_profile"] = compression_profile
+            aggregate["context_compressor"] = config.context_compressor
+            aggregate["context_word_reduction"] = compression_profile.get("word_reduction")
+            compression_llms.append(compression_profile["llm"])
         aggregate["judge_failures"] = len(judge_failures)
         aggregate["judge_failure_detail"] = judge_failures
         aggregate.update(refusal_summary(per_question))
@@ -667,6 +764,14 @@ def _execute(
         aggregate["judge_skipped_no_reference"] = int(
             sum(row.get("judge_skipped_no_reference", 0) for row in per_question.values())
         )
+        # DEC-063 — a Tier 2 run without a judge. Recorded affirmatively, because a
+        # row with no faithfulness number and no explanation reads as a broken judge.
+        if config.skip_judge:
+            aggregate["skip_judge"] = True
+            aggregate["skipped_criteria"] = list(CRITERIA)
+            aggregate["judge_skipped_by_config"] = int(
+                sum(row.get("judge_skipped_by_config", 0) for row in per_question.values())
+            )
         for criterion in CRITERIA:
             values = [
                 row[criterion] for row in per_question.values() if row.get(criterion) is not None
@@ -711,10 +816,22 @@ def _execute(
     # P2-03 — a pipeline that called an LLM is not deterministic unless the
     # generation cache served every call. The hit rate goes on the row; a repeat of
     # an identical config with a hit rate under 100% is flagged, not averaged away.
-    pipeline_llm = getattr(retriever, "pipeline_llm", None) or getattr(reranker, "pipeline_llm", None)
-    if pipeline_llm is not None:
-        stats = pipeline_llm.stats()
-        store.update_run(run_id, pipeline_nondeterministic=1, pipeline_llm_json=json.dumps(stats))
+    # P2-13: the chunker can hold one too (contextual retrieval calls a model to
+    # build the index), and the compressor's has already finished by here, so its
+    # stats arrive as a dict rather than as a live object.
+    pipeline_llm = (
+        getattr(retriever, "pipeline_llm", None)
+        or getattr(reranker, "pipeline_llm", None)
+        or getattr(chunker, "pipeline_llm", None)
+    )
+    all_stats = ([pipeline_llm.stats()] if pipeline_llm is not None else []) + compression_llms
+    if all_stats:
+        stats = _merge_pipeline_stats(all_stats)
+        store.update_run(
+            run_id,
+            pipeline_nondeterministic=1,
+            pipeline_llm_json=json.dumps(all_stats if len(all_stats) > 1 else stats),
+        )
         aggregate["pipeline_nondeterministic"] = True
         aggregate["pipeline_llm_temperature"] = stats["temperature"]
         aggregate["pipeline_llm_calls"] = stats["calls"]
@@ -741,7 +858,7 @@ def _execute(
         generator_tokens_out=sum(g.get("tokens_out", 0) for g in generated.values()),
         generator_model=config.generator_model,
         judge_estimate_usd=cost_estimate.get("judge_usd") if config.eval_tier is EvalTier.TIER_2 else None,
-        pipeline_llm_stats=pipeline_llm.stats() if pipeline_llm is not None else None,
+        pipeline_llm_stats=all_stats or None,
         pricing=pricing,
     )
     aggregate["cost_actual_usd"] = actual["total_usd"]
@@ -803,9 +920,21 @@ def _tier2(
     results_by_question: dict[str, Any],
     chunk_text: dict[str, str],
     per_question: dict[str, dict[str, Any]],
+    generation_cache: GenerationCache,
 ) -> dict[str, Any]:
     """Generate answers and judge them. The only part of a run that costs money."""
-    assembler = ConcatAssembler(max_tokens=config.context_max_tokens)
+    # P2-13: ordering is the assembler's business; compression happens before it,
+    # because it changes the text the budget walk is measuring.
+    assembler = ConcatAssembler(max_tokens=config.context_max_tokens, order=config.context_order)
+    compressor = None
+    if config.context_compressor:
+        params = dict(config.context_compressor_params)
+        model = params.pop("model", "")
+        compressor = build_compressor(
+            config.context_compressor,
+            PipelineLLM(model, cache=generation_cache),
+            **params,
+        )
     generator = OpenRouterGenerator(
         GeneratorConfig(
             model=config.generator_model,
@@ -815,7 +944,7 @@ def _tier2(
             reasoning_effort=config.generator_reasoning_effort,
         )
     )
-    judge = RagasJudge(_judge_config(config))
+    judge = None if config.skip_judge else RagasJudge(_judge_config(config))
 
     generated: dict[str, Any] = {}
     for row in rows:
@@ -823,7 +952,24 @@ def _tier2(
         # Scoring saw `retrieval_depth` chunks; the generator sees one chunk per
         # selected document — `top_k` distinct documents (P1-03), not top_k chunks.
         context_chunks = results_by_question[question_id].context_chunks
-        context = assembler.assemble(context_chunks, chunk_text)
+        texts = chunk_text
+        if compressor is not None:
+            compressed = compressor.compress(
+                question_id=question_id,
+                question=row["question"],
+                chunks=context_chunks,
+                chunk_text=chunk_text,
+            )
+            context_chunks, texts = compressed.chunks, compressed.chunk_text
+        context = assembler.assemble(context_chunks, texts)
+        # Words in and out per question: the tokens-per-query reduction the story
+        # asks for is reported from these, not from an average of averages.
+        per_question[question_id].update(
+            {
+                "context_words": float(context.meta["words_out"]),
+                "context_chunks_used": float(context.n_chunks),
+            }
+        )
         answer = generator.generate(row["question"], context.text)
         if answer.prompt_ref != config.generator_prompt:
             raise RuntimeError(
@@ -841,9 +987,15 @@ def _tier2(
         )
         # Ragas scores against the retrieved contexts as a list, not one blob:
         # faithfulness decomposes claims and attributes them to individual contexts.
-        contexts = [chunk_text[c.chunk_id] for c in context_chunks]
+        contexts = [texts[c.chunk_id] for c in context_chunks]
         reference = (row.get("answer") or "").strip()
-        if reference:
+        if judge is None:
+            # DEC-063: the judged criteria are recorded as skipped, not as zero and
+            # not as absent. A metric that cannot be scored is None (preflight 6).
+            for criterion in CRITERIA:
+                per_question[question_id][criterion] = None
+            per_question[question_id]["judge_skipped_by_config"] = 1.0
+        elif reference:
             scores = judge.score(
                 question=row["question"],
                 answer=answer.text,
@@ -871,4 +1023,7 @@ def _tier2(
             "tokens_in": answer.tokens_in,
             "tokens_out": answer.tokens_out,
         }
+    if compressor is not None:
+        generated["__compression__"] = compressor.provenance()
+    generated["__assembly__"] = {"order": config.context_order}
     return generated
