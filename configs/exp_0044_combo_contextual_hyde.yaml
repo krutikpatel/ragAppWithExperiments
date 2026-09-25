@@ -1,0 +1,48 @@
+# EXP-0044 combination: contextual retrieval + HyDE
+#
+# P2-16 — combination set. There are NO per-axis winners to combine: six axes produced
+# one positive result (P2-14's abstention threshold) and it is not a retrieval technique.
+# So these combinations pair the techniques that were individually POSITIVE-BUT-NULL on
+# the multi-document slice, which is the organizing question's slice:
+#
+#   control                     multi-doc 0.350
+#   cohere/rerank-4-fast        multi-doc 0.475  (+0.125, p = 0.180)   EXP-0025
+#   HyDE                        multi-doc 0.450  (+0.100, p = 0.346)   EXP-0032
+#   contextual retrieval        multi-doc 0.425  (+0.075, p = 0.720)   EXP-0030
+#   hybrid weighted a=0.8       multi-doc 0.400, overall R@5 0.730     EXP-0018
+#
+# None is significant alone. The question P2-16 exists to ask is whether they compose --
+# and specifically whether the gain is SUB-ADDITIVE, which is a primary Phase 2
+# deliverable. If two techniques each rescue the same handful of multi-document questions
+# the combination reproduces one of them; if they rescue different ones it adds.
+#
+# Index-side and query-side, stacked. Contextual retrieval prefixes each chunk with
+# generated context before indexing; HyDE generates a passage to query with. Both are
+# 'write text with a model, then embed it', applied at opposite ends of retrieval --
+# so if either works by closing a vocabulary gap, doing both may close it twice.
+# The contextual index is already on disk; nothing is re-embedded.
+name: "EXP-0044 combination: contextual retrieval + HyDE"
+axis: combination
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: contextual
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+  context_model: openai/gpt-oss-20b
+  context_max_words: 60
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+query_transform: hyde
+query_transform_params:
+  model: openai/gpt-oss-20b
+  max_words: 120

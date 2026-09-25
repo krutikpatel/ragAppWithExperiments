@@ -1,0 +1,51 @@
+# EXP-0043 combination: HyDE + hybrid weighted a=0.8
+#
+# P2-16 — combination set. There are NO per-axis winners to combine: six axes produced
+# one positive result (P2-14's abstention threshold) and it is not a retrieval technique.
+# So these combinations pair the techniques that were individually POSITIVE-BUT-NULL on
+# the multi-document slice, which is the organizing question's slice:
+#
+#   control                     multi-doc 0.350
+#   cohere/rerank-4-fast        multi-doc 0.475  (+0.125, p = 0.180)   EXP-0025
+#   HyDE                        multi-doc 0.450  (+0.100, p = 0.346)   EXP-0032
+#   contextual retrieval        multi-doc 0.425  (+0.075, p = 0.720)   EXP-0030
+#   hybrid weighted a=0.8       multi-doc 0.400, overall R@5 0.730     EXP-0018
+#
+# None is significant alone. The question P2-16 exists to ask is whether they compose --
+# and specifically whether the gain is SUB-ADDITIVE, which is a primary Phase 2
+# deliverable. If two techniques each rescue the same handful of multi-document questions
+# the combination reproduces one of them; if they rescue different ones it adds.
+#
+# P2-16 shape (d) — the deliberately cheap config. Both components cost effectively
+# nothing per query ($0.0000018 and $0.0000004), against the reranker's $0.00224.
+# Also a real interaction question: HyDE replaces a 20-word question with a 120-word
+# generated passage, and hybrid feeds that to BM25 as well as to the embedder.
+name: "EXP-0043 combination: HyDE + hybrid weighted a=0.8"
+axis: combination
+split: dev
+eval_tier: tier1
+retriever: hybrid
+retriever_params:
+  fusion: weighted
+  alpha: 0.8
+  dense:
+    embedding_backend: openrouter
+    embedding_model: qwen/qwen3-embedding-8b
+    embedding_provider: DeepInfra
+    batch_size: 64
+  bm25:
+    k1: 1.5
+    b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+query_transform: hyde
+query_transform_params:
+  model: openai/gpt-oss-20b
+  max_words: 120

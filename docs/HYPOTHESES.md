@@ -785,6 +785,88 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   EXP-0038's free threshold (0.1333 / 0.0299 against 0.2222 / 0.1212).
   `run_20260925_211103_1e43`.
 
+## H-030 — HyDE and the cross-encoder rescue the same questions, so the pairing is sub-additive
+- **Date written:** 2026-09-26, before EXP-0042 ran
+- **Source:** Claude. P2-16 shape (e), the pairing where interaction is suspected.
+- **The arithmetic being tested.** On the 40-question multi-document slice the control
+  scores 0.350. HyDE alone reaches **0.450** (+0.100, p = 0.346) and `cohere/rerank-4-fast`
+  alone reaches **0.475** (+0.125, p = 0.180). If the two are real and independent,
+  combining them lands near **0.575**. If they rescue the same questions, it lands near
+  **0.475** — the better of the two, and no more.
+- **Hypothesis: near 0.475, i.e. strongly sub-additive.** Multi-doc comes out **at or
+  below 0.500**, and overall strict recall@5 stays within ±0.03 of the better single
+  technique (0.735).
+- **The mechanism, measured rather than assumed.** A reranker cannot exceed the recall of
+  the candidate set it is given (DEC-058), so the pairing can only be additive if HyDE
+  hands it a *better pool*. It does not: **HyDE's recall@20 is 0.925 against the control's
+  0.920**, and at candidate depth the two are indistinguishable. Both techniques are
+  therefore re-ordering within the same recoverable set. They also fail the same way at
+  the same place — both sharpen rank 1 (@1 0.365 and 0.375 against the control's 0.305)
+  and neither moves @20 — which is the signature of two methods finding the same
+  documents rather than different ones.
+- **What would falsify it:** multi-doc at or above 0.550. That would mean the two are
+  picking out different questions, and would be the first evidence in this project that
+  any two of its techniques are independent.
+- **Tested by:** `rag compare promoted <run> --metric strict_recall@5` per slice, plus a
+  question-level intersection of which multi-doc questions each of the three runs rescues.
+- **Resolution:** _pending EXP-0042._
+
+## H-031 — The two free techniques compose no better, and HyDE hurts BM25
+- **Date written:** 2026-09-26, before EXP-0043 ran
+- **Source:** Claude. P2-16 shape (d), the deliberately cheap config.
+- **Hypothesis:** overall strict recall@5 lands **below HyDE alone (0.735)** — this is the
+  one combination I expect to be actively worse than its better component, not merely
+  sub-additive.
+- **Reasoning, and it is specific to this pairing.** Hybrid α=0.8 fuses a dense ranking
+  with a **BM25** ranking, and HyDE hands both of them a 120-word generated passage
+  instead of a 20-word question. BM25 scores on term overlap; a generated help-article
+  passage is full of this corpus's most common words ("Wix", "click", "settings",
+  "dashboard"), which are exactly the terms BM25's IDF weighting treats as least
+  informative — while the handful of rare terms that made the original question findable
+  are diluted to 1/6 of the query. The dense half should behave as HyDE did alone; the
+  sparse half should get worse, and α=0.8 still gives it 20% of the fused score.
+- **The part I expect to be wrong:** the magnitude. 20% weight on a degraded ranking may
+  simply not matter, in which case this reproduces HyDE alone and the interesting fact is
+  that BM25 contributed nothing either way.
+- **Tested by:** overall and per-slice strict recall@5 against EXP-0032 (HyDE alone) and
+  EXP-0018 (hybrid alone), not only against promoted.
+- **Resolution:** _pending EXP-0043._
+
+## H-032 — Two generated-text techniques at opposite ends of retrieval overlap almost completely
+- **Date written:** 2026-09-26, before EXP-0044 ran
+- **Source:** Claude.
+- **Hypothesis:** multi-doc lands **within ±0.05 of contextual retrieval alone (0.425)**,
+  and overall within ±0.03 of HyDE alone (0.735) — no gain from stacking them.
+- **Reasoning.** Contextual retrieval and HyDE are the same idea applied at opposite ends:
+  write text with a model, then embed it. Contextual retrieval adds article context to the
+  *indexed* chunk; HyDE adds answer-shaped text to the *query*. Both, if they work at all,
+  work by closing the same vocabulary gap between how a user asks and how the corpus
+  writes — and a gap can only be closed once. EXP-0030 measured that contextual retrieval
+  is **perfectly inert on one-chunk articles** (0.780 → 0.780, 4 gained / 4 lost), which
+  is 79% of the corpus, so there is little for it to contribute on top of anything.
+- **Tested by:** per-slice comparison against EXP-0030 and EXP-0032 individually.
+- **Resolution:** _pending EXP-0044._
+
+## H-033 — Stacking three null techniques produces a null, and the frontier has one point on it
+- **Date written:** 2026-09-26, before EXP-0045 ran
+- **Source:** Claude. P2-16 shape (a) all positives combined, and (b) the same minus the
+  most expensive component.
+- **Hypothesis:** overall strict recall@5 within **±0.03 of the control's 0.720** — the
+  three-way stack is indistinguishable from changing nothing — and **no combination in
+  EXP-0042 to EXP-0045 beats the control significantly**, so the cost/quality frontier
+  P2-16 asks for collapses to a single point: the control, at $0.0000004 per query.
+- **Reasoning:** six axes have produced no significant positive retrieval result, and
+  sub-additivity among null techniques cannot manufacture one. The specific risk in a
+  three-way stack is compounding: HyDE degrades the BM25 half (H-031), contextual
+  retrieval adds 60 words of restatement to every chunk, and both perturb the ranking the
+  other is trying to improve.
+- **What would make this entry wrong in the interesting direction:** any combination
+  reaching p < 0.05 positive. That would make the phase's conclusion "the techniques are
+  individually too weak to detect but compose", which is a materially different finding
+  from "nothing works here".
+- **Tested by:** `rag compare` for all four combinations, plus the frontier table.
+- **Resolution:** _pending EXP-0045._
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /
