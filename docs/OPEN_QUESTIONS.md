@@ -675,3 +675,26 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
 - **Current handling:** option 3 without the check — the failure ids are on the row
   (`prefix_call_failures`) and the discrepancy is stated in EXP-0030's Anomalies. Whichever
   way this is decided, it needs a DEC entry, because it changes when an index is rebuilt.
+
+## OQ-045 — Is HyDE's multi-document gain real?
+- **Status:** open. Surfaced 2026-09-25 by EXP-0032.
+- **What was measured:** on `dev`, HyDE moved `gold_docs:multi` from **0.350 to 0.450**
+  — seven questions gained, three lost — at **p = 0.346, 95% CI [−0.050, +0.250], n=40**.
+  Not a finding. It is also the **only positive movement that slice has produced** across
+  six techniques aimed at it: MMR (0.000), three cross-encoder rerankers, contextual
+  retrieval (+0.050, p=0.72) and decomposition (−0.050).
+- **Why it cannot simply be re-run bigger:** the obvious move is `dev_large` for
+  statistical power, and `dev_large`'s multi-document slice **has zero rows** (MIS-021) —
+  its questions were generated one-per-article. There is no larger multi-document sample
+  in this project.
+- **Decided by:** three seeds of EXP-0032 on `dev` would separate a 0.100 shift on n=40
+  from noise only if the run-to-run spread on that slice is well under 0.05, which is
+  itself unmeasured. The honest options:
+  1. Three repeat runs of EXP-0032 with fresh query embeddings (~$0.001 each, the
+     transforms replay free) to measure the multi-doc slice's own noise floor first.
+     Cheap, and it answers whether the question is answerable before spending on it.
+  2. Combine HyDE with the depth finding (k=20 lifts multi-doc to 0.825) in P2-16 and
+     test whether the two compose, rather than chasing 40 questions.
+  3. Drop it, and record that the one positive signal on the organizing question's slice
+     was left unresolved for want of a sample.
+- **Current handling:** open, untaken. It belongs in P2-16's combination set if anywhere.

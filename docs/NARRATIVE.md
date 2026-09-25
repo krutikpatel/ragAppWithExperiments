@@ -507,6 +507,93 @@ have said something about a model.
 And it cost the most of anything here: **$0.00605 a query, about fifteen thousand times
 the control**, with 31 transient retries against Cohere's one or two.
 
+### Query transformation: four ways to ask again, and a rule about fusing (EXP-0031 to EXP-0034)
+
+Axis 4 changes the question rather than the index. Four techniques, eight runs, and the
+whole axis cost **two cents**. None of them won, two of them lost significantly, and
+together they produced the clearest quantitative rule in the project.
+
+**Decomposition was run first, and it supplies its own control (EXP-0031).** The model
+splits a question into the sub-questions it depends on; each is retrieved for separately
+and the rankings fused. Strict recall@5 fell 0.720 → 0.665, **p = 0.019**.
+
+What makes this one unusually legible is that it declined to fire on most questions. Only
+**50 of 200** were split; the other 150 came back as a single line, 145 of them verbatim,
+and those reproduce the control almost exactly (0.713 → 0.707). All the damage is in the
+50, and there it is severe: **0.740 → 0.540**, thirteen lost against three gained. Those
+questions were not harder to begin with — their control recall was *above* the rest.
+
+Before running it I wrote down that the risk was the sub-queries retrieving the *same*
+documents, making the technique a no-op. The opposite happened: each extra sub-query
+found **40.8 documents the others had not**. The decomposition works exactly as designed,
+and that is why it fails. *"How can I add a personalized name to my automated emails? I
+was advised to use dynamic values"* becomes two good questions. Each has its own
+best-matching article. Neither is the gold, which answers both — and the gold falls from
+rank 1 to rank 10. Reciprocal Rank Fusion reads ranks, so a document that is first for
+one sub-question beats a document that is third for two.
+
+**Decomposition assumes the corpus is indexed by sub-fact. A help centre is indexed by
+task, and a user's multi-part question is usually one task.**
+
+**HyDE was the only technique that did not fuse, and the only one that did not lose
+(EXP-0032).** Instead of embedding the question, generate the help article that would
+answer it and embed that. One query, nothing to fuse. Recall went 0.720 → **0.735**, at
+p = 0.754 — no measurable difference, but the only positive direction in the axis. It
+also produced the single most interesting slice result in the phase: `gold_docs:multi`
+went **0.350 → 0.450**, seven questions gained against three lost. At forty questions
+that is p = 0.35 and not a finding. It is also the only positive signal the
+multi-document slice has shown after six techniques aimed at it, and it cannot be
+settled by running bigger, because the large split's multi-document slice has no rows at
+all. That one is written down as an open question rather than a result.
+
+**Multi-query expansion produced the cleanest null the instrument can make (EXP-0033).**
+Three paraphrases retrieved alongside the original: **delta exactly zero**, twelve
+questions gained and twelve lost. But the slice underneath is not flat — short questions
+fell **0.095 at p = 0.016, seven lost and none gained**. A short question is already
+close to a bare keyword query, and three longer paraphrases pull the fused ranking off
+the literal match with nothing ambiguous to resolve.
+
+**Step-back prompting was the worst (EXP-0034).** Derive a more general question, retrieve
+for both, fuse. Recall fell 0.720 → **0.645, p = 0.017** — twenty-five questions lost
+against ten gained.
+
+I had predicted this one would lose, from a six-question probe in which the model twice
+invented "Wix Bookings" for questions that named no product. Across all two hundred that
+defect runs at **23%**: *"How to make the published changes draft?"* becomes *"How does
+Wix Bookings handle published changes draft?"*. The prompt tells it to keep the product
+name; when there is none, it supplies one, and Bookings is its default guess.
+
+But only **six of those forty-six** questions actually lost the gold. The defect I
+predicted explains about a quarter of the damage. The rest is the same fusion problem
+everything else in this axis hit: the general question retrieved **34.7 documents the
+original did not**, doing precisely its job, and at equal fusion weight "best overview
+article" outranks "good specific article" — while on a help centre the answer is almost
+always the specific one.
+
+**The rule the axis produced.** Order the three fusing techniques by how different the
+extra query's results were, and the outcomes fall in step:
+
+| Technique | New documents per extra query | Δ recall@5 | p |
+|---|---|---|---|
+| HyDE — *replaces* the query, no fusion | — | **+0.015** | 0.754 |
+| Multi-query — 3 paraphrases | 16.8 | **0.000** | 1.000 |
+| Step-back — 1 general question | 34.7 | **−0.075** | 0.017 |
+| Decomposition — 1.3 sub-questions | 40.8 | **−0.055** | 0.019 |
+
+**A second ranking does not add evidence to the first. At equal weight it competes with
+it,** and the more genuinely different it is, the more damage it does. The only technique
+that avoided this replaced the query rather than fusing with it.
+
+Two things worth carrying forward. Every transform did exactly what it was asked —
+sensible sub-questions, faithful paraphrases, a correctly more-general question, a
+corpus-shaped fake passage, **zero fallbacks and zero failed calls across eight hundred
+model calls**. This is not a story about a model disobeying; it is a story about four
+reasonable instructions being wrong for this corpus. And three meaning-preserving
+paraphrases retrieved nearly seventeen new documents each, which says this embedding
+space is far more sensitive to phrasing than the words "semantic search" suggest. Two
+separate hypotheses here predicted otherwise and both were wrong the same way.
+
+
 ### Context assembly: five ways to rearrange the answer, and what they taught (EXP-0027 to EXP-0030)
 
 Axis 6 asks a different question from the rest. Every earlier axis changed what gets

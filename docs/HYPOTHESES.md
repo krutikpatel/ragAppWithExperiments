@@ -601,7 +601,20 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   had in EXP-0027 — a technique whose premise is variety, applied to a corpus with none.
 - **Tested by:** `rag compare` per slice on `dev`, reporting single-doc explicitly
   against its ceiling.
-- **Resolution:** _pending EXP-0032._
+- **Resolution:** **the headline claim was right and the reasoning behind it was wrong.**
+  Overall strict recall@5 landed at **+0.0150 (p = 0.754)**, inside the ±0.03 I named.
+  The ceiling half held exactly: `gold_docs:single` went 0.8125 → 0.8063 at p = 1.000,
+  with about 0.17 of headroom to the measured 0.985 ceiling and 40 questions of noise
+  around it — the story's expectation that HyDE would help single-doc most is not
+  testable on this split, which is itself the answer to that part.
+  The **mechanism I proposed is not supported**. I argued that a 120-word generated
+  passage would be dominated by generic help-article phrasing and so be
+  *anti*-discriminating on a single-product corpus — "the same failure MMR had". If that
+  were happening recall would have fallen. Instead it rose slightly, and
+  **`gold_docs:multi` rose 0.350 → 0.450**, the largest movement that slice has shown
+  across six techniques. I reasoned by analogy to EXP-0027 and the analogy did not hold:
+  MMR's problem was choosing *between* candidates on similarity, HyDE's input is a
+  different query, and those are not the same operation. `run_20260925_064215_4033`.
 
 ## H-025 — Multi-query expansion is the one most likely to do nothing at all
 - **Date written:** 2026-09-25, before EXP-0033 ran
@@ -618,7 +631,22 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   pull back different articles, the embedding space is more phrasing-sensitive than
   assumed, which would be a more interesting finding than the recall number.
 - **Tested by:** `rag compare` on `dev`, plus `mean_new_docs_per_extra_query`.
-- **Resolution:** _pending EXP-0033._
+- **Resolution:** **number right, mechanism wrong — and I said in advance which would be
+  the more interesting outcome.**
+  Overall strict recall@5 moved by **exactly 0.0000 (p = 1.000, 12 gained / 12 lost)**,
+  inside the ±0.02 I named and about as clean a null as the instrument can produce.
+  The mechanism was **wrong**. I predicted `mean_new_docs_per_extra_query` **below 1.0**,
+  on the reasoning that "a paraphrase that preserves meaning should retrieve nearly the
+  same ranking". Measured: **16.8**. I wrote that a high yield "would be a more
+  interesting finding than the recall number", and it is: together with EXP-0031's 40.8,
+  it says this embedding space is far more sensitive to phrasing than a "semantic search"
+  framing suggests. Two hypotheses in this axis predicted phrasing-insensitivity and both
+  were wrong the same way.
+  One thing I did not predict at all: **`q_len:short` fell 0.0946 at p = 0.016, with 7
+  questions lost and 0 gained** — the only slice in the axis with an empty side. A short
+  question is already close to a bare keyword query; three longer paraphrases pull the
+  fused ranking off the literal match and there is nothing ambiguous for them to
+  resolve. `run_20260925_070609_71df`.
 
 ## H-026 — Step-back hurts, because it invents a product the question never named
 - **Date written:** 2026-09-25, before EXP-0034 ran
@@ -639,7 +667,24 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   list are recorded; if the rate is low the effect may be invisible.
 - **Tested by:** `rag compare` on `dev`, plus a count of step-back questions naming a
   product absent from the original.
-- **Resolution:** _pending EXP-0034._
+- **Resolution:** **direction right, magnitude under-stated, mechanism over-attributed.**
+  I predicted a fall of more than the 0.010 re-embedding floor. It fell **0.0750, CI
+  [−0.130, −0.020], p = 0.0169** — significant, the worst result in Axis 4, 25 questions
+  lost against 10 gained.
+  The defect I named from a 6-question probe is real and **more common than I would have
+  guessed: 46 of 200 step-back questions (23.0%) named a Wix product the original never
+  mentioned**, the model's default guess being "Bookings". *"How to make the published
+  changes draft?"* became *"How does Wix Bookings handle published changes draft?"*.
+  **But only 6 of those 46 questions lost the gold — about a quarter of the 25 losses.**
+  I attributed the damage to a mechanism that accounts for a minority of it. The rest is
+  the failure the whole axis shares: the step-back question retrieved **34.7 documents
+  the original did not**, doing exactly what it was meant to, and RRF at equal weight
+  then ranks "best overview article" above "good specific article" — while the gold on a
+  help centre is almost always the specific one.
+  I also wrote "if the rate is low the effect may be invisible." The rate was high *and*
+  the effect is significant, but largely through a different channel. Being right for
+  partly the wrong reason is worth recording as plainly as being wrong.
+  `run_20260925_074024_9154`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

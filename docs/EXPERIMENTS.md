@@ -51,6 +51,9 @@ produced one.
 | EXP-0030 | `run_20260925_051847_7c33` | 2026-09-25 | assembly | **the P2-03 warm-cache repeat** of the row above: 99.99% of the 8,218 prefix calls replayed from cache, **$0.00016**, byte-identical index. strict@5 **0.730**, Δ +0.0100 vs promoted (p = 0.857). The **0.005 gap between two runs of this identical config is hosted query-embedding non-determinism alone** (OQ-023) — the cleanest measurement of that noise floor so far. Caveat on the row: the one prefix call that failed cold **succeeded here**, so this run reports 8,218 prefixes while reusing the cold run's 8,217-prefix index (OQ-043) | 0.730 | 0.830 | 0.648 | 0.584 (n=160) | — | 3654 | 0.0000008 | VALID | [→](experiments/EXP-0030.md) |
 | EXP-0031 | `run_20260925_062204_6667` | 2026-09-25 | query_transform | **query decomposition** (P2-12, run first per the story), cold cache: sub-questions replace the question, retrieved separately, RRF fused. **1.27 sub-queries/question, 0 fallbacks, 50 of 200 questions actually split.** vs promoted: Δ −0.0450, CI [−0.085, −0.005], **p = 0.0501 / McNemar 0.0490 — straddling the threshold**, reported as such. Superseded as the headline by the warm-cache repeat below (3% hit rate here, so the paired test's fixed-outcome assumption does not hold, P2-03) | 0.675 | 0.820 | 0.613 | 0.545 (n=160) | — | — | 0.0000113 | VALID | [→](experiments/EXP-0031.md) |
 | EXP-0031 | `run_20260925_063044_0da8` | 2026-09-25 | query_transform | **the P2-03 warm-cache repeat — the headline.** 100% of transforms replayed, **$0.00009**. vs promoted (0.720): **Δ −0.0550, CI [−0.095, −0.015], p = 0.0186 — significant and negative** (4 gained / 15 lost); single-doc −0.0563 (**p=0.035**), long questions −0.113 (**p=0.041**). **multi-doc 0.350 → 0.300** — the slice it was ordered first to serve, and the fourth technique in a row not to move it. **The entire loss is in the 50 questions actually split: 0.740 → 0.540 (3 gained / 13 lost), while the 150 unsplit reproduce the control (0.713 → 0.707), 145 of them returned verbatim.** Cause measured: each extra sub-query finds **40.8 new documents** — they work exactly as designed. The gold answers the WHOLE question; each part has a better-matching article that is not the gold, and RRF ranks 'best answer to part A' above 'good answer to both'. **Significant negative; not promoted** | 0.665 | 0.820 | 0.614 | 0.545 (n=160) | — | — | 0.0000005 | VALID | [→](experiments/EXP-0031.md) |
+| EXP-0032 | `run_20260925_064215_4033` | 2026-09-25 | query_transform | **HyDE** — a generated 120-word help passage **replaces** the question as the query (Gao et al. 2022); one query, so no fusion. 200/200 generated, 0 fallbacks. vs promoted: Δ **+0.0150**, CI [−0.050, +0.080], p = 0.754 — **no measurable difference**, but the only positive direction in the axis. **multi-doc 0.350 → 0.450 (+0.100, p=0.35, 7 gained / 3 lost) — the largest multi-document movement any technique in this project has produced, and not significant at n=40** (OQ-045). Highest churn in the axis: 43 of 200 questions changed outcome to net +0.015. single-doc flat (p=1.000) against a 0.8125 start. **Not promoted.** $0.00035 warm | 0.735 | 0.830 | 0.653 | 0.578 (n=160) | — | — | 0.0000018 | VALID | [→](experiments/EXP-0032.md) |
+| EXP-0033 | `run_20260925_070609_71df` | 2026-09-25 | query_transform | **multi-query expansion** — 3 paraphrases + the original, RRF fused. 2.985 generated/question, 0 fallbacks. vs promoted: **Δ exactly +0.0000, p = 1.000 (12 gained / 12 lost)** — the cleanest null in the axis. But **q_len:short −0.0946, p = 0.0160, 7 lost / 0 gained** — the only slice in the axis with an empty side: a short question is already near-keyword, and paraphrases pull the fusion off the literal match. Each rewrite found **16.8 documents the original did not**, falsifying the premise that a meaning-preserving paraphrase retrieves the same ranking. **Not promoted.** $0.00030 warm | 0.720 | 0.845 | 0.641 | 0.567 (n=160) | — | — | 0.0000015 | VALID | [→](experiments/EXP-0033.md) |
+| EXP-0034 | `run_20260925_074024_9154` | 2026-09-25 | query_transform | **step-back prompting** — one general question + the original, RRF fused (Zheng et al. 2023). vs promoted: **Δ −0.0750, CI [−0.130, −0.020], p = 0.0169 — significant and negative** (10 gained / 25 lost), the worst result in Axis 4. long questions −0.129 (**p=0.037**); multi-doc 0.350 → 0.250. **Measured defect: 46 of 200 step-back questions (23.0%) invented a Wix product the original never named** — *"How to make the published changes draft?"* → *"How does **Wix Bookings** handle published changes draft?"*. **But only 6 of those 46 lost the gold, so it explains ~a quarter of the 25 losses**; the rest is the axis's fusion problem — the general question found **34.7 new documents** and RRF then ranks 'best overview' above 'good specific'. **Significant negative; not promoted.** $0.00014 warm | 0.645 | 0.780 | 0.584 | 0.512 (n=160) | — | — | 0.0000007 | VALID | [→](experiments/EXP-0034.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -362,6 +365,52 @@ produces better *answers*. Everything above is an input-side fact. More context 
 means more tokens to dilute, more opportunity to cite the wrong article, and more
 money per query. Faithfulness and citation precision at k=10 or k=20 against EXP-0006
 are unmeasured, and that is the experiment worth buying here (OQ-040).
+
+## Axis 4 scorecard — query transformation (P2-12, EXP-0031–0034) — CLOSED
+
+`dev` decides (DEC-055); every run is Tier 1, cache-backed and repeated warm so the
+paired test's fixed-outcome assumption holds (P2-03). Model: `gpt-oss-20b` (DEC-065).
+**Axis spend: $0.0208** across eight runs — four cold, four warm.
+
+| EXP | Technique | `dev` strict R@5 (Δ, CI, p) | multi-doc | new docs / extra query | Verdict |
+|---|---|---|---|---|---|
+| — | **control** | 0.720 | 0.350 | — | promoted |
+| 0032 | HyDE (replaces the query) | 0.735 (+0.015, [−0.050, +0.080], 0.754) | **0.450** (+0.100, p=0.35) | — (one query) | null, best direction |
+| 0033 | multi-query, 3 paraphrases | 0.720 (**+0.000**, [−0.050, +0.050], **1.000**) | 0.375 | 16.8 | null; short questions **−0.095, p=0.016** |
+| 0031 | decomposition | 0.665 (−0.055, [−0.095, −0.015], **0.0186**) | 0.300 | 40.8 | **significant negative** |
+| 0034 | step-back | **0.645** (−0.075, [−0.130, −0.020], **0.0169**) | 0.250 | 34.7 | **significant negative** |
+
+What the axis established:
+
+1. **Adding a second query to the fusion is monotonically harmful, in proportion to how
+   different its results are.** Order the three fusing techniques by how many documents
+   the extra query contributed that the original did not — 16.8, 34.7, 40.8 — and the
+   deltas fall in step: **0.000, −0.075, −0.055**. The one technique that *replaces* the
+   query instead of fusing with it (HyDE) is the only one not negative. A second ranking
+   does not add evidence to the first; at equal RRF weight it competes with it.
+2. **The transforms work. That is the problem.** Every one of them did what it was asked:
+   1.27 sub-questions with sensible content, 2.985 faithful paraphrases, a correctly
+   more-general question, a corpus-shaped hypothetical passage. Zero fallbacks and zero
+   failed calls across 800 calls. This axis is not a story about a model failing to
+   follow instructions; it is a story about the instructions being wrong for the corpus.
+3. **The gold document answers the whole question, and the corpus has no better match
+   for its parts than for the whole.** Decomposition's losses are questions whose gold
+   ranked 1 or 2 and fell to 10, 19 or out of 20, because each sub-question's own
+   best-matching article outranks the article that answers both. Step-back's are the same
+   shape with "general" in place of "part". **These techniques assume documents are
+   indexed by sub-fact or by topic; a help centre is indexed by task.**
+4. **Dense retrieval on this corpus is far more phrasing-sensitive than "semantic search"
+   implies.** Three meaning-preserving paraphrases retrieved **16.8 new documents each**.
+   Two separate hypotheses in this axis (H-023, H-025) predicted that rewrites would
+   retrieve near-identical rankings, and both were wrong in the same direction. That is a
+   fact about the embedding model worth carrying into any later axis.
+5. **HyDE is the only untaken lead in the phase.** `multi_doc` 0.350 → 0.450, 7 gained
+   against 3 lost, p = 0.35 at n = 40. Not a finding, and the only positive signal that
+   slice has produced across six techniques. It cannot be settled on `dev_large`, whose
+   multi-document slice has zero rows (MIS-021). See OQ-045.
+
+**Axis 4 verdict: no winner, four techniques, two significant negatives,
+`promoted.yaml` unchanged.**
 
 ## Axis 6 scorecard — context assembly (P2-13, EXP-0027–0030) — CLOSED
 
@@ -687,6 +736,25 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   **Decomposition assumes the corpus is organised by sub-fact. A help centre is organised
   by task, and a user's multi-part question is usually one task.** Splitting it asks the
   index for something it does not contain.
+
+- **EXP-0032 / 0033 / 0034 — HyDE, multi-query expansion and step-back prompting.** On
+  `dev`: HyDE **+0.0150** (p = 0.754), multi-query **exactly 0.0000** (p = 1.000),
+  step-back **−0.0750** (**p = 0.0169**, significant). Cost they would have added:
+  **$0.00014 to $0.00035 per run** warm — the cheapest experiments in the project.
+  **Decision: control retained; none promoted. Axis 4 closes with no winner.**
+  Two slice results are worth more than the headlines. HyDE moved `gold_docs:multi`
+  **0.350 → 0.450**, seven questions gained against three lost — the largest
+  multi-document movement anything in this project has produced, and **not significant**
+  at n = 40 (p = 0.35). It is the only positive signal on that slice after MMR, three
+  rerankers, contextual retrieval and decomposition all failed to move it (OQ-045). And
+  multi-query lost `q_len:short` by **0.0946 at p = 0.016 with 7 lost and 0 gained** —
+  the only slice in the axis with an empty side — because a short question is already
+  close to a keyword query and paraphrasing pulls the fused ranking off the literal
+  match.
+  Step-back's defect is measured rather than inferred: **46 of 200 step-back questions
+  (23%) named a Wix product the original never mentioned**, the model's default guess
+  being "Bookings". That is a real and large failure of the (prompt, corpus) pair — and
+  it explains only **6 of the 25 losses**. The rest is the axis's common failure, below.
 
 ## Phase 1 scorecard — the controls (P1-08)
 

@@ -436,6 +436,13 @@ rag/
                     min-max weighted `alpha` on dense, DEC-056; owns no index — the
                     dense half does, and `Retriever.embedding_params` is how the
                     runner costs a retriever by what it embeds, not by its name),
+                    query_transform.py (P2-12 Axis 4: decompose / hyde / multi_query /
+                    step_back. `TransformingRetriever` WRAPS a retriever, so config.retriever
+                    still names the real one and pooling, the walk and the collapse ratio stay
+                    the base class's. `prewarm` batches every question's transform at 16
+                    workers before the loop (MIS-036); a failed or empty transform falls back
+                    to the original question, counted, never raised. Fusion is Axis 3's
+                    rrf_fuse — a single-query transform skips it and keeps its own scores),
                     toy.py (smoke tests only; toy_llm_rewrite puts a
                     fake non-deterministic LLM call inside retrieval for the P2-03 test)
   eval/             qrels.py (binary document-level qrels + alignment check),
@@ -489,7 +496,7 @@ rag/
                     invented and repeated candidate numbers and counts both; toy.py —
                     smoke tests only. All DEC-058
 
-prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0),
+prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0), query_{decompose,hyde,multi,step_back}.yaml (P2-12),
                     baseline_answer.yaml (the Phase 1 control, DEC-042: numbered
                     steps, English, [doc:<id>] on every claim, NO URLs) and
                     rerank_llm.yaml (P2-10's ordering prompt),
@@ -515,6 +522,8 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     builds the index, dev decides); exp_0024..0026_rerank_*_dev.yaml
                     are Axis 5 (DEC-058/059; dev only — reranking bills per query, so
                     dev_large costs 31x and is bought only for a winner, OQ-033).
+                    exp_0031..0034_*.yaml are Axis 4 (P2-12, DEC-065 — decomposition
+                    runs first per the story).
                     exp_0027_mmr_lambda*.yaml and exp_0028..0030_*.yaml are Axis 6
                     (P2-13; DEC-062/063/064 — the two Tier 2 ones skip the judge, the two
                     LLM-using ones run on gpt-oss-20b).
