@@ -1,0 +1,36 @@
+# exp_0050_bm25_dev_tier2 — sparse control on DEV, Tier 2 — the missing comparison point
+#
+# P2-18 — the test split, opened ONCE at the end of Phase 2. Requires --open-test and
+# writes a row to the openings log in docs/DECISIONS.md (P0-12).
+#
+# `promoted.yaml` IS the Phase 1 dense control: it has never moved, because no technique
+# in Phase 2 earned promotion. The story asks for "the Phase 1 dense control, the Phase 1
+# sparse control, and the final promoted config" — the first and the third are the same
+# configuration, verified by identity_hash 70610a6119fb9223, so there are two arms here,
+# not three.
+#
+# RE-TUNING AFTER THIS RUN IS FORBIDDEN. If anything is changed in response to these
+# numbers, the split is burned and that must be disclosed.
+# Not a test run and not an experiment: it exists only so the sparse arm's dev-to-test
+# gap can be computed like-for-like. The store has no BM25 Tier 2 run at 600/100 on dev,
+# so without this the sparse Tier 2 gap would have no dev side. Running on `dev` costs
+# nothing in split integrity.
+name: "P2-18 sparse control on DEV, Tier 2 — the missing comparison point"
+split: dev
+eval_tier: tier2
+retriever: bm25
+retriever_params:
+  k1: 1.5
+  b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+skip_judge: true

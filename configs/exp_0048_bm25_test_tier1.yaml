@@ -1,0 +1,30 @@
+# exp_0048_bm25_test_tier1 — sparse control on test, Tier 1
+#
+# P2-18 — the test split, opened ONCE at the end of Phase 2. Requires --open-test and
+# writes a row to the openings log in docs/DECISIONS.md (P0-12).
+#
+# `promoted.yaml` IS the Phase 1 dense control: it has never moved, because no technique
+# in Phase 2 earned promotion. The story asks for "the Phase 1 dense control, the Phase 1
+# sparse control, and the final promoted config" — the first and the third are the same
+# configuration, verified by identity_hash 70610a6119fb9223, so there are two arms here,
+# not three.
+#
+# RE-TUNING AFTER THIS RUN IS FORBIDDEN. If anything is changed in response to these
+# numbers, the split is burned and that must be disclosed.
+# Gap measured against EXP-0004 `run_20260912_215235_ff2f` (dev, 0.410).
+name: "P2-18 sparse control on test, Tier 1"
+split: test
+eval_tier: tier1
+retriever: bm25
+retriever_params:
+  k1: 1.5
+  b: 0.75
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1

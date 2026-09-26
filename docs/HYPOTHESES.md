@@ -920,6 +920,40 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   compose" — did not occur. The conclusion stays "nothing here beats the control".
   `run_20260925_224144_bebc`.
 
+## H-034 — The dev-to-test gap is small, because nothing was ever selected on dev
+- **Date written:** 2026-09-26, before EXP-0046–0050 ran and before the test split was opened
+- **Source:** Claude. The last hypothesis in Phase 2.
+- **Hypothesis:** the dense control's strict recall@5 on `test` lands **within ±0.05 of its
+  dev value of 0.720**, and the sparse control's within ±0.05 of 0.410. The dense-over-sparse
+  gap — the one real finding of Phase 1 — **survives at more than +0.20**.
+- **Reasoning, and it is the interesting part of this entry.** **58 runs were executed
+  against the same 200 dev questions**, which is exactly the shape of experiment that
+  normally produces a large optimism gap. It should not here, because of something the
+  ledger makes unusually easy to check: **`promoted.yaml` never moved.** Not once, across
+  six axes and 45 Phase 2 runs. Its `identity_hash` is 70610a6119fb9223 today and was on
+  the day it was written.
+  The usual overfitting mechanism is *selection*: run many configurations, keep the best
+  on dev, and the kept one carries the noise that made it look best. That mechanism never
+  operated. Every axis returned "no measurable difference" or worse, and the decision rule
+  — promote only on a significant positive — fired zero times. **A configuration that was
+  never chosen for its dev score cannot have been overfitted to its dev score.**
+- **Where the real exposure is, and why the band is ±0.05 rather than tighter.** The
+  control is not unselected. Its chunk size (600/100, DEC-038), its embedding model and
+  provider (DEC-041), its `top_k` and pooling rule (DEC-040) were all chosen in Phase 1
+  by looking at dev numbers. That is roughly **four or five selection decisions**, not
+  fifty-eight — but it is not zero, and those choices are where any gap will come from.
+- **The part I expect to be wrong:** the sparse control. BM25 is a lexical method with no
+  fitted parameters beyond `k1` and `b` at their defaults, so it should transfer almost
+  exactly; if anything moves more than the dense arm, my account of where the exposure
+  lies is wrong.
+- **What would make this project's conclusion worse, not better:** a large gap would mean
+  the Phase 1 control itself was a dev artifact, which would undermine every Phase 2
+  comparison made against it — all 45 of them are relative to that baseline.
+- **Tested by:** EXP-0046–0049 against EXP-0005, EXP-0006, EXP-0004 and EXP-0050, per
+  metric, with `rag compare` where the splits permit and plain deltas where they do not
+  (dev and test are different questions, so no paired test is possible across them).
+- **Resolution:** _pending EXP-0046–0050._
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /
