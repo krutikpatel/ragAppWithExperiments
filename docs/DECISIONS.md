@@ -4,7 +4,9 @@ Append-only. Every consequential decision, who made it, and the condition that
 would make us revisit it. A superseded decision keeps its entry and gains a
 `Superseded by DEC-NNN` status.
 
-**Test-split openings log:** see the bottom of this file. Zero openings so far.
+**Test-split openings log:** see the bottom of this file. **Opened once, on 2026-09-26,
+for P2-18** — four rows, one per run, all carrying the same reason and the same git SHA
+(`663b555`). One opening event, four runs. Nothing has been tuned since.
 
 ---
 
@@ -214,7 +216,10 @@ SHA, and reason.
 
 | # | Date | Config hash | Git SHA | Reason |
 |---|---|---|---|---|
-| _(none)_ | — | — | — | The test split has never been opened. |
+| 1 | 2026-09-26 | `87353cd987f08f78` | `663b555` | P2-18: the single end-of-Phase-2 opening of the test split. Measures the dev-to-test gap for the Phase 1 dense control (which is also promoted.yaml, unchanged across six axes and 45 runs) and the Phase 1 sparse control, at Tier 1 and Tier 2. No tuning follows this run. (run `run_20260926_010435_6495`) |
+| 2 | 2026-09-26 | `0ea2ad99f3c1a7ef` | `663b555` | P2-18: the single end-of-Phase-2 opening of the test split. Measures the dev-to-test gap for the Phase 1 dense control (which is also promoted.yaml, unchanged across six axes and 45 runs) and the Phase 1 sparse control, at Tier 1 and Tier 2. No tuning follows this run. (run `run_20260926_011237_58f7`) |
+| 3 | 2026-09-26 | `781216f38f8299cb` | `663b555` | P2-18: the single end-of-Phase-2 opening of the test split. Measures the dev-to-test gap for the Phase 1 dense control (which is also promoted.yaml, unchanged across six axes and 45 runs) and the Phase 1 sparse control, at Tier 1 and Tier 2. No tuning follows this run. (run `run_20260926_011244_9d0e`) |
+| 4 | 2026-09-26 | `e29d1973b5492cca` | `663b555` | P2-18: the single end-of-Phase-2 opening of the test split. Measures the dev-to-test gap for the Phase 1 dense control (which is also promoted.yaml, unchanged across six axes and 45 runs) and the Phase 1 sparse control, at Tier 1 and Tier 2. No tuning follows this run. (run `run_20260926_012047_6004`) |
 
 ## DEC-010 — Strict recall@k is the headline retrieval metric
 - **Date:** 2026-09-09
@@ -2659,3 +2664,32 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** the retriever or the embedding model changes — the threshold is a raw
   cosine score and has no meaning across a change of either; or P2-18 shows the curve
   does not hold out of sample.
+
+## DEC-069 — Phase 2 closes with `promoted.yaml` unchanged, and the test split confirms it
+- **Date:** 2026-09-26
+- **Decided by:** Krutik (opening approved); Claude (the reading of the result)
+- **Status:** Active
+- **Context:** P2-18 opened `test` once, at the end of Phase 2, and measured the
+  dev-to-test gap for both Phase 1 controls at Tier 1 and Tier 2. The Phase 1 dense
+  control and `promoted.yaml` are the same configuration (`identity_hash`
+  70610a6119fb9223) because no technique in six axes earned promotion.
+- **The result.** Strict recall@5: dense **0.7200 → 0.6800** (gap −0.0400, 95% CI
+  [−0.130, +0.050]); sparse **0.4100 → 0.3450** (gap −0.0650, CI [−0.160, +0.030]).
+  **Every gap measured, on every headline metric and both slices, is within the sampling
+  noise of two independent 200-question samples.** `strict recall@20` and Tier 2
+  `gold_in_context` and `refusal_rate` came back **numerically identical** across the
+  two splits.
+- **The finding that survives.** Dense over sparse — the one real result of Phase 1 —
+  is **+0.3100 on dev and +0.3350 on test**, with a test CI of [+0.243, +0.427]. It is
+  the only thing in this project that was ever significant, and it holds out of sample.
+- **Decision: `promoted.yaml` is unchanged and Phase 2 is closed.** Nothing has been
+  modified in response to these numbers and nothing will be. The split is not burned.
+- **Evidence:** EXP-0046–0050, all VALID, openings log rows 1–4.
+- **Consequences:**
+  - The project's headline number is now **strict recall@5 = 0.68 on 200 unseen
+    questions**, not 0.72 on the set it was developed against.
+  - Every Phase 2 comparison was made against a baseline that transfers, so the 45
+    "no measurable difference" verdicts are not artefacts of a lucky control.
+  - **`test` is spent.** Any future phase needs a new held-out split, and comparisons
+    across that boundary are invalid.
+- **Revisit if:** never, for this split. A Phase 3 would freeze a new one.

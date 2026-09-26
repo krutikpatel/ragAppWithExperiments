@@ -507,6 +507,80 @@ have said something about a model.
 And it cost the most of anything here: **$0.00605 a query, about fifteen thousand times
 the control**, with 31 transient retries against Cohere's one or two.
 
+### Opening the test split, once (EXP-0046 to EXP-0050)
+
+Two hundred questions were locked away at the start of the project and never looked at.
+Every decision, every experiment, all fifty-eight runs, used the other two hundred. On
+2026-09-26 the locked set was opened once, with a recorded reason, and nothing has been
+changed since.
+
+The reason for locking it is that scoring yourself repeatedly on the same questions and
+adjusting until the number improves is memorising a practice exam. The held-out set is
+the real exam, and it works exactly once — the moment you see the result and change
+something in response, it becomes another practice exam.
+
+**Fifty-eight runs against the same two hundred questions is the shape of programme that
+normally produces a large optimism gap. It did not produce one here.**
+
+| | dev | test | gap |
+|---|---|---|---|
+| **Dense control (= promoted), strict recall@5** | **0.7200** | **0.6800** | **−0.0400** |
+| strict recall@20 | 0.9200 | 0.9200 | **0.0000** |
+| Tier 2, gold document reached the generator | 0.6700 | 0.6700 | **0.0000** |
+| Tier 2, refusal rate | 0.0800 | 0.0800 | **0.0000** |
+| BM25 sparse control, strict recall@5 | 0.4100 | 0.3450 | −0.0650 |
+
+Every gap, on every headline metric, both slices and both tiers, falls inside the
+sampling noise of two independent two-hundred-question samples. Three came back
+numerically identical.
+
+**And the one finding this project ever established as significant got larger.** Dense
+retrieval over BM25 was +0.310 on the development set and **+0.335 on the unseen one**,
+with a confidence interval of [+0.243, +0.427]. The single real result transfers.
+
+**Why the gap is small, and how we can tell it is not luck.** Overfitting has a
+signature: the configuration that was *selected* degrades more than one that was not,
+because it carries the noise that made it look good in the first place. The opposite
+happened. **BM25 — which has no fitted parameters, was never tuned on anything, and was
+only ever the thing dense retrieval was compared against — lost 0.065, while the promoted
+dense configuration lost 0.040.** An unselected baseline cannot be overfitted, so its
+larger drop is a property of the two splits differing. The selected arm moving *less*
+than the unselected one is the cleanest evidence available that almost no selection
+pressure was applied.
+
+The ledger says why, and it is the least flattering explanation possible: **selection
+never operated, because nothing was ever selected.** Every axis returned "no measurable
+difference" or worse. The rule — promote only on a significant positive — fired zero
+times across six axes and forty-five runs. `promoted.yaml` carries the same identity hash
+today as the day it was written. **A configuration that was never chosen for its
+development score cannot have been overfitted to it.** Fifty-eight runs bought knowledge
+about techniques and did not buy a tuned configuration, which turns out to be the one way
+to run fifty-eight experiments on two hundred questions and not pay for it at the end.
+
+I had written the prediction down before opening the split, and got the dense arm and the
+headline finding right and the sparse arm wrong — by exactly the margin I had named as
+the thing that would show my reasoning was wrong. I had attributed the expected gap to
+the four or five choices made on the development set in Phase 1. The arm with *no* such
+choices moved furthest, so that account was incorrect: the gap is the two splits
+differing in difficulty, not the configuration fitting its questions. Being wrong there
+makes the result stronger than my reasoning deserved.
+
+**The project's headline number is strict recall@5 = 0.68 on two hundred unseen
+questions**, not 0.72 on the set it was developed against. The test split is now spent;
+any future work needs a new one.
+
+One last thing surfaced in the final hour, and it is worth recording because of when it
+happened. The suite went red: an answer on the test split was flagged as containing a
+URL, which the prompt forbids. It did not. The answer correctly told a user to *"remove
+http:// and replace it with https://"*, and the detector had matched a bare scheme with
+no host — the fourth parser in this project to be written against the format its author
+imagined rather than the text it would meet. Correcting it would make a test-split number
+look better, after the split had been opened, which is the exact shape of thing the rules
+forbid. So it was put to Krutik before anything was touched, fixed as a measurement bug
+with the timing disclosed, and the record shows what changed: one verdict out of 1,638
+stored answers, no system file, and no number appearing in any comparison.
+
+
 ### Grounding: four ways to stop the system answering what it cannot (EXP-0038 to EXP-0041)
 
 Axis 7 is the one that matters commercially. Everything before it asked whether the right

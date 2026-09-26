@@ -194,6 +194,12 @@ Derived from the prevention rules below. Run through it and say in chat that you
     value — 0/45, 45/45 — as a suspected instrument failure until the raw output says
     otherwise. (MIS-038)
 
+49. **Validate every lexical check over model output against the FULL stored corpus at
+    the moment you write it**, and count the disagreements. This project has now had four
+    parser bugs of identical shape — citation (MIS-016), refusal (DEC-045 and MIS-038),
+    extractive (MIS-035) and URL (MIS-039). Each was caught later by a test on stored
+    output; none was caught by review. Four instances is not four accidents.
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1333,3 +1339,47 @@ Derived from the prevention rules below. Run through it and say in chat that you
   computed from it** — and treat an extreme value (0/45, 45/45) as a suspected
   instrument failure until the raw output says otherwise.
 - **Added to preflight:** yes — item 48.
+
+## MIS-039 — The URL detector flagged a bare scheme, and it surfaced after the test split was opened
+- **Date:** 2026-09-26
+- **Severity:** Low on impact, high on timing
+- **What happened:** `find_urls` matched `(?:https?://|www\.)\S+` — a scheme followed by
+  any run of non-space characters. A test-split answer correctly instructed the user to
+  *"remove `http://` and replace it with `https://`, then Publish"*, and the detector
+  matched the string `https://,`. There is no URL in that answer. The module's own
+  docstring says the check is for links, and that a bare domain in prose is "a name, not
+  a link" — a scheme with no host is even less of one.
+- **How it was caught:** `tests/test_prompts.py::test_recorded_generated_answers_contain_no_urls`,
+  the P1-05 acceptance test, went red immediately after the P2-18 runs landed. The test
+  did its job; the detector it calls did not.
+- **The timing, stated plainly because it is the part that matters.** This was found
+  **after `test` was opened**, and correcting it makes a test-split diagnostic look
+  better — exactly the shape of thing P2-18 forbids. It was put to Krutik before anything
+  was changed, per CLAUDE.md's rule about anything that might invalidate an experiment.
+  **The reasoning for treating it as a measurement fix rather than as tuning:**
+  - **No system file changed.** No config, no prompt, no retriever, no chunker. The
+    pipeline that produced the test numbers is byte-identical to the one that produced
+    the dev numbers.
+  - **No reported number moved.** `answers_with_url` appears in none of the dev-to-test
+    gap metrics, in no scorecard and in no comparison. The P2-18 write-up is unchanged.
+  - **The scope is one verdict in 1,638 stored answers.** Measured across the whole
+    results store: 4 answers flagged before, 3 after, and the single verdict that changed
+    is the one described above.
+  - Leaving a detector in place that is known to be wrong would have been the worse
+    outcome, and would have meant a permanently red suite.
+- **Root cause:** the fourth parser in this project to be written against the format it
+  expected rather than the text it would meet — after the citation parser (MIS-016), the
+  refusal detector (DEC-045, and again MIS-038) and the extractive checker (MIS-035).
+  Each was caught by a test on stored output; none was caught by review.
+- **Fix applied:** the pattern now requires a host containing a dot and stops at the last
+  URL-ish character, so `https://,` and `http:// to https://` do not match while
+  `https://support.wix.com/en/article/x` and `www.wix.com/my-account` still do. One
+  existing expectation changed with it: v1 swallowed the trailing sentence period in
+  `www.wix.com/my-account.`, which was a wart rather than a behaviour, and no recorded
+  number depends on the matched string.
+- **Prevention rule:** already covered by preflight 21 and 45 — and this is the fourth
+  instance, which is itself the finding. **When a project has four parser bugs of the
+  same shape, the problem is not the parsers.** Any lexical check over model output
+  should be validated against the full stored corpus at the moment it is written, not
+  the handful of strings its author imagined.
+- **Added to preflight:** yes — item 49.

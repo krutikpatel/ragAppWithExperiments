@@ -103,7 +103,11 @@ def test_url_detector_matches_links_not_domain_names():
     from rag.eval.generation_metrics import find_urls
 
     assert find_urls("Go to https://support.wix.com/en/article/x for details.") == ["https://support.wix.com/en/article/x"]
-    assert find_urls("See www.wix.com/my-account.") == ["www.wix.com/my-account."]
+    # The trailing full stop is sentence punctuation, not part of the host. v1 swallowed
+    # it; the MIS-039 fix stops at the last URL-ish character. No recorded number depends
+    # on the matched STRING — `answers_with_url` is a count — so nothing in the ledger
+    # moves, and this expectation was pinning a wart rather than a behaviour.
+    assert find_urls("See www.wix.com/my-account.") == ["www.wix.com/my-account"]
     assert find_urls("Connect example.com in your Domains settings [doc:abc12345].") == []
     assert find_urls("") == [] and find_urls(None) == []
 
@@ -176,3 +180,17 @@ def test_compress_context_prompt_forbids_rewriting_and_names_the_empty_marker():
     assert "word for word" in flat
     assert "Do not rewrite" in flat
     assert f"output exactly: {EMPTY_MARKER}" in flat
+
+
+def test_url_detector_does_not_flag_a_bare_scheme():
+    """MIS-039: a scheme with no host is not a link. An answer correctly instructing a
+    user to 'replace http:// with https://' was flagged as containing a URL — found on
+    the test split, after it was opened, and fixed as a measurement bug rather than a
+    change to anything the system does."""
+    from rag.eval.generation_metrics import find_urls
+
+    assert find_urls("edit the code to remove http:// and replace it with https://, then Publish.") == []
+    assert find_urls("ensure any code uses HTTPS (not HTTP)") == []
+    # And it still catches what it exists to catch.
+    assert find_urls("Go to https://support.wix.com/en/article/x") == ["https://support.wix.com/en/article/x"]
+    assert find_urls("See www.wix.com/my-account.") == ["www.wix.com/my-account"]

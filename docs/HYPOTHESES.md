@@ -952,7 +952,26 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
 - **Tested by:** EXP-0046–0049 against EXP-0005, EXP-0006, EXP-0004 and EXP-0050, per
   metric, with `rag compare` where the splits permit and plain deltas where they do not
   (dev and test are different questions, so no paired test is possible across them).
-- **Resolution:** _pending EXP-0046–0050._
+- **Resolution:** **right on the dense arm and on the headline finding; wrong on the
+  sparse arm, in precisely the way I named as the falsifier — and the error strengthens
+  the conclusion.**
+  - Dense within ±0.05 of 0.720 → **0.6800, gap −0.0400.** Correct.
+  - Dense-over-sparse survives above +0.20 → **+0.3350 on test** against +0.3100 on dev,
+    test CI [+0.243, +0.427]. Correct, and it is *larger* out of sample.
+  - Sparse within ±0.05 of 0.410 → **0.3450, gap −0.0650.** **Wrong**, outside the band.
+  I wrote: *"the part I expect to be wrong is the sparse control. BM25 is a lexical
+  method with no fitted parameters beyond `k1` and `b` at their defaults, so it should
+  transfer almost exactly; if anything moves more than the dense arm, my account of where
+  the exposure lies is wrong."* BM25 moved **more**. So the account was wrong: I located
+  the exposure in the four or five Phase 1 selection decisions, and the arm carrying
+  **zero** selection decisions moved furthest.
+  The gap is the two splits differing in difficulty, not the configuration fitting the
+  dev questions. And that makes the result *stronger* than my reasoning predicted:
+  overfitting's signature is the selected arm degrading more than the unselected one, and
+  we observed the reverse. Every gap, on every headline metric, both slices and both
+  tiers, sits inside the sampling noise of two 200-question samples; `strict recall@20`,
+  Tier 2 `gold_in_context` and Tier 2 refusal rate came back numerically identical.
+  `run_20260926_010435_6495` and `run_20260926_011237_58f7`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

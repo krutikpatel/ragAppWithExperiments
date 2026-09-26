@@ -168,7 +168,13 @@ def is_refusal(answer: str) -> bool:
 # `url` field, never generated, so a generated one can only be stale or invented.
 # "URL-shaped" means a scheme or a www. host; a bare domain in prose ("connect
 # example.com") is a name, not a link, and is deliberately not matched.
-_URL_SHAPED = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# A scheme alone is not a link. v1 matched `https://` followed by ANY non-space run,
+# so an answer correctly telling a user to "replace http:// with https://, then Publish"
+# was flagged as containing a URL (MIS-039). A link needs a host, and a host has a dot.
+_URL_SHAPED = re.compile(
+    r"(?:https?://|www\.)[^\s,;)\]]*[A-Za-z0-9][^\s,;)\]]*\.[^\s,;)\]]*[A-Za-z0-9/]",
+    re.IGNORECASE,
+)
 
 
 def find_urls(answer: str) -> list[str]:

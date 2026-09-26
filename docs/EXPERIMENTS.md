@@ -62,6 +62,11 @@ produced one.
 | EXP-0043 | `run_20260925_223430_553c` | 2026-09-25 | combination | **HyDE + hybrid weighted α=0.8** — the deliberately cheap arm. R@5 0.7400 (+0.0200, p = 0.683), multi-doc 0.425, **$0.0000018/query**. Highest **nDCG@10 in the project (0.6819)** while third on strict recall@5 — better at ranking, no better at the deciding metric. H-031 predicted it would land *below* HyDE alone because HyDE feeds BM25 a 120-word passage of high-frequency corpus vocabulary; it landed above. **Not promoted** | 0.740 | 0.840 | 0.682 | 0.582 (n=160) | — | 6444 | 0.0000018 | VALID | [→](experiments/EXP-0043.md) |
 | EXP-0044 | `run_20260925_223951_153c` | 2026-09-25 | combination | **contextual retrieval + HyDE** — index-side + query-side, both 'write text with a model then embed it'. R@5 0.7250 (+0.0050, **p = 1.000**), multi-doc **0.375 — below contextual retrieval alone (0.400) and HyDE alone (0.450)**. The two overlap destructively on the slice both improve individually. **Not promoted** | 0.725 | 0.830 | 0.646 | 0.571 (n=160) | — | 2299 | 0.0000018 | VALID | [→](experiments/EXP-0044.md) |
 | EXP-0045 | `run_20260925_224144_bebc` | 2026-09-25 | combination | **contextual retrieval + HyDE + hybrid α=0.8** — all three free positives stacked, and EXP-0042 minus its paid component. **R@5 0.7100 — BELOW the control (Δ −0.0100, p = 0.885) — and multi-doc lands on exactly 0.350, the control's value**, after passing through three techniques each of which raised it alone. **Adding components degrades monotonically: 0.750 / 0.740 / 0.725 at two components, 0.710 at three.** **Not promoted** | 0.710 | 0.830 | 0.664 | 0.569 (n=160) | — | 1167 | 0.0000018 | VALID | [→](experiments/EXP-0045.md) |
+| EXP-0046 | `run_20260926_010435_6495` | 2026-09-26 | control | **TEST SPLIT, opened once (P2-18).** Dense control = `promoted.yaml` (identity 70610a6119fb9223, never moved) on 200 unseen questions, Tier 1. **strict recall@5 0.7200 → 0.6800, gap −0.0400, 95% CI [−0.130, +0.050] — within sampling noise.** **@20 identical at 0.9200.** single-doc −0.061, multi-doc **+0.035**. **Dense over sparse, the one significant finding this project ever produced, is LARGER on test: +0.3350, CI [+0.243, +0.427], against +0.3100 on dev** | 0.680 | 0.810 | 0.623 | 0.552 (n=161) | — | — | 0.0000004 | VALID | [→](experiments/EXP-0046.md) |
+| EXP-0047 | `run_20260926_011244_9d0e` | 2026-09-26 | control | **test, dense, Tier 2.** `gold_in_context` **0.6700 → 0.6700 identical**; refusal rate **0.0800 → 0.0800 identical**; step coverage +0.010; citation precision −0.116 and recall −0.050; false-refusal +0.060. Judge skipped (DEC-063), refusals recounted under v3 on both sides | — | — | — | — | — | — | 0.00034 | VALID | [→](experiments/EXP-0047.md) |
+| EXP-0048 | `run_20260926_011237_58f7` | 2026-09-26 | control | **test, sparse BM25, Tier 1.** strict recall@5 0.4100 → 0.3450, **gap −0.0650 — LARGER than the dense arm's −0.0400.** An unselected baseline cannot be overfitted, so its bigger drop is split difficulty, and the selected arm moving LESS is the cleanest evidence that little selection pressure was applied | 0.345 | 0.440 | 0.319 | 0.276 (n=161) | — | — | 0.0 | VALID | [→](experiments/EXP-0048.md) |
+| EXP-0049 | `run_20260926_012047_6004` | 2026-09-26 | control | **test, sparse, Tier 2.** `gold_in_context` −0.070; citation precision −0.123, recall −0.115; **refusal rate 0.0900 → 0.1800 — it refuses twice as often because retrieval is worse, which is correct behaviour** | — | — | — | — | — | — | 0.00034 | VALID | [→](experiments/EXP-0049.md) |
+| EXP-0050 | `run_20260926_012517_266b` | 2026-09-26 | control | **DEV, sparse, Tier 2 — not a test run and not an experiment.** The store had no BM25 Tier 2 run at 600/100 on dev (only Phase 0's 512/0), so the sparse Tier 2 arm had no dev side to compare against. Exists only to make that gap computable like-for-like | — | — | — | — | — | — | 0.00034 | VALID | [→](experiments/EXP-0050.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -414,6 +419,53 @@ it and no revert is needed.
 **Honest gap:** Phase 2 definition-of-done item 9 says the revisit pass "has been run and
 its composition verdict recorded". The verdict is recorded. The pass was not run.
 
+
+## The dev-to-test gap (P2-18) — the test split, opened once
+
+`test` was opened on **2026-09-26**, once, with `--open-test` and a recorded reason
+(openings log rows 1–4 — one opening event, four runs). **Nothing has been changed in
+response to these numbers. The split is not burned.**
+
+**58 runs were executed against the same 200 dev questions.** That is the shape of
+programme that normally produces a large optimism gap.
+
+| Metric | dev | test | gap | 95% CI |
+|---|---|---|---|---|
+| **DENSE (= promoted) strict recall@5** | **0.7200** | **0.6800** | **−0.0400** | [−0.130, +0.050] |
+| strict recall@10 | 0.8500 | 0.8100 | −0.0400 | [−0.114, +0.034] |
+| strict recall@20 | 0.9200 | 0.9200 | **+0.0000** | [−0.053, +0.053] |
+| nDCG@10 | 0.6308 | 0.6232 | −0.0077 | — |
+| single-doc slice | 0.8125 | 0.7516 | −0.0609 | [−0.151, +0.029] |
+| multi-doc slice | 0.3500 | 0.3846 | **+0.0346** | [−0.178, +0.247] |
+| Tier 2 `gold_in_context` | 0.6700 | 0.6700 | **+0.0000** | — |
+| Tier 2 refusal rate | 0.0800 | 0.0800 | **+0.0000** | — |
+| Tier 2 citation precision | 0.5455 | 0.4291 | −0.1164 | — |
+| **SPARSE strict recall@5** | **0.4100** | **0.3450** | **−0.0650** | [−0.160, +0.030] |
+
+**Every gap on every headline metric, both slices and both tiers, is within the sampling
+noise of two independent 200-question samples.** Dev and test are different questions, so
+no paired test is possible; these are two-proportion intervals and none excludes zero.
+
+**The one significant finding of the project is larger on the unseen split.** Dense over
+sparse: **+0.3100 on dev, +0.3350 on test**, test CI [+0.243, +0.427].
+
+**Why the gap is small after 58 runs, and how we can tell it is not luck.** Overfitting
+has a signature — the *selected* configuration degrades more than an unselected one,
+because it carries the noise that made it look good. **The opposite happened here. BM25,
+which has no fitted parameters and was never tuned on anything, lost 0.0650; the dense
+control lost 0.0400.** An unselected baseline cannot be overfitted, so its larger drop is
+a property of the split, and the selected arm moving *less* is the cleanest available
+evidence that little selection pressure was ever applied.
+
+The ledger explains why: **selection never operated.** Every axis returned "no measurable
+difference" or worse, the promote-on-significant-positive rule fired **zero** times across
+six axes and 45 runs, and `promoted.yaml` carries the same `identity_hash` today as the
+day it was written. **A configuration that was never chosen for its dev score cannot have
+been overfitted to it.** The 58 runs bought knowledge about techniques, not a tuned
+configuration — which is the one way to run 58 experiments on 200 questions and not pay
+for it.
+
+**The project's headline number is `strict recall@5 = 0.68` on 200 unseen questions.**
 
 ## P2-16 combination set — sub-additivity, and the frontier (EXP-0042–0045) — CLOSED
 
