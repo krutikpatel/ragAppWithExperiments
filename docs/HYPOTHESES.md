@@ -1005,7 +1005,22 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   and would make k=10 a trade rather than a free upgrade.
 - **Not tested and not claimed:** any retrieval metric. `top_k` cannot change one
   (DEC-040/061), so none is reported.
-- **Resolution:** _pending EXP-0051._
+- **Resolution:** **two of three right, and the one I got wrong is the entire finding.**
+  1. Predicted **citation recall rises beyond its 0.040 MDD**, because 13 more questions
+     per 100 would have their gold document present and a document not in the prompt
+     cannot be cited. **Wrong — it fell 0.0183.** The premise was exactly right: 15
+     questions gained their gold and their citation recall rose **+0.2111**. The
+     conclusion did not follow because **I counted only the questions that would gain and
+     never asked what the same change does to the 67 that were already fine.** They lost
+     0.0746 each, and `(15 × 0.2111) + (67 × −0.0746)` reproduces the observed −0.0183 to
+     four decimals. I reasoned about a numerator and ignored the denominator it came from.
+  2. Predicted citation precision **falls but stays inside its 0.080 MDD**. Half right:
+     it fell to **−0.0851, outside** the MDD and significant. I named the mechanism
+     ("twice as many chances to cite a wrong one") and then assumed it would be small.
+  3. Predicted step coverage stays inside its 0.097 MDD. **Correct**, +0.0104.
+  I also wrote that the part I most expected to be wrong was "that any of it reaches
+  significance". One metric did — and it was the one I had explicitly placed inside the
+  noise band. `run_20260927_235029_2216`.
 
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's

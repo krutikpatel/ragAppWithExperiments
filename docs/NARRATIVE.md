@@ -507,6 +507,66 @@ have said something about a model.
 And it cost the most of anything here: **$0.00605 a query, about fifteen thousand times
 the control**, with 31 transient retries against Cohere's one or two.
 
+### The last question: is retrieval even the bottleneck? (EXP-0051)
+
+One thing was left open at the end of the phase, and it was the largest measured effect
+in the whole project. Showing the generator ten documents instead of five puts the
+correct article in front of it far more often — 0.720 of questions at five, 0.850 at ten,
+and that replicated on the held-out split. No technique across six axes moved anything by
+more than three points; this moved thirteen.
+
+But it was only ever an input-side fact. It said the right document was *present* more
+often. Nobody had asked whether the answers got better.
+
+They did not.
+
+| | k=5 | k=10 | |
+|---|---|---|---|
+| Gold document in the prompt | 0.6700 | **0.8200** | +0.150 |
+| Citation recall | 0.6100 | 0.5917 | −0.018, inside its noise floor |
+| **Citation precision** | 0.5455 | **0.4604** | **−0.085, significant** |
+| Generator input tokens | 264,581 | 481,190 | **×1.82** |
+
+Fifteen more questions per hundred had their answer sitting in the context, and the
+system cited it no more often — while attributing claims to the wrong article
+significantly more.
+
+The decomposition explains it completely, and the arithmetic closes to four decimal
+places. Split the hundred questions by whether the gold document was newly available:
+
+- the **fifteen** that gained it improved by **+0.2111** on citation recall
+- the **sixty-seven** that already had it lost **0.0746**
+- fifteen times 0.2111, plus sixty-seven times −0.0746, is −0.0183 per hundred — exactly
+  the overall change
+
+**The mechanism works.** Put the right article in front of this generator and it cites it
+more; on the questions that gained their gold document, citation recall more than
+doubled. **The distraction it causes is four and a half times larger by population.** The
+sixty-seven questions that were already working got five more articles each, and those
+articles were, for them, noise.
+
+This reframes everything before it. Six axes failed to improve retrieval, and the natural
+reading was that we had hit a retrieval ceiling — that the gold document simply was not
+findable often enough. This run found it fifteen points more often than any technique had
+managed, and the answers did not improve. **The bottleneck is not how often the right
+document is retrieved. It is what the generator does with a context that contains it.**
+The axes had not been failing to find headroom; they had been finding headroom the
+generation step cannot use.
+
+It is also the cleanest measurement of dilution in the project. Earlier evidence was
+indirect — compression shortened the context and citation recall fell (EXP-0029);
+enforcing citations made the model describe documents instead of answering them
+(EXP-0039, EXP-0040). This one moves the dial in the *helpful* direction, confirms the
+gain is real, and then shows it being spent.
+
+I had written the prediction down first and got two of three parts right. The part I got
+wrong is the finding: I predicted citation recall would rise, counted the questions that
+would gain, and never asked what the same change does to the ones that were already fine.
+Reasoning about a numerator while ignoring the population it came from is a mistake that
+does not announce itself — the premise was correct and the arithmetic still went the
+other way.
+
+
 ### Opening the test split, once (EXP-0046 to EXP-0050)
 
 Two hundred questions were locked away at the start of the project and never looked at.

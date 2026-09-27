@@ -605,7 +605,14 @@ citation precision 0.550, MDD 0.08, step coverage 0.289) — citation precision 
 coverage each against their MDD (DEC-048), plus tokens and cost per query. ~$0.09 of
 generation and judge, no reranker, no new index. The judged metrics remain the DEC-018
 placeholder and must not reach EXPERIMENTS.md as measurements.
-**Status:** open, queued, needs approval (DEC-053).
+**Status:** **answered by EXP-0051** (2026-09-27, `run_20260927_235029_2216`, $0.03831).
+**More context does not produce better answers here; it dilutes.** `gold_in_context`
+rose 0.6700 → 0.8200, citation recall moved −0.0183 (inside its 0.040 MDD) and citation
+precision fell **0.0851 against an MDD of 0.080 — significant and negative**, at ×1.82
+the generator input tokens. The decomposition is exact: the 15 questions that newly
+gained their gold document improved by **+0.2111** on citation recall, the 67 that
+already had it lost **0.0746**, and those two numbers reproduce the −0.0183 overall.
+The technique works on the questions it reaches and harms a group 4.5x larger.
 
 ## OQ-041 — Would a diversity penalty that is document-aware rather than vector-aware help?
 EXP-0027 showed MMR inverts here because gold documents of one question cluster in

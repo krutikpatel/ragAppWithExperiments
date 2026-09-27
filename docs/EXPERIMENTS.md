@@ -67,6 +67,7 @@ produced one.
 | EXP-0048 | `run_20260926_011237_58f7` | 2026-09-26 | control | **test, sparse BM25, Tier 1.** strict recall@5 0.4100 → 0.3450, **gap −0.0650 — LARGER than the dense arm's −0.0400.** An unselected baseline cannot be overfitted, so its bigger drop is split difficulty, and the selected arm moving LESS is the cleanest evidence that little selection pressure was applied | 0.345 | 0.440 | 0.319 | 0.276 (n=161) | — | — | 0.0 | VALID | [→](experiments/EXP-0048.md) |
 | EXP-0049 | `run_20260926_012047_6004` | 2026-09-26 | control | **test, sparse, Tier 2.** `gold_in_context` −0.070; citation precision −0.123, recall −0.115; **refusal rate 0.0900 → 0.1800 — it refuses twice as often because retrieval is worse, which is correct behaviour** | — | — | — | — | — | — | 0.00034 | VALID | [→](experiments/EXP-0049.md) |
 | EXP-0050 | `run_20260926_012517_266b` | 2026-09-26 | control | **DEV, sparse, Tier 2 — not a test run and not an experiment.** The store had no BM25 Tier 2 run at 600/100 on dev (only Phase 0's 512/0), so the sparse Tier 2 arm had no dev side to compare against. Exists only to make that gap computable like-for-like | — | — | — | — | — | — | 0.00034 | VALID | [→](experiments/EXP-0050.md) |
+| EXP-0051 | `run_20260927_235029_2216` | 2026-09-27 | assembly | **OQ-040 answered: `top_k=10` vs 5, Tier 2 dev.** No retrieval delta is reported — `top_k` cannot change one. **`gold_in_context` 0.6700 → 0.8200 (+0.150): the input-side gain is real and large.** And it does not convert. **citation precision 0.5455 → 0.4604, Δ −0.0851 against MDD 0.080 — SIGNIFICANT and negative**; citation recall −0.0183 (within noise); step coverage +0.010. **The decomposition is exact: the 15 questions that newly gained their gold document went +0.2111 on citation recall, the 67 that already had it went −0.0746, and (15×0.2111)+(67×−0.0746) = −0.0183 per 100 — the observed delta.** The mechanism works and the collateral damage is 4.5x larger by population. Costs **×1.82 generator input tokens, permanently.** **Not promoted.** $0.03831 | — | — | — | — | — | 5247 | 0.00038 | VALID | [→](experiments/EXP-0051.md) |
 | EXP-0019 | `run_20260922_084139_aaf1` | 2026-09-22 | chunking | **sentence-window** (1 sentence indexed, ±3 context) on `dev_large`, re-run after MIS-024: **196,133 rows, 3,213 MB, 2.8 h build**, mean 12 words; all 5,936 procedure blocks cut (3,263 still cut in context). vs EXP-0008: **−0.072, CI [−0.080, −0.064], p=0.0001** (89/537); @1 −0.189; collapse 1.490 / p90 2.2. Index $0.034 | 0.901 | 0.901 | 0.813 | 0.771 (n=6,221) | — | 3810 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 | EXP-0019 | `run_20260923_042438_c9b1` | 2026-09-23 | chunking | same, on **`dev`** vs promoted (0.720): **Δ −0.190, CI [−0.260, −0.120], p=0.0001** (10 / **48**) — the largest negative in Phase 2; nDCG −0.146; @1 −0.075; multi-doc 0.250 (3/7); collapse 1.314. **Both splits agree in direction** (first in Axis 1). 24x index for a 19-point loss. **Negative; not promoted** | **0.530** | 0.625 | 0.485 | 0.434 (n=160) | — | 1169 | 0.0000004 | VALID | [→](experiments/EXP-0019.md) |
 
@@ -1003,6 +1004,28 @@ delta, the verdict that makes it null, what it would have cost, the decision tak
   Stacking is sub-additive *and* lossy. Adding a third component takes the multi-doc
   slice back to **exactly the control's 0.350**, having passed through three techniques
   that each raised it alone.
+
+- **EXP-0051 — `top_k=10`: the largest input-side gain in the project, and it does not
+  convert (OQ-040).** Tier 2 on `dev`. Doubling the documents raised `gold_in_context`
+  from 0.6700 to **0.8200** — fifteen more questions per hundred with their gold article
+  in front of the generator, a bigger improvement than any of the 45 technique runs
+  achieved. **Citation recall moved −0.0183 (within its 0.040 MDD) and citation precision
+  fell 0.0851 against an MDD of 0.080 — significant, and negative.** Cost it would have
+  added: **×1.82 generator input tokens per query, permanently.**
+  **Decision: control retained; not promoted.**
+  The decomposition is the finding and it is exact. Split the hundred questions by
+  whether the gold document was newly available: the **15** that gained it went
+  **+0.2111** on citation recall; the **67** that already had it went **−0.0746**; and
+  `(15 × 0.2111) + (67 × −0.0746) = −0.0183 per 100`, the observed delta to four decimal
+  places. **The mechanism works — put the right article in front of this generator and it
+  cites it more — and the distraction it causes to the questions that were already
+  working is four and a half times larger by population.**
+  This reframes the phase. Six axes failed to improve retrieval and it was reasonable to
+  read that as a retrieval ceiling. This run improved what reaches the generator by
+  **fifteen points** and the answers did not improve. **The bottleneck is not how often
+  the right document is retrieved; it is what the generator does with a context that
+  contains it.** The axes were not failing to find headroom — they were finding headroom
+  the generation step cannot use.
 
 ## Phase 1 scorecard — the controls (P1-08)
 
