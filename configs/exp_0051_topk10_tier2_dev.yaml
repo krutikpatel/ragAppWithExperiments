@@ -1,0 +1,43 @@
+# EXP-0051 — OQ-040: does a larger context produce better answers, or just more tokens
+# to dilute? Tier 2, dev subsample, top_k = 10.
+#
+# The input-side gain is already measured and is the largest effect in the project:
+# the gold document reaches the generator for 0.720 of dev questions at top_k=5 and
+# 0.850 at top_k=10, with the multi-document slice going 0.350 -> 0.625. It replicated
+# out of sample (test: 0.680 -> 0.810). NONE of that says what the generator does with
+# the extra documents, which is the only thing this run measures.
+#
+# top_k CANNOT change a retrieval metric (DEC-040/061) — the metrics score the document
+# ranking and top_k only sets how far the context walk goes down it. So no retrieval
+# delta is reported here; this is a Tier 2 question about generation.
+#
+# One dimension against EXP-0006 (run_20260913_205058_dc03): only top_k moves.
+# context_max_tokens stays at 6000, and it is not a binding constraint at k=10 —
+# measured 1,712 context words at k=5, so ~3,425 at k=10, well under the budget.
+# At k=20 it WOULD bind (~k=14), which is why this run is k=10 and not k=20.
+#
+# The judge is skipped (DEC-063): its scores are the DEC-018 placeholder and may not be
+# reported, while citation precision/recall, step coverage and refusal are deterministic
+# and are what OQ-040's decision rule names.
+name: "EXP-0051 OQ-040: top_k=10 vs the control's 5 — does more context help the generator? Tier 2 dev"
+axis: assembly
+split: dev
+eval_tier: tier2
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 10
+doc_pooling: max
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+skip_judge: true

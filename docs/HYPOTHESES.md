@@ -973,6 +973,40 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   Tier 2 `gold_in_context` and Tier 2 refusal rate came back numerically identical.
   `run_20260926_010435_6495` and `run_20260926_011237_58f7`.
 
+## H-035 — Doubling the context raises citation recall and costs citation precision
+- **Date written:** 2026-09-27, before EXP-0051 ran. Answers OQ-040.
+- **Source:** Claude.
+- **Hypothesis, against the decision rule OQ-040 already names** (citation precision and
+  step coverage each against their MDD, plus tokens and cost per query):
+  1. **Citation recall rises by more than its MDD of 0.040** — the control's 0.6100 goes
+     above 0.6500. Reasoning: 13 more questions per 100 have their gold document in the
+     context at k=10 than at k=5 (0.720 → 0.850), and a document that is not in the
+     prompt cannot be cited. This is close to arithmetic rather than a guess.
+  2. **Citation precision falls, but stays inside its MDD of 0.080.** Ten documents give
+     twice as many chances to cite a wrong one, and precision is the metric this project
+     has measured as noisiest — the generator, not the judge, is the loose instrument
+     there.
+  3. **Step coverage does not move beyond its MDD of 0.097.** The reference procedure
+     lives in one article; having five more articles alongside it does not add steps.
+- **The evidence that makes this checkable rather than a hunch, and it cuts both ways.**
+  EXP-0029 moved this exact dial in the opposite direction: compression cut the context
+  from 1,712 to 912 words and citation recall fell **0.0883 at p = 0.036**, the only
+  significant deterministic result in Axis 6. Less context measurably cost citation
+  recall on this system. Doubling it is the same axis the other way — but EXP-0029 also
+  saw citation *precision* fall (−0.051) when context shrank, so the relationship is not
+  simply monotone in length, and that is the part of this hypothesis I trust least.
+- **The part I expect to be wrong:** that any of it reaches significance. Six axes and
+  45 runs have produced two significant deterministic results in this project, both
+  negative. A prior that says "this one moves a metric" has been wrong far more often
+  than it has been right here.
+- **What would make the run interesting in the other direction:** citation precision
+  falling *beyond* its MDD. That would mean more context actively degrades attribution,
+  which is a real cost to weigh against 13 extra questions having their answer present —
+  and would make k=10 a trade rather than a free upgrade.
+- **Not tested and not claimed:** any retrieval metric. `top_k` cannot change one
+  (DEC-040/061), so none is reported.
+- **Resolution:** _pending EXP-0051._
+
 ## Not available hosted — recorded as future work, not as experiments
 - **Late chunking** (P2-07): needs token-level embeddings; OpenRouter's
   `/embeddings` returns one pooled vector per input and drops `late_chunking` /
