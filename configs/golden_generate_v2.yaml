@@ -1,0 +1,27 @@
+# The v2 Tier 2 control (configs/baseline_dense_tier2_v2.yaml) run on the golden CI slice
+# (golden_v1, all 95 questions), generating answers WITHOUT the runner's built-in judge
+# (DEC-082). Answers are judged by `rag faithfulness --judge-config
+# configs/baseline_dense_tier2_v2.yaml` — the P3-05 path the gate uses. Retrieval,
+# generator and prompt are identical to the v2 control.
+name: golden_v1 generation — dense control v2, qwen3-embedding-8b, 600/100, top-5, baseline_answer@v1, no judge
+split: golden_v1
+eval_tier: tier2
+full_eval: true
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+doc_pooling: max
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+skip_judge: true

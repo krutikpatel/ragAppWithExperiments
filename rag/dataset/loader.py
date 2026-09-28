@@ -26,6 +26,9 @@ ROW_FIELDS = [
     "article_types",
 ]
 EXTRA_FIELDS = {"unanswerable": ["reason", "seed_id"]}
+# P3-03/P3-07: a golden CI slice is a split too. Its stratum is part of its identity.
+GOLDEN_PREFIX = "golden_"
+GOLDEN_EXTRA_FIELDS = ["stratum", "reason"]
 
 DEV_LARGE_WARNING = (
     "LEAKAGE WARNING: wixqa_synthetic questions were LLM-generated from the article "
@@ -36,6 +39,8 @@ DEV_LARGE_WARNING = (
 
 
 def fields_for(name: str) -> list[str]:
+    if name.startswith(GOLDEN_PREFIX):
+        return ROW_FIELDS + GOLDEN_EXTRA_FIELDS
     return ROW_FIELDS + EXTRA_FIELDS.get(name, [])
 
 
@@ -51,7 +56,10 @@ def counts(rows: list[dict[str, Any]], field: str) -> dict[str, int]:
 
 
 def load_split(name: str) -> pd.DataFrame:
-    """Read a built split. Emits the leakage warning for dev_large."""
+    """Read a built split. Emits the leakage warning for dev_large. `golden_vN` is the
+    committed CI slice (P3-03), read through `rag.dataset.golden` — its only read path."""
+    if name.startswith(GOLDEN_PREFIX):
+        return _golden_frame(name)
     path = SPLIT_PATHS[name]
     if not path.exists():
         raise FileNotFoundError(f"split {name!r} not built. Run `rag data splits`.")
@@ -76,3 +84,22 @@ def describe_split(name: str) -> dict[str, Any]:
     if name == "dev_large":
         described["warning"] = DEV_LARGE_WARNING
     return described
+
+
+def _golden_frame(name: str) -> pd.DataFrame:
+    """The golden slice in the runner's split shape. Article types come from `dev` (the
+    slice stores ids, not types); unanswerable questions have none."""
+    from rag.dataset.golden import load_golden
+
+    dev = load_split("dev").set_index("question_id")
+    rows = []
+    for g in load_golden(name):
+        qid = g["question_id"]
+        rows.append({
+            "question_id": qid, "question": g["question"], "answer": g["reference_answer"],
+            "gold_doc_ids": list(g["article_ids"]), "source_config": g["source_config"],
+            "n_gold_docs": int(g["n_gold_docs"]),
+            "article_types": list(dev.loc[qid, "article_types"]) if qid in dev.index else [],
+            "stratum": g["stratum"], "reason": g["reason"],
+        })
+    return pd.DataFrame(rows)

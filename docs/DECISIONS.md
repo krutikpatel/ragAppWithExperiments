@@ -3198,3 +3198,29 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   P3-06 is the first.
 - **Revisit if:** P3-06's report shows the attribution heuristic pointing at the wrong chunk
   often enough to mislead a reader, or P3-07 needs claim-level variance the cache hides.
+
+## DEC-082 — The golden slice is a runner split; P3-07 measures noise with fresh answers, α = 0.05
+- **Date:** 2026-09-28
+- **Decided by:** Joint. Krutik: α = 0.05, including the judge-only re-judges, and pausing
+  before spend. Claude: the split mechanics below.
+- **Status:** Active
+- **Context:** P3-07 needs judge variance on the golden slice, and no run had ever
+  generated answers for it: the runner only knew the four frozen splits.
+- **Decision:**
+  - `load_split("golden_v1")` returns the committed slice in the runner's split shape,
+    read through `rag.dataset.golden` (its only read path); article types come from `dev`.
+    Its hash covers `stratum` and `reason`: `sha256:25398286…dd55`. Runs report a
+    `stratum:<name>` slice for each of the four strata. Verified on a free toy run: retrieval
+    metrics average over the 80 answerable questions, the 15 unanswerable ones are not
+    applicable (MIS-002).
+  - `configs/golden_generate_v2.yaml`: the v2 control on `golden_v1`, all 95 questions,
+    `skip_judge: true`. Answers are judged by `rag faithfulness` (the gate's path), never
+    by the runner's built-in three-criterion judge.
+  - **P3-07 method = P1-11's**: three identical full runs — fresh generation AND fresh
+    judging (`--no-cache`) each time — MDD = max(range, 2 × stdev), rounded up to 0.001.
+    Plus two extra `--no-cache` re-judges of the first run's answers, to separate judge
+    noise from generator noise.
+  - **α = 0.05** for the retrieval paired test (P3-09 will declare it in `ci/gate.yaml`).
+- **Evidence:** no measured data; method choices.
+- **Revisit if:** the three golden runs disagree on which questions are refused by more
+  than a handful — the floor would then be dominated by refusal flips, not faithfulness.

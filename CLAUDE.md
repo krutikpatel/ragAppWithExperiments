@@ -408,7 +408,8 @@ rag/
                     procedure-block cuts; a characterization, not an experiment)
   dataset/          adapter.py (DatasetAdapter, QARow), wixqa.py (WixQAAdapter),
                     golden.py (P3-03: the seeded golden CI slice, `rag data golden`),
-                    loader.py (reads frozen splits — NO benchmark import; the
+                    loader.py (reads frozen splits, and `golden_vN` via golden.py — DEC-082;
+                    NO benchmark import; the
                     runner's only dataset dependency), splits.py (builds them),
                     unanswerable.py (the authored refusal set)
   chunking/         base.py (Chunker, Chunk with `text` = what is indexed and
@@ -545,6 +546,8 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     builds the index, dev decides); exp_0024..0026_rerank_*_dev.yaml
                     are Axis 5 (DEC-058/059; dev only — reranking bills per query, so
                     dev_large costs 31x and is bought only for a winner, OQ-033).
+                    golden_generate_v2.yaml generates answers for the golden slice with the v2
+                    control and no built-in judge (P3-07, DEC-082).
                     exp_0052/0053_rerank_4fast_c{20,100}_dev.yaml are OQ-038's candidate-count
                     runs (DEC-072; the c100 one sets retrieval_depth 150).
                     exp_0031..0034_*.yaml are Axis 4 (P2-12, DEC-065 — decomposition

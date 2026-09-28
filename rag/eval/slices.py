@@ -59,6 +59,11 @@ def build_slices(frame: pd.DataFrame) -> SliceSet:
     for source in sorted(frame["source_config"].unique()):
         add(f"source:{source}", frame["source_config"] == source)
 
+    # A golden CI slice carries its stratum (P3-03); report per stratum.
+    if "stratum" in frame.columns:
+        for stratum in sorted(frame["stratum"].unique()):
+            add(f"stratum:{stratum}", frame["stratum"] == stratum)
+
     lengths = frame["question"].apply(question_length)
     low, high = lengths.quantile([1 / 3, 2 / 3]).tolist()
     add("q_len:short", lengths <= low)
