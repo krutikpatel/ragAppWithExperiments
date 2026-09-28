@@ -45,7 +45,7 @@ DIMENSIONS = {
 RUN_SETTINGS = (
     "name", "axis", "split", "eval_tier", "seed", "eval_subsample_size", "eval_subsample_seed",
     "full_eval", "harness_smoke_test", "judge_model", "judge_temperature", "judge_max_tokens",
-    "judge_provider_order", "judge_concurrency", "judge_embedding_model",
+    "judge_provider_order", "judge_allow_fallbacks", "judge_concurrency", "judge_embedding_model",
 )
 
 

@@ -1,16 +1,22 @@
-# ci/phase3_baseline.yaml — what the `phase3-baseline` git tag froze (P3-02, DEC-071).
+# ci/phase3_baseline.yaml — what the `phase3-baseline-v2` git tag froze (DEC-080).
 #
 # Every Phase 3 comparison is against this. It is a record, not a config: the runner
 # never reads it. tests/test_model_check_p3_02.py asserts the files it names still
 # hash to what is written here, so the freeze cannot drift silently. Changing any of
 # it needs a DECISIONS.md entry and a new version of this file (P3-03 / P3-11).
 #
-# Every value below was read off a command on 2026-09-27, named beside it.
+# Version 1 (tag `phase3-baseline`, 2026-09-27, DEC-071) froze the same retrieval,
+# generator and prompt with the placeholder judge openai/gpt-oss-120b, which DEC-073
+# later refused as same-lab. Version 2 changes the judge and adds the golden slice;
+# everything else is carried over unchanged and re-verified. v1 is in git at that tag.
+#
+# Every value below was read off a command on 2026-09-28, named beside it.
 
-version: 1
-tag: phase3-baseline
-frozen_on: "2026-09-27"
-decision: DEC-071
+version: 2
+tag: phase3-baseline-v2
+frozen_on: "2026-09-28"
+decision: DEC-080
+previous: {version: 1, tag: phase3-baseline, decision: DEC-071}
 
 # The retrieval configuration Phase 3 protects. Unchanged since 2026-09-15; no Phase 2
 # technique earned promotion (DEC-069).
@@ -20,15 +26,12 @@ promoted:
   config_hash: 7c99bc8e9a88e878         # RunConfig.config_hash
   identity_hash: 70610a6119fb9223       # RunConfig.identity_hash — the id the ledger uses
 
-# promoted.yaml is Tier 1 and names no generator, judge or prompt (OQ-042). The
-# answer-side baseline is the Tier 2 dense control: the same retrieval plus those.
+# The answer-side control: the same retrieval plus generator, prompt and judge.
 tier2_control:
-  path: configs/baseline_dense_tier2.yaml
-  file_sha256: 4054bc08063d36797018385fb24dd20d67beb201845718afc15685b89f1fa04a
-  config_hash: 86cd401cbdac80c7
-  reference_runs:                       # VALID, audited in DEC-070
-    dev: run_20260913_205058_dc03
-    unanswerable: run_20260913_060733_6a9b
+  path: configs/baseline_dense_tier2_v2.yaml
+  file_sha256: 498098d27ac2eb9adc7ee67f389898fefd01f6acc1bce49086627abd76028a23
+  config_hash: 2d7800625af53774
+  reference_runs: {}                    # none yet: no judged run with this judge exists (P3-05 makes the first)
 
 prompt:
   ref: baseline_answer@v1
@@ -38,28 +41,30 @@ data:
   corpus_hash: sha256:74694ad4a96b62433813cf65b4f6f2c7fdbfaad0dfd8a5689121f6851ab80ec0
   normalization: norm-v1
   dev_split_hash: sha256:eeb8d2d3b9cc4e239108630af066c35a41a38e7d3cf5e3a3506264d89b44c015
+  golden: {version: golden_v1, path: eval/golden/golden_v1.jsonl,
+           hash: "sha256:baa621b13c481e953b60b6ce07782bbbe4857c321b9f37db9661b8d23384639a"}   # DEC-074
   ragas_version: 0.4.3
 
-# `rag models verify configs/promoted.yaml configs/baseline_dense_tier2.yaml`
+# `rag models verify configs/promoted.yaml configs/baseline_dense_tier2_v2.yaml`
 # probes GET /api/v1/models/<id>/endpoints. The runner does the same before every run.
 models:
   embedder:
     slug: qwen/qwen3-embedding-8b
     provider: DeepInfra                 # hard pin, allow_fallbacks false (DEC-041)
-    verified_on_openrouter: "2026-09-27"
+    verified_on_openrouter: "2026-09-28"
   generator:
     slug: openai/gpt-5-nano
     provider: null                      # not pinned
-    verified_on_openrouter: "2026-09-27"
+    verified_on_openrouter: "2026-09-28"
   judge:
-    slug: openai/gpt-oss-120b
-    provider_order: [Cerebras, Groq]    # preference order with fallbacks (DEC-032)
-    verified_on_openrouter: "2026-09-27"
+    slug: deepseek/deepseek-v4.1-flash
+    provider_order: [DeepInfra]
+    allow_fallbacks: false              # hard pin, as validated by P3-04 (EXP-0057)
+    verified_on_openrouter: "2026-09-28"
     status: >-
-      PLACEHOLDER (DEC-018). Recorded because it is what the Tier 2 control runs, not
-      because it has been validated. P3-04 is the validation; its outcome may change
-      this slug once, which is a new version of this file.
+      Production judge (DEC-079). Passed the P3-04 v2 check: unsupported-flag recall 1.00,
+      supported pass rate 0.90, 0 failures. Validated on literal support only.
   judge_embedder:
     slug: qwen/qwen3-embedding-8b
     provider: null
-    verified_on_openrouter: "2026-09-27"
+    verified_on_openrouter: "2026-09-28"

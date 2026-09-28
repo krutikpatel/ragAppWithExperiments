@@ -110,31 +110,30 @@ def test_the_runner_stops_before_the_index_or_any_row(tmp_path, monkeypatch):
 
 
 def test_the_phase3_baseline_record_matches_the_files_it_froze():
-    """ci/phase3_baseline.yaml is a record of the tag. If promoted.yaml, the Tier 2
-    control or the answer prompt moves, this fails until a DEC entry and a new
-    version of the record say so."""
+    """ci/phase3_baseline.yaml is a record of the latest baseline tag (v2, DEC-080). If
+    promoted.yaml, the Tier 2 control, the prompt or the golden slice moves, this fails
+    until a DEC entry and a new version of the record say so."""
     import hashlib
     from pathlib import Path
 
     import yaml
 
+    from rag.dataset.golden import golden_hash, load_golden
     from rag.prompts import load_prompt
 
     record = yaml.safe_load(Path("ci/phase3_baseline.yaml").read_text())
-    # v1 froze a same-lab judge, refused since DEC-073; it is read as history.
-    with historical_configs():
-        for key in ("promoted", "tier2_control"):
-            entry = record[key]
-            assert hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest() == entry["file_sha256"], key
-            assert load_config_file(entry["path"]).config_hash == entry["config_hash"], key
-        tier2 = load_config_file(record["tier2_control"]["path"])
+    assert record["version"] == 2 and record["tag"] == "phase3-baseline-v2"
+    for key in ("promoted", "tier2_control"):
+        entry = record[key]
+        assert hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest() == entry["file_sha256"], key
+        assert load_config_file(entry["path"]).config_hash == entry["config_hash"], key
     assert load_config_file(record["promoted"]["path"]).identity_hash == record["promoted"]["identity_hash"]
-    with pytest.raises(ValueError, match="'openai' family"):
-        load_config_file(record["tier2_control"]["path"])
 
+    tier2 = load_config_file(record["tier2_control"]["path"])
     prompt_id, version = record["prompt"]["ref"].split("@")
     assert tier2.generator_prompt == record["prompt"]["ref"]
     assert load_prompt(prompt_id, version).content_hash == record["prompt"]["content_hash"]
+    assert golden_hash(load_golden(record["data"]["golden"]["version"])) == record["data"]["golden"]["hash"]
 
     models = record["models"]
     assert tier2.retriever_params["embedding_model"] == models["embedder"]["slug"]
@@ -142,5 +141,38 @@ def test_the_phase3_baseline_record_matches_the_files_it_froze():
     assert tier2.generator_model == models["generator"]["slug"]
     assert tier2.judge_model == models["judge"]["slug"]
     assert list(tier2.judge_provider_order) == models["judge"]["provider_order"]
+    assert tier2.judge_allow_fallbacks is models["judge"]["allow_fallbacks"] is False
     assert tier2.judge_embedding_model == models["judge_embedder"]["slug"]
     assert all(m["verified_on_openrouter"] for m in models.values())
+
+
+def test_the_v1_control_is_refused_but_still_readable_as_history():
+    """The v1 Tier 2 control is kept byte-identical for the `phase3-baseline` tag."""
+    import hashlib
+    from pathlib import Path
+
+    path = "configs/baseline_dense_tier2.yaml"
+    assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == \
+        "4054bc08063d36797018385fb24dd20d67beb201845718afc15685b89f1fa04a"
+    with pytest.raises(ValueError, match="'openai' family"):
+        load_config_file(path)
+    with historical_configs():
+        assert load_config_file(path).config_hash == "86cd401cbdac80c7"
+
+
+def test_a_judge_pinned_without_fallbacks_is_a_hard_pin_in_the_model_check():
+    config = load_config_file("configs/baseline_dense_tier2_v2.yaml")
+    judge = next(r for r in configured_models(config) if r.role == "judge")
+    assert judge.pinned and judge.providers == ("DeepInfra",)
+    served = {**SERVED, "deepseek/deepseek-v4.1-flash": ["Groq"]}
+    with pytest.raises(ModelResolutionError, match="no longer served by \\['DeepInfra'\\]"):
+        verify_config_models(config, fetch=fetch(served))
+
+
+def test_allow_fallbacks_true_is_absent_from_every_hash():
+    """MIS-019: the new field at its Phase 0-2 value moves no existing config_hash."""
+    from rag.runner.config import RunConfig
+
+    assert load_config_file("configs/promoted.yaml").config_hash == "7c99bc8e9a88e878"
+    base = RunConfig(name="x")
+    assert base.with_(judge_allow_fallbacks=True).config_hash == base.config_hash

@@ -419,6 +419,7 @@ def judge_provenance(config: JudgeConfig) -> dict[str, Any]:
         "judge_temperature": config.temperature,
         "judge_embedding_model": config.embedding_model,
         "judge_provider_order": list(config.provider_order),
+        "judge_allow_fallbacks": config.provider_allow_fallbacks,
         "ragas_version": ragas_version(),
         "answer_correctness_weights": list(config.answer_correctness_weights),
         "metric_prompt_versions": {

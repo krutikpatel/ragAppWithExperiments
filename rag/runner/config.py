@@ -127,6 +127,11 @@ class RunConfig:
     # model from many providers whose speed differs by ~37x and whose outputs are not
     # identical. Part of config_hash, and a comparability key. See DEC-032.
     judge_provider_order: tuple[str, ...] = ("Cerebras", "Groq")
+    # False = the judge may ONLY be served by `judge_provider_order` (DEC-080). The
+    # production judge passed P3-04 pinned to one host without fallbacks; a run that
+    # let OpenRouter re-route would be judged by a different judge. True is the Phase
+    # 0–2 behaviour and is an absent dimension, so no existing hash moves.
+    judge_allow_fallbacks: bool = True
     judge_concurrency: int = 20
     # Ragas AnswerRelevancy needs an embedding model. OpenRouter supplies them, so
     # this is empty only because the model is unchosen — not because it is unavailable
@@ -193,6 +198,11 @@ class RunConfig:
                     f"Tier 2 needs {' and '.join(missing)}. Model choice is a decision "
                     "for Krutik with a DEC entry, not a default — see CLAUDE.md "
                     "section 10."
+                )
+            if not self.judge_allow_fallbacks and not self.judge_provider_order:
+                raise ValueError(
+                    "judge_allow_fallbacks is false but judge_provider_order is empty: "
+                    "a judge pinned to no provider cannot be served."
                 )
             if self.skip_judge and self.judge_model:
                 raise ValueError(
@@ -296,6 +306,7 @@ class RunConfig:
         ("context_order", "rank", ("context_order",)),
         ("context_compressor", "", ("context_compressor", "context_compressor_params")),
         ("skip_judge", False, ("skip_judge",)),
+        ("judge_allow_fallbacks", True, ("judge_allow_fallbacks",)),
         ("query_transform", "", ("query_transform", "query_transform_params")),
         ("grounding_check", "", ("grounding_check", "grounding_check_params")),
     )

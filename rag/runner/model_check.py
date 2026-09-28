@@ -9,8 +9,8 @@ anything, with the slug named — not surface forty calls in as a 404 inside a m
 chat, embedding or rerank model, and 404 for an unknown id. It needs no API key and
 costs nothing. Where the config pins a provider, the provider must be in that list:
 the embedder and reranker pin one with `allow_fallbacks: false`, so a missing
-provider is a hard failure; the judge sends a preference order with fallbacks, so
-it needs at least one of its providers.
+provider is a hard failure; so does a judge with `judge_allow_fallbacks: false`
+(DEC-080). A judge sent with fallbacks needs at least one of its providers.
 
 A network failure after retries is `ModelCheckUnavailable`, not `ModelResolutionError`:
 "OpenRouter did not answer" and "your model is gone" are different facts (P3-10).
@@ -90,7 +90,8 @@ def configured_models(config: RunConfig) -> list[ModelRef]:
         if config.grounding_check:
             from_params("grounding check", config.grounding_check_params)
         if not config.skip_judge:
-            refs.append(ModelRef("judge", config.judge_model, tuple(config.judge_provider_order), pinned=False))
+            refs.append(ModelRef("judge", config.judge_model, tuple(config.judge_provider_order),
+                                pinned=not config.judge_allow_fallbacks))
             if config.judge_embedding_model:
                 refs.append(ModelRef("judge embedder", config.judge_embedding_model))
     return [r for r in refs if r.model]

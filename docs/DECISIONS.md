@@ -3125,3 +3125,32 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** EXP-0057; EXP-0054 for the per-pair cost ranking.
 - **Revisit if:** P3-07's variance runs show this judge's MDD at golden-slice size too wide
   to catch the regressions P3-12 must catch, or the slug stops resolving.
+
+## DEC-080 — Baseline record v2: the production judge, pinned without fallbacks, tagged `phase3-baseline-v2`
+- **Date:** 2026-09-28
+- **Decided by:** Krutik ("finish step 1"); implementation choices Claude's, below.
+- **Status:** Active — completes what DEC-073 and DEC-079 promised. Does not move the
+  `phase3-baseline` tag (DEC-071), which stays as v1.
+- **Context:** the v1 record named the placeholder judge `gpt-oss-120b`, now a refused
+  same-lab pairing (DEC-073). P3-04 chose `deepseek/deepseek-v4.1-flash` validated on one
+  host with fallbacks off (DEC-079), and run configs had no way to say "no fallbacks": a run
+  could have been judged partly by hosts P3-04 never tested.
+- **Decision:**
+  - **New RunConfig field `judge_allow_fallbacks`** (default `True`, the Phase 0–2
+    behaviour). Its default is an absent dimension, so **no existing config hash moved** —
+    checked on all 76 configs before and after, and pinned by a test (MIS-019). `False`
+    requires a non-empty `judge_provider_order`, reaches the judge's OpenRouter routing,
+    and makes the startup model check treat the judge's provider as a hard pin.
+  - **New Tier 2 control `configs/baseline_dense_tier2_v2.yaml`** — the v1 control with only
+    the judge changed: `deepseek/deepseek-v4.1-flash`, `[DeepInfra]`, no fallbacks.
+    `config_hash` 2d7800625af53774. The v1 file stays byte-identical (the v1 tag pins it).
+    `rag ask` now defaults to v2.
+  - **`ci/phase3_baseline.yaml` version 2**, tag **`phase3-baseline-v2`**: promoted.yaml,
+    the v2 control, `baseline_answer@v1`, corpus/dev hashes, `golden_v1` and its hash,
+    and the four slugs, each verified on OpenRouter 2026-09-28 by `rag models verify`.
+    The v2 control has **no reference run yet** — no judged run with this judge exists.
+- **What this is and is not:** a record of settings. It holds no judged numbers; the first
+  trustworthy ones come from P3-05, and P3-11's `ci/baseline.json` freezes them.
+- **Evidence:** the hash comparison over 76 configs; `rag models verify` output; tests.
+- **Revisit if:** the judge, generator, prompt, retrieval config or golden slice changes —
+  each is a version 3 with its own entry.

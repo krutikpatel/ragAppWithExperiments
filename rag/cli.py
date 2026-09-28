@@ -155,7 +155,7 @@ def run_experiment(
 def ask(
     question: str = typer.Argument("", help="The question. Omit when using --question-id."),
     config_path: str = typer.Option(
-        "configs/baseline_dense_tier2.yaml", "--config", help="Run config to answer with."
+        "configs/baseline_dense_tier2_v2.yaml", "--config", help="Run config to answer with."
     ),
     question_id: str = typer.Option(
         "", "--question-id", help="Answer a split question by id and score its citations against gold."

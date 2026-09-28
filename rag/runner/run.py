@@ -501,6 +501,7 @@ def _judge_config(config: RunConfig) -> JudgeConfig:
         embedding_model=config.judge_embedding_model,
         max_tokens=config.judge_max_tokens,
         provider_order=tuple(config.judge_provider_order),
+        provider_allow_fallbacks=config.judge_allow_fallbacks,
         concurrency=config.judge_concurrency,
     )
 

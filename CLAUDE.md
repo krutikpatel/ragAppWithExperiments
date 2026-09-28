@@ -531,8 +531,10 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     smoke (baseline_dense with top_k 10). Otherwise: exp_NNNN_*.yaml are experiments and are
                     committed BEFORE their run so git_sha is clean. baseline_dense.yaml
                     is the dense control (EXP-0005) that Phase 2 diffs against (P1-09);
-                    baseline_dense_tier2.yaml adds generation + judge (P1-07 run 2,
-                    and `rag ask`'s default); exp_0004_bm25_distinct_docs.yaml is the
+                    baseline_dense_tier2.yaml adds generation + judge (P1-07 run 2;
+                    refused since DEC-073, kept byte-identical for the phase3-baseline tag);
+                    baseline_dense_tier2_v2.yaml is the same with the production judge
+                    deepseek-v4.1-flash@DeepInfra, no fallbacks (DEC-080, `rag ask`'s default); exp_0004_bm25_distinct_docs.yaml is the
                     sparse control; exp_0014..0018_hybrid_*_dev.yaml are Axis 3
                     (RRF, then weighted α 0.2/0.4/0.6/0.8; dev only, DEC-056);
                     exp_0019..0022_{sentence_window,parent_document,semantic,
@@ -551,8 +553,9 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     smoke_p2_10_rerank.yaml and tier2_smoke.yaml are harness smoke
                     tests, not experiments.
 ci/                 Phase 3 CI gate files. phase3_baseline.yaml records what the
-                    `phase3-baseline` tag froze — configs, prompt, hashes and model slugs
-                    with their OpenRouter verification date (P3-02, DEC-071); a test
+                    latest baseline tag froze — v2, `phase3-baseline-v2`: configs, prompt,
+                    golden slice, hashes and model slugs with their OpenRouter verification
+                    date (DEC-080; v1 at tag `phase3-baseline`, DEC-071); a test
                     fails if the files it names drift from it
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
