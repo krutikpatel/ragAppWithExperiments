@@ -21,6 +21,9 @@ from rag.runner.model_check import configured_models, verify_models
 from rag.runner.registry import build_retriever
 from rag.runner.run import build_index
 
+# `ask` never judges; these fields are cleared before the config is validated.
+NO_JUDGE = {"judge_model": "", "judge_embedding_model": "", "skip_judge": True}
+
 
 @dataclass(frozen=True)
 class AskResult:
@@ -42,7 +45,9 @@ def answer_question(
     question_id: str | None = None,
     split: str = "dev",
 ) -> AskResult:
-    config = load_config_file(config_path)
+    # `ask` never judges, so the judge is not part of what it loads (DEC-073 made the
+    # Tier 2 control's placeholder judge a refused pairing until P3-04 picks one).
+    config = load_config_file(config_path, overrides=NO_JUDGE)
     if not config.generator_model:
         raise ValueError(f"{config_path} has no generator_model; `rag ask` needs a Tier 2 config")
 
@@ -61,8 +66,8 @@ def answer_question(
         reference = str(row["answer"])
     assert question is not None
 
-    # P3-02: `ask` never judges, so the judge's slugs are not its concern.
-    verify_models([r for r in configured_models(config) if not r.role.startswith("judge")])
+    # P3-02: fail fast on a retired slug.
+    verify_models(configured_models(config))
     corpus = load_corpus()
     index, chunk_text = build_index(config)
     retriever = build_retriever(

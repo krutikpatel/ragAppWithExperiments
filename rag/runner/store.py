@@ -262,7 +262,7 @@ class ResultsStore:
         each row's `config_json`, so a Tier 1 run is found even if a Tier-2-only
         default has since changed (P2-05).
         """
-        from rag.runner.config import config_from_json
+        from rag.runner.config import config_from_json, historical_configs
 
         query = "SELECT * FROM runs WHERE status = 'VALID' AND eval_tier = ? AND retriever = ?"
         params: list[Any] = [config.eval_tier.value, config.retriever]
@@ -271,7 +271,9 @@ class ResultsStore:
             params.append(split)
         for row in self.conn.execute(query + " ORDER BY timestamp DESC", params):
             try:
-                stored = config_from_json(row["config_json"]).with_(split=config.split)
+                # A stored row is history, including its copy onto this split (DEC-073).
+                with historical_configs():
+                    stored = config_from_json(row["config_json"]).with_(split=config.split)
             except (TypeError, ValueError):
                 continue
             if stored.identity_hash == config.identity_hash:

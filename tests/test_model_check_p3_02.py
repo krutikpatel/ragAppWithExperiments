@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag.runner.config import load_config_file
+from rag.runner.config import historical_configs, load_config_file
 from rag.runner.model_check import (
     ModelResolutionError,
     check_models,
@@ -16,8 +16,16 @@ from rag.runner.model_check import (
 SERVED = {
     "qwen/qwen3-embedding-8b": ["Nebius", "DeepInfra", "SiliconFlow"],
     "openai/gpt-5-nano": ["OpenAI", "Azure"],
-    "openai/gpt-oss-120b": ["Cerebras", "Groq", "DeepInfra"],
+    "deepseek/deepseek-v4.1-flash": ["Cerebras", "Groq", "DeepInfra"],
 }
+TIER2 = "configs/baseline_dense_tier2.yaml"
+# The v1 control's gpt-oss judge is a refused pairing since DEC-073. The mechanism
+# tests only need SOME cross-family judge; this is a stand-in, not a choice.
+STAND_IN = {"judge_model": "deepseek/deepseek-v4.1-flash"}
+
+
+def tier2():
+    return load_config_file(TIER2, overrides=STAND_IN)
 
 
 def fetch(served):
@@ -32,11 +40,11 @@ def fetch(served):
 
 
 def test_the_tier2_baseline_names_embedder_generator_judge_and_judge_embedder():
-    refs = configured_models(load_config_file("configs/baseline_dense_tier2.yaml"))
+    refs = configured_models(tier2())
     assert [(r.role, r.model, r.providers) for r in refs] == [
         ("retriever embedder", "qwen/qwen3-embedding-8b", ("DeepInfra",)),
         ("generator", "openai/gpt-5-nano", ()),
-        ("judge", "openai/gpt-oss-120b", ("Cerebras", "Groq")),
+        ("judge", "deepseek/deepseek-v4.1-flash", ("Cerebras", "Groq")),
         ("judge embedder", "qwen/qwen3-embedding-8b", ()),
     ]
 
@@ -52,7 +60,7 @@ def test_toy_configs_name_no_hosted_model():
 
 def test_all_served_passes_and_each_slug_is_fetched_once():
     f = fetch(SERVED)
-    results = verify_config_models(load_config_file("configs/baseline_dense_tier2.yaml"), fetch=f)
+    results = verify_config_models(tier2(), fetch=f)
     assert all(r.ok for r in results)
     assert sorted(f.calls) == sorted(set(f.calls)), "a slug named twice is probed once"
 
@@ -60,7 +68,7 @@ def test_all_served_passes_and_each_slug_is_fetched_once():
 def test_a_retired_slug_fails_fast_and_is_named():
     served = {k: v for k, v in SERVED.items() if k != "openai/gpt-5-nano"}
     with pytest.raises(ModelResolutionError, match=r"generator: 'openai/gpt-5-nano' does not resolve"):
-        verify_config_models(load_config_file("configs/baseline_dense_tier2.yaml"), fetch=fetch(served))
+        verify_config_models(tier2(), fetch=fetch(served))
 
 
 def test_a_hard_pinned_provider_that_stopped_serving_fails():
@@ -70,12 +78,12 @@ def test_a_hard_pinned_provider_that_stopped_serving_fails():
 
 
 def test_the_judge_needs_only_one_provider_of_its_preference_order():
-    served = {**SERVED, "openai/gpt-oss-120b": ["Groq"]}
-    config = load_config_file("configs/baseline_dense_tier2.yaml")
+    served = {**SERVED, "deepseek/deepseek-v4.1-flash": ["Groq"]}
+    config = tier2()
     results = check_models(configured_models(config), fetch=fetch(served))
     judge = next(r for r in results if r.ref.role == "judge")
     assert judge.ok and judge.missing_providers == ["Cerebras"]
-    served["openai/gpt-oss-120b"] = ["DeepInfra"]
+    served["deepseek/deepseek-v4.1-flash"] = ["DeepInfra"]
     with pytest.raises(ModelResolutionError, match="judge"):
         verify_config_models(config, fetch=fetch(served))
 
@@ -113,13 +121,17 @@ def test_the_phase3_baseline_record_matches_the_files_it_froze():
     from rag.prompts import load_prompt
 
     record = yaml.safe_load(Path("ci/phase3_baseline.yaml").read_text())
-    for key in ("promoted", "tier2_control"):
-        entry = record[key]
-        assert hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest() == entry["file_sha256"], key
-        assert load_config_file(entry["path"]).config_hash == entry["config_hash"], key
+    # v1 froze a same-lab judge, refused since DEC-073; it is read as history.
+    with historical_configs():
+        for key in ("promoted", "tier2_control"):
+            entry = record[key]
+            assert hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest() == entry["file_sha256"], key
+            assert load_config_file(entry["path"]).config_hash == entry["config_hash"], key
+        tier2 = load_config_file(record["tier2_control"]["path"])
     assert load_config_file(record["promoted"]["path"]).identity_hash == record["promoted"]["identity_hash"]
+    with pytest.raises(ValueError, match="'openai' family"):
+        load_config_file(record["tier2_control"]["path"])
 
-    tier2 = load_config_file(record["tier2_control"]["path"])
     prompt_id, version = record["prompt"]["ref"].split("@")
     assert tier2.generator_prompt == record["prompt"]["ref"]
     assert load_prompt(prompt_id, version).content_hash == record["prompt"]["content_hash"]

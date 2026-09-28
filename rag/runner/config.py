@@ -8,6 +8,8 @@ thing to look at when they do not.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from typing import Any
@@ -200,7 +202,10 @@ class RunConfig:
                 )
             # P0-07: a judge from the generator's own family grades its own lineage.
             # The bias is real and unmeasured, so it is refused rather than noted.
-            if not self.skip_judge and self.generator_family == self.judge_family:
+            # Not for a HISTORICAL config (see `historical_configs`): a stored run
+            # describes what already ran, under the rule of its day (DEC-073).
+            if (not self.skip_judge and not _HISTORICAL.get()
+                    and self.generator_family == self.judge_family):
                 raise ValueError(
                     f"judge and generator are both from the {self.judge_family!r} "
                     "family. Same-family judging carries self-preference bias; P0-07 "
@@ -346,6 +351,23 @@ class RunConfig:
         return short_id(canonical_json(payload), length=16)
 
 
+_HISTORICAL: ContextVar[bool] = ContextVar("historical_config", default=False)
+
+
+@contextmanager
+def historical_configs():
+    """Rebuild configs that describe runs which ALREADY happened, without today's
+    judge-family rule. DEC-073 moved `gpt-oss` into the `openai` family, which makes
+    every Phase 0–2 judged run a same-family pairing; lookups over the results store
+    skip rows that fail to rebuild, so without this they would silently stop finding
+    EXP-0006 and EXP-0007. Never used on a path that runs anything."""
+    token = _HISTORICAL.set(True)
+    try:
+        yield
+    finally:
+        _HISTORICAL.reset(token)
+
+
 def config_from_json(text: str) -> RunConfig:
     """Rebuild a RunConfig from a run row's `config_json`. Fields the row predates
     take today's defaults; fields today's code no longer has are dropped."""
@@ -356,14 +378,17 @@ def config_from_json(text: str) -> RunConfig:
         document["eval_tier"] = EvalTier(document["eval_tier"])
     if "judge_provider_order" in document:
         document["judge_provider_order"] = tuple(document["judge_provider_order"])
-    return RunConfig(**document)
+    # A run row is history: rebuild it as it ran (DEC-073).
+    with historical_configs():
+        return RunConfig(**document)
 
 
-def load_config_file(path: str | Any) -> RunConfig:
+def load_config_file(path: str | Any, *, overrides: dict[str, Any] | None = None) -> RunConfig:
     """Load a `RunConfig` from a YAML file. Unknown keys are an error, not a shrug.
 
     A typo in a config field would otherwise be silently ignored and the run would
-    record settings nobody chose.
+    record settings nobody chose. `overrides` replaces fields before validation — for
+    a caller that uses only part of a config (`rag ask` never judges).
     """
     from pathlib import Path
 
@@ -374,6 +399,7 @@ def load_config_file(path: str | Any) -> RunConfig:
     unknown = sorted(set(document) - known)
     if unknown:
         raise ValueError(f"unknown config keys {unknown}; known keys: {sorted(known)}")
+    document.update(overrides or {})
     if "eval_tier" in document:
         document["eval_tier"] = EvalTier(document["eval_tier"])
     return RunConfig(**document)

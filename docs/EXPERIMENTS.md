@@ -1090,6 +1090,10 @@ Corpus-level MDDs (dense): strict/loose recall@1 and @5 0.012; @3 and @10 0 (ide
 | cited nothing | 0.05 | 100 | 0.023 | |
 | step coverage | 0.289 | 32 | 0.097 | procedural references only; MDD is a third of the value (OQ-007) |
 | step order preserved | 0.906 | 32 | 0.036 | of matched steps |
+
+> **CAVEAT (DEC-073, 2026-09-28):** these judged MDDs were measured with `openai/gpt-oss-120b`,
+> the same lab as the generator `openai/gpt-5-nano`. They describe a same-lab judge's noise
+> and do not carry over to the Phase 3 judge; P3-07 re-measures. Kept, not deleted.
 | refused on `dev` (`refusal-lexical-v2`) | 0.05 | 100 | 0.031 | |
 | `false_refusal_rate` as defined (MIS-012) | 0.05 | 100 | 0.031 | refused on any answerable question |
 | refused with all gold in context | 2/67 = 0.030 | 67 | — | the honest false-refusal rate (OQ-019, not yet adopted) |
@@ -1180,6 +1184,10 @@ Per-slice judged MDDs:
 | q_len:short | 45 | 0.041 | 0.053 | 0.019 |
 | q_len:medium | 24 | 0.007 | 0.033 | 0.023 |
 | q_len:long | 31 | 0.047 | 0.050 | 0.067 |
+
+> **CAVEAT (DEC-073, 2026-09-28):** these judged MDDs were measured with `openai/gpt-oss-120b`,
+> the same lab as the generator `openai/gpt-5-nano`. They describe a same-lab judge's noise
+> and do not carry over to the Phase 3 judge; P3-07 re-measures. Kept, not deleted.
 
 The two replicate runs are not experiments and have no index row; they are the noise
 measurement for EXP-0006's configuration. Cost of the three: ~$2.73.

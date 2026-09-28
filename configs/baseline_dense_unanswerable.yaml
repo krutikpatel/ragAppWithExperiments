@@ -1,3 +1,8 @@
+# REFUSED SINCE DEC-073 (2026-09-28): the judge `openai/gpt-oss-120b` is the same lab as
+# the generator `openai/gpt-5-nano`, and family now means the training lab. Kept
+# unchanged because it is what the recorded runs used; `rag.runner.config.historical_configs`
+# reads it as history. A new judge comes from the P3-04 bake-off, as a new config version.
+#
 # The dense control on the unanswerable split (P1-07 run 3): baseline refusal
 # behaviour. 45 authored questions with no gold document and no reference answer
 # (DEC-007), scored in full. Retrieval metrics do not exist here (DEC-009); the

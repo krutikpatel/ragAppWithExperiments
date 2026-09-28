@@ -1,3 +1,8 @@
+# REFUSED SINCE DEC-073 (2026-09-28): the judge `openai/gpt-oss-120b` is the same lab as
+# the generator `openai/gpt-5-nano`, and family now means the training lab. Kept
+# unchanged because it is what the recorded runs used; `rag.runner.config.historical_configs`
+# reads it as history. A new judge comes from the P3-04 bake-off, as a new config version.
+#
 # EXP-0001, Tier 2 variant — the same retrieval configuration as
 # exp_0001_baseline.yaml, run once so generation and judge metrics are exercised end
 # to end on the real baseline (P0-13, last criterion).

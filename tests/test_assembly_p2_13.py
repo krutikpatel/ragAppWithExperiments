@@ -245,7 +245,7 @@ def test_unknown_axis_6_values_are_refused():
         RunConfig(name="t", context_order="sideways")
     tier2 = dict(
         eval_tier=EvalTier.TIER_2, generator_model="openai/gpt-5-nano",
-        judge_model="openai/gpt-oss-120b",
+        judge_model="deepseek/deepseek-v4.1-flash",
     )
     with pytest.raises(ValueError, match="unknown context_compressor"):
         RunConfig(name="t", context_compressor="squeeze", **tier2)
@@ -267,7 +267,7 @@ def test_axis_6_fields_are_not_tier_1_identity():
     assert "context_compressor" not in RunConfig.TIER1_FIELDS
     tier2 = dict(
         eval_tier=EvalTier.TIER_2, generator_model="openai/gpt-5-nano",
-        judge_model="openai/gpt-oss-120b",
+        judge_model="deepseek/deepseek-v4.1-flash",
     )
     control = RunConfig(name="c", **tier2)
     reordered = RunConfig(name="r", context_order="lost_in_middle", **tier2)
@@ -287,7 +287,11 @@ def test_assembly_is_one_dimension_against_the_tier_2_control():
     from rag.runner.config import load_config_file
     from rag.runner.promoted import config_diff
 
-    control = load_config_file("configs/baseline_dense_tier2.yaml")
+    # The v1 control's gpt-oss judge is refused since DEC-073; any cross-family judge
+    # stands in, because the diff under test does not involve the judge.
+    control = load_config_file(
+        "configs/baseline_dense_tier2.yaml", overrides={"judge_model": "deepseek/deepseek-v4.1-flash"}
+    )
     config = control.with_(name="x", axis="assembly", context_order="lost_in_middle")
     diff = config_diff(config, control)
     assert diff["dimensions"] == ["assembly"], diff
@@ -302,7 +306,7 @@ def test_a_tier_2_experiment_differs_from_promoted_on_the_tier_not_the_axis():
     promoted = load_promoted()
     config = promoted.with_(
         name="x", axis="assembly", eval_tier=EvalTier.TIER_2,
-        generator_model="openai/gpt-5-nano", judge_model="openai/gpt-oss-120b",
+        generator_model="openai/gpt-5-nano", judge_model="deepseek/deepseek-v4.1-flash",
         context_order="lost_in_middle",
     )
     diff = config_diff(config, promoted)
@@ -636,11 +640,13 @@ def test_skip_judge_zeroes_the_judge_half_of_the_estimate():
 
     pricing = PricingTable.load()
     frame = pd.DataFrame({"answer": ["a reference answer"] * 100})
-    judged = _cost_estimate(
-        RunConfig(name="t", eval_tier=EvalTier.TIER_2, generator_model="openai/gpt-5-nano",
-                  judge_model="openai/gpt-oss-120b"),
-        frame, pricing,
-    )
+    from rag.runner.config import historical_configs
+
+    # Prices the Phase 2 placeholder judge, which is a historical pairing since DEC-073.
+    with historical_configs():
+        judged_config = RunConfig(name="t", eval_tier=EvalTier.TIER_2, generator_model="openai/gpt-5-nano",
+                                  judge_model="openai/gpt-oss-120b")
+    judged = _cost_estimate(judged_config, frame, pricing)
     unjudged = _cost_estimate(
         RunConfig(name="t", eval_tier=EvalTier.TIER_2, generator_model="openai/gpt-5-nano",
                   skip_judge=True),

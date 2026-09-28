@@ -52,13 +52,14 @@ OPENROUTER_EMBEDDINGS_MODELS_URL = "https://openrouter.ai/api/v1/embeddings/mode
 ANSWER_CORRECTNESS_WEIGHTS = (1.0, 0.0)
 
 
-# OpenRouter namespaces `gpt-oss-*` under `openai/` because OpenAI released the
-# weights, but these are open-weights models with their own training, served by
-# third-party providers — not the hosted GPT line. For self-preference purposes they
-# are treated as a distinct family. This is a judgment call, recorded as DEC-030,
-# and the residual risk (shared lineage may still correlate preferences) is stated
-# there rather than assumed away.
-_FAMILY_OVERRIDES = (("openai/gpt-oss", "openai-oss"),)
+# Family means the LAB THAT TRAINED THE MODEL (DEC-073, superseding DEC-030). The
+# self-preference the different-family rule guards against comes from shared training
+# data, post-training recipe and answer style — lineage — and open weights are only
+# how a model is distributed. So `openai/gpt-oss-*` is family `openai`, like the
+# hosted GPT line. On OpenRouter the namespace is the lab for every model this project
+# has used; an override is for a model whose namespace is NOT its lineage (a
+# third-party fine-tune of another lab's base model), and needs its own DEC entry.
+_FAMILY_OVERRIDES: tuple[tuple[str, str], ...] = ()
 
 
 def model_family(model_id: str) -> str:

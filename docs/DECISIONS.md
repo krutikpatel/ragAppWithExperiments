@@ -694,7 +694,8 @@ SHA, and reason.
 > providers pinned to Cerebras/Groq (DEC-032) the real rate is up to $0.350/$0.750.
 - **Date:** 2026-09-10
 - **Decided by:** Krutik
-- **Status:** Active — **supersedes DEC-025's model choice**
+- **Status:** Superseded by DEC-073 (2026-09-28) — its family ruling below is reversed.
+  Originally: Active — **supersedes DEC-025's model choice**
 - **Decision:** The LLM that drives every Ragas metric is `openai/gpt-oss-120b`, via
   OpenRouter. $0.037/$0.170 per Mtok, 131,072 context — roughly 7x cheaper on input
   than the `deepseek/deepseek-v3.2` it replaces ($0.27/$0.40).
@@ -2594,6 +2595,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   real contexts before any config was committed (preflight 42): 4 refusals correctly
   short-circuited without a call, 6 checked, 1 rejected, **zero unparseable, zero
   failures**, and **4,600 ms per answered question** — the latency number P2-14 requires.
+  > **CORRECTED by DEC-073 on 2026-09-28** — `gpt-oss-20b` is family `openai`, so this
+  > check was same-lab, not cross-family. EXP-0041 carries the caveat.
 - **Why it is the right family for this job:** the check grades `gpt-5-nano`'s output,
   so `gpt-oss-20b` makes it a **cross-family** check. P0-07 refuses same-family judging
   for the Ragas judge on self-preference grounds; the same argument applies to a model
@@ -2852,3 +2855,74 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** No measured data for the decision itself; judgment call on run validity.
 - **Revisit if:** the 100-candidate run's recorded candidate count per query falls short
   of 100 documents, which would mean 150 chunks was still too shallow.
+
+## DEC-073 — Model family means the lab that trained the model; `gpt-oss` is `openai` (supersedes DEC-030)
+- **Date:** 2026-09-28
+- **Decided by:** Krutik. (Claude found the consequences below and implemented them.)
+- **Status:** Active — **supersedes DEC-030's family ruling.** DEC-030's model choice was
+  already a placeholder (DEC-018); what this reverses is its argument that open weights
+  make `gpt-oss-*` a separate family.
+- **Context:** P0-07 requires the judge to be from a different family than the generator,
+  because a judge tends to favour outputs that look like its own. DEC-030 put
+  `openai/gpt-oss-120b` in family `openai-oss`, separate from the generator
+  `openai/gpt-5-nano`, on the argument that it is an open-weights model with its own
+  training. That argument misplaced the source of the bias.
+- **Decision:** family means the **lab that trained the model**, not how the weights are
+  distributed. Self-preference comes from lineage — training data, post-training recipe,
+  answer style — and both models are OpenAI's. So `gpt-oss-*` is family `openai`, and a
+  `gpt-oss` judge of a `gpt-5-nano` generator is refused.
+- **Options considered:**
+  1. Keep DEC-030 and leave the residual risk to OQ-014's measurement — rejected: it keeps
+     a judge whose independence rests on an argument that does not hold.
+  2. Family = training lab — chosen.
+  3. Change the generator instead — rejected: the generator is held constant across every
+     Phase 1–2 comparison (DEC-017).
+- **Implemented:**
+  - `rag/eval/judge.py`: `_FAMILY_OVERRIDES` is empty; the OpenRouter namespace is the lab
+    for every model this project has used. An override is now only for a model whose
+    namespace is not its lineage (a third-party fine-tune) and needs its own DEC entry.
+  - `rag/runner/config.py`: `historical_configs()`. A config rebuilt from a stored run row
+    describes what already ran, so it is rebuilt without today's family rule. Without
+    this, results-store lookups — which skip rows that fail to rebuild — would silently
+    stop finding every Phase 0–2 judged run, including EXP-0006 (P3's reference run).
+    `latest_run_of` keeps its `.with_()` copy inside the exemption too. Nothing that runs
+    a config uses it.
+  - `rag ask` loads its config with the judge fields cleared: it never judges, and the
+    Tier 2 control's judge is now a refused pairing.
+  - Tests: `gpt-oss` maps to `openai` and the pairing is refused; a stored run still
+    rebuilds and is still found; the exemption does not leak out of its context.
+- **Now refused (kept on disk unchanged, readable as history):**
+  `configs/baseline_dense_tier2.yaml` (the frozen v1 Tier 2 control — left byte-identical
+  because `ci/phase3_baseline.yaml` v1 pins its hash), `configs/baseline_dense_unanswerable.yaml`,
+  `configs/exp_0001_baseline_tier2.yaml`, `configs/tier2_smoke.yaml` (the last three carry
+  a header note). Their "Reproduce" commands no longer run as written.
+- **What this does to Phase 1–2 results:**
+  - **Retrieval findings: unaffected.** Every retrieval metric is deterministic and uses
+    no judge — dense over sparse, the promotion record, the `top_k=5` decision, all 45
+    "no measurable difference" verdicts, EXP-0052/0053.
+  - **Deterministic generation metrics: unaffected** — citation precision/recall, refusal,
+    step coverage and gold-in-context involve no judge.
+  - **Judged scores:** never reached the ledger as findings (DEC-018). The **judged MDDs**
+    in `EXPERIMENTS.md` (faithfulness 0.014, answer correctness 0.020, answer relevance
+    0.021, and the per-slice table; DEC-037/046) were measured with a same-lab judge.
+    They get a caveat, not a deletion. `rag/eval/noise_floor.py` labels a run with a new
+    judge "no MDD measured" automatically, and P3-07 re-measures anyway.
+  - **EXP-0041, the groundedness self-check**, used `openai/gpt-oss-20b` to grade
+    `gpt-5-nano`'s answers — a judging role. DEC-067 justified it as cross-family on
+    DEC-030's reasoning. Under this decision it was a same-lab check; EXP-0041 gets the
+    caveat. `gpt-oss-20b`'s other Phase 2 roles (chunk prefixes, compression, query
+    transforms) do not judge the generator, and the family rule does not apply to them.
+  - **OQ-014** (does `gpt-oss` show self-preference?) is closed by this decision rather
+    than by a measurement: the pairing is no longer used.
+- **Next:** the P3-04 bake-off picks a cross-lab judge. Candidates, per Krutik:
+  `deepseek/deepseek-v4.1-flash` (pinned to one host with structured outputs) and
+  `google/gemini-3.8-flash`; `qwen/qwen3.8-flash` optional (slug verified 2026-09-28,
+  $0.15/$0.47, Alibaba only, structured outputs yes). `gpt-oss-120b` and
+  `openai/gpt-6-luna` are excluded. The winner goes into a new Tier 2 control and
+  `ci/phase3_baseline.yaml` version 2 under tag `phase3-baseline-v2`; the existing
+  `phase3-baseline` tag is not moved. After the bake-off, the Phase 2 judged runs are
+  re-scored with the new judge from their stored answers, and whether any judged
+  conclusion changes is recorded.
+- **Evidence:** No measured data; a judgment about where self-preference comes from.
+- **Revisit if:** a measurement shows cross-lab judges disagree with each other as much as
+  a same-lab judge disagrees with them, which would say lineage is not the dominant term.

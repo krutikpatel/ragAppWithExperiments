@@ -209,6 +209,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
 51. **Confirm a background run actually started: a `RUNNING` row within the first
     minute.** A launch chain's exit 0 is the exit of its last command. (MIS-041)
 
+52. **"Same family" means the same training lab.** Open weights, third-party hosting
+    and a different product name do not make a model independent of its lab's other
+    models. Check lineage before calling a judge or checker cross-family. (MIS-042)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1436,3 +1440,31 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** after launching a background run, confirm a `RUNNING` row exists
   within the first minute. Exit 0 from a chain is not evidence the run started.
 - **Added to preflight:** yes — item 51.
+
+## MIS-042 — Classified a judge as a different family because its weights are open, when it shares the generator's lab
+- **Date:** 2026-09-28
+- **Severity:** Medium — no reported finding depended on it, because judged scores were
+  kept out of the ledger (DEC-018). But every judged number and judged noise floor from
+  Phase 0–2, and the Axis 7 groundedness check (EXP-0041), came from a same-lab judge
+  presented as cross-family.
+- **What happened:** DEC-030 (2026-09-10) put `openai/gpt-oss-120b` in family
+  `openai-oss`, separate from the generator `openai/gpt-5-nano`, arguing that an
+  open-weights model "with its own training" is not the hosted GPT line. `model_family()`
+  encoded that, so `RunConfig`'s P0-07 guard passed the pairing. DEC-067 then reused the
+  argument for `gpt-oss-20b` as the groundedness checker.
+- **How it was caught:** Krutik, when choosing the production judge for Phase 3: the bias
+  the rule guards against comes from shared training data, post-training recipe and
+  answer style, and both models are OpenAI's.
+- **Root cause:** the family was decided by how the model is *distributed* (open weights,
+  third-party hosts) instead of who *trained* it. DEC-030 named the residual risk and
+  filed it as OQ-014 — and then built on it for 18 days, including a second decision.
+- **Impact:** judged MDDs and EXP-0041 carry a caveat (DEC-073). The Tier 2 control and
+  three other configs are now refused until a cross-lab judge is chosen. Phase 2 judged
+  runs will be re-scored from stored answers after the P3-04 bake-off.
+- **Fix applied:** DEC-073. `model_family()` returns the lab; stored runs rebuild as
+  history (`historical_configs`); tests pin both.
+- **Prevention rule:** when a rule is about bias, decide "same family" by **lineage** —
+  which lab trained it — never by distribution, licence, hosting or naming. And an open
+  question that a decision rests on is a debt: when a second decision builds on it,
+  settle it first.
+- **Added to preflight:** yes — item 52.

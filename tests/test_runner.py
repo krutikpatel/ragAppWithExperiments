@@ -245,6 +245,31 @@ def test_judge_must_not_share_the_generators_family():
     assert ok.generator_family == "openai" and ok.judge_family == "anthropic"
 
 
+def test_family_is_the_training_lab_so_open_weights_gpt_oss_is_openai():
+    """DEC-073 supersedes DEC-030: open weights are distribution, not lineage."""
+    from rag.eval.judge import model_family
+
+    assert model_family("openai/gpt-oss-120b") == "openai"
+    with pytest.raises(ValueError, match="self-preference"):
+        RunConfig(name="x", eval_tier=EvalTier.TIER_2,
+                  generator_model="openai/gpt-5-nano", judge_model="openai/gpt-oss-120b")
+
+
+def test_a_stored_run_rebuilds_as_it_ran_and_the_exemption_does_not_leak():
+    """Lookups skip rows that fail to rebuild, so without the historical exemption every
+    Phase 0–2 judged run (gpt-oss judging gpt-5-nano) would silently vanish from them."""
+    import json
+
+    from rag.runner.config import config_from_json
+
+    stored = json.dumps({"name": "EXP-0006", "eval_tier": "tier2",
+                         "generator_model": "openai/gpt-5-nano", "judge_model": "openai/gpt-oss-120b"})
+    assert config_from_json(stored).judge_model == "openai/gpt-oss-120b"
+    with pytest.raises(ValueError, match="self-preference"):
+        RunConfig(name="x", eval_tier=EvalTier.TIER_2,
+                  generator_model="openai/gpt-5-nano", judge_model="openai/gpt-oss-120b")
+
+
 def test_subsample_settings_are_part_of_run_identity():
     base = RunConfig(name="x")
     assert base.with_(eval_subsample_size=50).config_hash != base.config_hash
@@ -360,3 +385,20 @@ def test_p1_09_diff_smoke_against_the_dense_control():
     for item in ctx["gained"]:
         newly = [d for d in item["gold_doc_ids"] if (item["ranks_a"].get(d) or 999) > 5]
         assert newly and all(6 <= item["ranks_b"][d] <= 10 for d in newly)
+
+
+def test_latest_run_of_still_finds_a_historical_same_lab_judged_run(tmp_path):
+    """The copy `.with_(split=...)` re-validates; it must stay inside the exemption."""
+    import json
+
+    from rag.runner.config import historical_configs
+    from rag.runner.store import ResultsStore
+
+    with historical_configs():
+        config = RunConfig(name="c", eval_tier=EvalTier.TIER_2,
+                           generator_model="openai/gpt-5-nano", judge_model="openai/gpt-oss-120b")
+    with ResultsStore(tmp_path / "runs.sqlite") as store:
+        store.start_run(_row("run_h", eval_tier="tier2", retriever=config.retriever,
+                             config_json=json.dumps(config.as_dict(), default=str)))
+        store.finish_run("run_h", status="VALID", metrics={}, n_questions=1)
+        assert store.latest_run_of(config, split="dev")["run_id"] == "run_h"

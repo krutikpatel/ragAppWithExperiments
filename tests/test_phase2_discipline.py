@@ -47,7 +47,7 @@ def test_axis_3_is_refused_on_dev_large_without_the_flag():
 def test_judged_decisions_are_refused_on_dev_large():
     config = RunConfig(
         name="x", axis="generation", split="dev_large", eval_tier=EvalTier.TIER_2,
-        generator_model="openai/gpt-5-nano", judge_model="openai/gpt-oss-120b",
+        generator_model="openai/gpt-5-nano", judge_model="deepseek/deepseek-v4.1-flash",
     )
     with pytest.raises(PermissionError, match="dev. subsample only"):
         check_split_policy(config, allow_leaky_split=False)

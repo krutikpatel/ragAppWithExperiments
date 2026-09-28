@@ -185,6 +185,9 @@ faithfulness and answer correctness. A systematic gap in favour of the `gpt-oss`
 is evidence of self-preference; comparable means are evidence against. Cheap, since it
 reuses stored answers and only re-runs judging.
 **Status:** open. Matters most before any judged number is quoted in the narrative.
+**Status (2026-09-28): dropped — settled by decision, not measurement (DEC-073).** Family
+now means the training lab, so the `gpt-oss` / `gpt-5-nano` pairing is refused and never
+used again. The measurement this question describes was never run.
 
 ## OQ-015 — How much does concurrent judging cut Tier 2 wall clock? **ANSWERED**
 **Answered 2026-09-10 by DEC-032 (harness measurement, not an experiment).** Concurrency
