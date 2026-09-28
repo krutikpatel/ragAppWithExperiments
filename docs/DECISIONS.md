@@ -2818,3 +2818,35 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
     no hosted model (the toy smoke configs) makes none.
 - **Revisit if:** P3-04 changes the judge; any slug stops resolving; or Krutik wants
   OQ-038 bought before the gate is built (the tag would then move, with a new entry).
+
+## DEC-072 — OQ-038 is run before the Phase 3 gate, at 20 and 100 candidate documents
+- **Date:** 2026-09-27
+- **Decided by:** Krutik (to run it, reversing the carry-over disposition in DEC-071);
+  Claude (the `retrieval_depth` change below, and the run shape).
+- **Status:** Active
+- **Context:** DEC-071 left OQ-038 — the reranker candidate-ratio diagnostic on the
+  recall@5 → recall@20 gap — unrun. Krutik asked for it to be run first. The
+  `phase3-baseline` tag was placed on b0b98b9 before that; it moves only if a result is
+  promoted (neither run is a promotion candidate by default: OQ-038 is a diagnostic).
+- **Run shape:** `configs/exp_0052_rerank_4fast_c20_dev.yaml` and
+  `configs/exp_0053_rerank_4fast_c100_dev.yaml`: EXP-0025 (`cohere/rerank-4-fast` pinned
+  to Cohere, 50 candidates) with `rerank_candidates` 20 and 100. `dev`, Tier 1. Decided by
+  OQ-038's own rule: `rag compare` on strict recall@5 against promoted and EXP-0025,
+  ≥ 0.03 separation between the ratios. Hypothesis H-036, written first.
+- **`retrieval_depth` 150 on the 100-candidate run — a second changed field.** Depth is
+  counted in chunks, candidates in distinct documents, and with ~1.2 chunks per document
+  near the top 100 ranked chunks cannot hold 100 documents; left at 100, the run would be
+  a ~80-candidate run labelled 100. Deeper retrieval only appends chunks below rank 100,
+  so it cannot alter the dense ordering of the top-20 documents any metric reads.
+  `rag promoted diff` reports it as a second dimension (`assembly`); the warning is
+  expected.
+- **Options considered:** (1) depth 100 and report the candidates actually reached —
+  rejected, the run would not test the ratio it is named for; (2) depth 150 — chosen;
+  (3) raise depth on both runs for symmetry — rejected, the 20-candidate run does not
+  need it and it would change a field for no reason.
+- **Cost:** estimates $0.1881 and $0.9361 (`--estimate-only`, pricing 2026-09-25); both
+  under the $2 gate. Account balance $12.28. EXP-0025's measured cost was $0.448 against a
+  $0.468 estimate.
+- **Evidence:** No measured data for the decision itself; judgment call on run validity.
+- **Revisit if:** the 100-candidate run's recorded candidate count per query falls short
+  of 100 documents, which would mean 150 chunks was still too shallow.

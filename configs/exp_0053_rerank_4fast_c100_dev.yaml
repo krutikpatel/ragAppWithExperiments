@@ -1,0 +1,38 @@
+# EXP-0053 — OQ-038: cohere/rerank-4-fast with 100 candidate docs -> top-5
+#
+# The Axis 5 candidate-ratio run cut by DEC-060, bought before the Phase 3 gate at
+# Krutik's request (2026-09-27). Identical to configs/exp_0025_rerank_cohere_4fast_dev.yaml
+# (50 candidate docs) except `rerank_candidates`. OQ-038 decides it: strict recall@5
+# via `rag compare` against promoted and against EXP-0025, >= 0.03 separation between
+# the ratios.
+#
+# retrieval_depth is 150 here, not 100. It is counted in CHUNKS and the candidates in
+# DOCUMENTS: at ~1.2 chunks per document near the top, 100 ranked chunks hold fewer
+# than 100 distinct documents, so depth 100 would silently make this a ~80-candidate
+# run. Retrieving deeper is free (a dot product against the cached index) and only
+# adds chunks BELOW rank 100, so it cannot change the dense ranking of the top 20
+# documents that the metrics read. DEC-072.
+name: "EXP-0053 — OQ-038: cohere/rerank-4-fast, 100 candidate docs -> top-5"
+axis: reranking
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 150
+candidate_pool: 50
+top_k: 5
+reranker: openrouter
+reranker_params:
+  model: cohere/rerank-4-fast
+  provider: Cohere
+rerank_candidates: 100
+doc_pooling: max
+seed: 1

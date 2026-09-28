@@ -1029,3 +1029,33 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   local backend and a different model — a two-axis change. Not run.
 - **ColBERT late interaction** (P2-10): multi-vector index, not served by a rerank
   endpoint. Not run.
+
+## H-036 — The candidate ratio does not matter: 20 → 5 and 100 → 5 both sit near the control
+- **Date written:** 2026-09-27, before EXP-0052 and EXP-0053 ran. Answers OQ-038.
+- **Source:** Claude.
+- **The two readings OQ-038 was written to separate.** The dense control has the gold in its
+  top 50 almost always (strict recall@50 = 0.985) and `cohere/rerank-4-fast` put it in the
+  top five for 0.730 of questions at 50 candidates (EXP-0025, against the control's 0.720,
+  p = 0.887). If the reranker is **drowning** in candidates, 20 → 5 beats 50 → 5 and
+  100 → 5 is worst. If it is **not good enough at this task**, the ratio does not matter.
+- **Hypothesis:** the second. Neither run separates from EXP-0025 or from `promoted` on
+  strict recall@5 by the 0.03 OQ-038 names with a significant paired test.
+  1. **20 → 5** lands within ±0.03 of 0.730. At 20 candidates the reranker can only
+     re-order documents the dense retriever already ranked highly; its ceiling is the
+     control's recall@20, 0.920, which is still far above what either side achieves.
+  2. **100 → 5** lands within ±0.03 of 0.730 as well. It adds only the documents ranked
+     51–100 by the dense retriever, and recall@50 is already 0.985, so at most 3 questions
+     in 200 have gold that only 100 candidates can reach.
+- **Reasoning, with its weak point named.** Axis 5 produced three rerankers with three
+  different profiles at 50 candidates (v3.5 −0.055, 4-fast +0.010, qwen3-8b +0.000) and none
+  significant against the control. A mechanism that varies that much by model but never
+  moves the headline number looks like a model-quality ceiling, not a candidate-count one.
+  **The weak point:** EXP-0024 showed v3.5 *better* at rank 1 and *worse* at ranks 3–5 —
+  a signature that could be distractors pulling the gold down, which is exactly what a
+  narrower candidate set would remove. If 20 → 5 beats 50 → 5 by the full 0.03, that
+  signature was drowning, and I was wrong.
+- **What would surprise me most:** 100 → 5 *improving*. Only three questions can gain from
+  documents 51–100, so an improvement beyond ~0.015 would have to come from re-ordering
+  inside the top 50 changing because of what sits beneath it — which a pointwise
+  cross-encoder should not do.
+- **Not claimed:** anything about the generator. Tier 1 only; OQ-034 stays open.
