@@ -326,5 +326,25 @@ def runs_test_openings() -> None:
         typer.echo(f"  {opening['timestamp']}  {opening['run_id']}  {opening['notes'] or ''}")
 
 
+audit_app = typer.Typer(help="Provenance audits over the results store (P3-01).", no_args_is_help=True)
+app.add_typer(audit_app, name="audit")
+
+
+@audit_app.command("provenance")
+def audit_provenance(
+    dev_run: str = typer.Argument(..., help="The dev-split run."),
+    test_run: str = typer.Argument(..., help="The test-split run it was compared with."),
+    dev_tier1: str = typer.Option(None, "--dev-tier1", help="Dev Tier 1 run, to recompute recall on the subsample."),
+    test_tier1: str = typer.Option(None, "--test-tier1", help="Test Tier 1 run, same."),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Were two runs independent? Question overlap, cache reuse, per-question agreement.
+    Zero model calls."""
+    from rag.runner.audit import format_audit, provenance_audit
+
+    report = provenance_audit(dev_run, test_run, dev_tier1=dev_tier1, test_tier1=test_tier1)
+    typer.echo(json.dumps(report, indent=2, default=str) if as_json else format_audit(report))
+
+
 if __name__ == "__main__":
     app()

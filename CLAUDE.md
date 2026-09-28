@@ -477,7 +477,9 @@ rag/
                     identity_hash = the tier's identity, MIS-019), run.py (run(config)
                     -> row; split policy, cost gate, promoted diff, pipeline cache
                     stats, actual cost), store.py (SQLite runs + run_questions),
-                    diff.py (rag diff), compare.py (rag compare — paired bootstrap CI +
+                    diff.py (rag diff), audit.py (`rag audit provenance` — P3-01: were two
+                    runs independent? shared ids, cache reuse, copied answers; no model
+                    calls), compare.py (rag compare — paired bootstrap CI +
                     permutation p per question, per slice, P2-01), promoted.py (the
                     promoted.yaml pointer, P2-04 split policy, `rag promote`, resolves
                     `promoted` as a run ref), cost.py (PricingTable over

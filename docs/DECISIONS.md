@@ -2693,3 +2693,66 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   - **`test` is spent.** Any future phase needs a new held-out split, and comparisons
     across that boundary are invalid.
 - **Revisit if:** never, for this split. A Phase 3 would freeze a new one.
+
+## DEC-070 — P3-01: the Phase 2 dev and test runs were independent; Phase 3 may baseline on them
+- **Date:** 2026-09-27
+- **Decided by:** Claude (the audit and its reading). Krutik has not yet reviewed it.
+- **Status:** Active
+- **Context:** Phase 3 fact 5: Tier 2 `gold_in_context` (0.67) and refusal rate (0.08)
+  came back identical on `dev` and `test`, while Tier 1 strict recall@5 differed
+  (0.72 vs 0.68). Identical numbers from two splits look like a cache serving one
+  split's outputs to the other. P3-01 requires that to be ruled in or out before
+  anything is baselined.
+- **Runs audited** (the P2-18 comparison pairs, EXP-0046/0047):
+  - Tier 2 dev `run_20260913_205058_dc03` (EXP-0006 replicate, subsample `sub100:b551f7f49c91`)
+    vs Tier 2 test `run_20260926_011244_9d0e` (`sub100:9f0dee4cacd0`).
+  - Tier 1 dev `run_20260912_225005_be04` (0.72, the value quoted in EXP-0046) vs
+    Tier 1 test `run_20260926_010435_6495`.
+- **Command:** `rag audit provenance run_20260913_205058_dc03 run_20260926_011244_9d0e
+  --dev-tier1 run_20260912_225005_be04 --test-tier1 run_20260926_010435_6495`. Reads the
+  results store and the generation cache; zero model calls.
+- **What was found:**
+
+  | Check | dev | test |
+  |---|---|---|
+  | Question ids in the run | 100 | 100 — **0 shared** |
+  | Full splits (200 each) | — | **0 shared ids, 0 identical question texts** |
+  | Index (passage vectors) | cache hit, key `f0e720da2aa33751` | same key, cache hit — corpus-level and split-blind by design, not a leak |
+  | Query embeddings | 100 fresh calls, 3,889 tokens | 100 fresh calls, 3,735 tokens — no query cache exists |
+  | In-pipeline LLM cache | no LLM call in this config | same; 0 hits |
+  | Answer generation | 100 fresh calls | 100 fresh calls — the generator has no cache, and the cache DB holds **0 rows** for `baseline_answer@v1` |
+  | Judge | ran (`gpt-oss-120b`, Cerebras/Groq), no cache | **skipped** (DEC-063) — no judge output exists to leak |
+  | Test answers identical to any dev answer | — | **0** |
+
+  **No leak. No test output was served from anything a dev run created.**
+- **Why the numbers were identical — explained, and it is one coincidence, not two:**
+  1. `gold_in_context` equals strict recall@5 on **every** question of both runs (0
+     disagreements of 100 each). At `top_k=5` distinct documents they are the same
+     quantity, so "gold_in_context identical while recall@5 differed" is really
+     "recall@5 on the subsample identical while recall@5 on the full split differed".
+  2. Tier 2 runs on a **100-question subsample**; Tier 1 on all 200. Recall@5 on the
+     subsamples was 67/100 on dev and 67/100 on test. The Tier 1 gap lives in the
+     *other* 100 questions: dev's scored **0.78**, test's **0.69**.
+     Check: (66 + 78) / 200 = 0.72; (67 + 69) / 200 = 0.68.
+  3. The dev Tier 1 run scored 66/100 on the subsample and the Tier 2 run 67/100: one
+     question (`47ed1fdd553ce70f`) flipped 0 → 1 between them. That is query-embedding
+     non-determinism (OQ-023), not a leak — the two runs embedded the question
+     separately, twelve hours apart.
+  4. Refusals (recounted under `refusal-lexical-v3`): 8/100 on each side, on disjoint
+     question sets. A separate coincidence of counts, not of outcomes.
+- **Per-question agreement:** not computable — the two runs share no question id. **The
+  identical aggregates come from entirely different per-question outcomes**, which is
+  what P3-01 asked to have stated explicitly.
+- **Decision:** the Phase 2 closing numbers are independent measurements and Phase 3
+  may baseline on them. No cache keying change is needed; no `MISTAKES.md` entry.
+- **Evidence:** the audit output above, from the four run ids named.
+- **Consequences:**
+  - `rag audit provenance` exists and is tested (`tests/test_audit_p3_01.py`): a shared
+    question id, a copied answer, or a cache row that could serve the answer prompt
+    each set `leak_found`.
+  - A limitation this audit does not remove: the answer path being uncached is what
+    made it clean. P3-05's judge cache and P3-10's CI cache will be the first caches
+    on that path, and both key on question id, so dev/test separation depends on the
+    two splits never sharing an id — true today (0 of 200).
+- **Revisit if:** any cache is added to the answer or judge path (re-run this audit on
+  the first run that uses it), or a new held-out split is built.
