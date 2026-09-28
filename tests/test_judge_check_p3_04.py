@@ -108,3 +108,28 @@ def test_a_nan_score_is_a_failure_not_a_pass():
                    {"kind": "unsupported", "score": 0.0, "flag": True}])
     assert s["unsupported_flag_recall"] == 1.0
     assert s["judge_failures"] == 1 and s["mean_faithfulness"]["unsupported"] == 0.0
+
+
+def test_v2_pairs_are_supported_by_construction_and_differ_only_in_provenance():
+    """DEC-078: every kind shares the gold context; only where the answer came from differs.
+    A sentence shared by two articles is never eligible, so boilerplate cannot leak."""
+    from rag.eval.judge_check import Extractor, build_pairs_v2
+
+    body = lambda tag: " ".join(f"{tag} sentence number {i} has plenty of words in it." for i in range(6))
+    texts = {d: body(d) for d in CORPUS}
+    texts["g1"] += " Learn more about this feature today and later."
+    texts["d000"] += " Learn more about this feature today and later."
+    ex = Extractor(texts)
+    assert all(not any("Learn more" in ex.sentences["g1"][i + k] for k in range(3)) for i in ex.windows("g1"))
+    pairs = build_pairs_v2(GOLDEN, texts, RANKED, extractor=ex)
+    for p in pairs:
+        gold = next(r["article_ids"] for r in GOLDEN if r["question_id"] == p.question_id)
+        assert p.article_ids == tuple(gold), "v2 context is always the gold articles"
+        sents = [x.strip() for x in ex.sentences[p.answer_source]]
+        assert any(p.answer == " ".join(sents[i:i + 3]) for i in range(len(sents) - 2)), \
+            "the answer is three consecutive sentences of its source article, verbatim"
+        if p.kind == "supported":
+            assert p.answer_source in gold
+        else:
+            assert p.answer_source not in gold
+    assert build_pairs_v2(GOLDEN, texts, RANKED) == build_pairs_v2(GOLDEN, texts, RANKED)

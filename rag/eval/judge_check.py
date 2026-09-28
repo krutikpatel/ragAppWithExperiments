@@ -74,7 +74,10 @@ class Pair:
     kind: str
     question: str
     answer: str
+    # The CONTEXT the judge sees. In v1 it varies by kind; in v2 it is always the gold.
     article_ids: tuple[str, ...]
+    # v2 only: the article the answer's sentences were copied from.
+    answer_source: str = ""
 
     @property
     def expected_unsupported(self) -> bool:
@@ -102,6 +105,73 @@ def build_pairs(golden: list[dict[str, Any]], corpus_ids: list[str],
         hard = [d for d in ranked if d not in gold][: len(gold)]
         for kind, ids in (("supported", gold), ("unsupported", unrelated), ("hard_negative", hard)):
             pairs.append(Pair(f"{qid}:{kind}", qid, kind, row["question"], strip_links(row["reference_answer"]), tuple(ids)))
+    return pairs
+
+
+# --- v2: supported by construction (DEC-078) ----------------------------------------
+# v1's "supported" pairs assumed a WixQA reference answer is grounded in its gold
+# articles' text; for about half of golden_v1 it is not (EXP-0054–0056, DEC-077). v2
+# builds the answer from the articles themselves, so the label is true by construction:
+#   supported      3 consecutive sentences copied from a gold article; context = gold
+#   unsupported    3 sentences copied from a far article (not gold, not dense top 50);
+#                  context = the SAME gold articles — only provenance differs
+#   hard_negative  3 sentences from the top-ranked non-gold article with a window;
+#                  context = gold. Report-only (a near-duplicate may say the same thing)
+# A sentence is eligible when it has 6–60 words and occurs in exactly ONE corpus article,
+# so shared boilerplate ("Learn more about…") can never make an unsupported pair true.
+PAIRS_V1 = "v1-reference-answers"
+PAIRS_V2 = "v2-extractive"
+EXTRACT_SENTENCES = 3
+
+
+def _norm_sentence(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+class Extractor:
+    """Eligible sentence windows per article, over the whole frozen corpus."""
+
+    def __init__(self, texts: dict[str, str]) -> None:
+        from rag.chunking.sentences import split_sentences
+
+        self.sentences = {d: split_sentences(t) for d, t in texts.items()}
+        counts: dict[str, int] = {}
+        for sents in self.sentences.values():
+            for n in {_norm_sentence(x) for x in sents}:
+                counts[n] = counts.get(n, 0) + 1
+        self._unique = counts
+
+    def windows(self, doc: str, k: int = EXTRACT_SENTENCES) -> list[int]:
+        sents = self.sentences[doc]
+        ok = [6 <= len(x.split()) <= 60 and self._unique[_norm_sentence(x)] == 1 for x in sents]
+        return [i for i in range(len(sents) - k + 1) if all(ok[i:i + k])]
+
+    def extract(self, doc: str, rng: random.Random) -> str:
+        start = rng.choice(self.windows(doc))
+        return " ".join(x.strip() for x in self.sentences[doc][start:start + EXTRACT_SENTENCES])
+
+
+def build_pairs_v2(golden: list[dict[str, Any]], texts: dict[str, str],
+                   ranked_docs: dict[str, list[str]], *, seed: int = SEED,
+                   extractor: Extractor | None = None) -> list[Pair]:
+    extractor = extractor or Extractor(texts)
+    with_window = sorted(d for d in texts if extractor.windows(d))
+    pairs = []
+    for row in golden:
+        if row["stratum"] == "unanswerable":
+            continue
+        qid, gold = row["question_id"], tuple(row["article_ids"])
+        ranked = ranked_docs[qid]
+        rng = random.Random(f"{seed}:v2:{qid}")
+        gold_ok = [d for d in gold if extractor.windows(d)]
+        if not gold_ok:
+            raise ValueError(f"{qid}: no gold article has an eligible window")
+        source = rng.choice(gold_ok)
+        banned = set(gold) | set(ranked[:EXCLUDE_TOP])
+        far = rng.choice([d for d in with_window if d not in banned])
+        hard = next(d for d in ranked if d not in gold and extractor.windows(d))
+        for kind, src in (("supported", source), ("unsupported", far), ("hard_negative", hard)):
+            pairs.append(Pair(f"{qid}:{kind}", qid, kind, row["question"], extractor.extract(src, rng), gold, src))
     return pairs
 
 
@@ -178,7 +248,8 @@ def run_pairs(pairs: list[Pair], texts: dict[str, str], config: JudgeConfig) -> 
     for pair, score in zip(pairs, scores, strict=True):
         s = score["faithfulness"]
         results.append({"pair_id": pair.pair_id, "question_id": pair.question_id, "kind": pair.kind,
-                        "article_ids": list(pair.article_ids), "score": s.score, "flag": verdict_flag(s.score),
+                        "article_ids": list(pair.article_ids), "answer_source": pair.answer_source,
+                        "answer": pair.answer, "score": s.score, "flag": verdict_flag(s.score),
                         "error": s.error, "reason": (s.detail or {}).get("reason")})
     return results, {**judge.usage.as_dict(), "wall_seconds": round(elapsed, 1)}
 
@@ -197,7 +268,7 @@ def load_inputs() -> tuple[list[dict[str, Any]], dict[str, str], dict[str, list[
 
 def record_run(*, name: str, model: str, provider: str, pairs: list[Pair], results: list[dict[str, Any]],
                usage: dict[str, Any], summary: dict[str, Any], corpus: Any, notes: str,
-               cost_estimate: float | None, approval: str) -> str:
+               cost_estimate: float | None, approval: str, pairs_version: str = PAIRS_V1) -> str:
     """One row in `runs` (eval_tier `judge_check`) and one `run_questions` row per pair,
     so every number P3-04 reports is traceable to a run id (CLAUDE.md §2)."""
     from rag.dataset.golden import VERSION, golden_hash, load_golden
@@ -205,7 +276,8 @@ def record_run(*, name: str, model: str, provider: str, pairs: list[Pair], resul
     from rag.runner.store import ResultsStore
 
     config = {"kind": "judge_check", "judge_model": model, "judge_provider": provider,
-              "allow_fallbacks": False, "criterion": "faithfulness", "reference_links": REFERENCE_LINK_RULE, "verdict": "flag unsupported if faithfulness < 1.0",
+              "allow_fallbacks": False, "criterion": "faithfulness", "reference_links": REFERENCE_LINK_RULE,
+              "pairs": pairs_version, "verdict": "flag unsupported if faithfulness < 1.0",
               "pair_seed": SEED, "dense_run": DENSE_RUN, "exclude_top": EXCLUDE_TOP, "golden": VERSION,
               "pair_ids": [p.pair_id for p in pairs]}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -232,7 +304,8 @@ def record_run(*, name: str, model: str, provider: str, pairs: list[Pair], resul
             "run_id": run_id, "question_id": r["pair_id"], "retrieved_doc_ids": json.dumps(r["article_ids"]),
             "retrieved_chunk_ids": "[]", "scores": "[]", "gold_doc_ids": "[]",
             "metrics_json": json.dumps({"kind": r["kind"], "faithfulness": r["score"], "flag_unsupported": r["flag"],
-                                        "error": r["error"]}),
+                                        "error": r["error"], "answer_source": r.get("answer_source", ""),
+                                        "answer": r.get("answer") if pairs_version == PAIRS_V2 else None}),
             "generated_answer": r["reason"], "cited_doc_ids": "[]", "latency_ms": None,
             "tokens_in": None, "tokens_out": None, "cost_usd": None,
         } for r in results])

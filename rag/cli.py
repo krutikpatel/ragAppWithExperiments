@@ -375,13 +375,16 @@ app.add_typer(judge_app, name="judge-check")
 PROBE_QUESTIONS = 2
 
 
-def _judge_inputs(candidate: str):
-    from rag.eval.judge_check import CANDIDATES, build_pairs, load_inputs
+def _judge_inputs(candidate: str, pairs: str = "v1"):
+    from rag.eval.judge_check import CANDIDATES, build_pairs, build_pairs_v2, load_inputs
 
     if candidate not in CANDIDATES:
         raise typer.BadParameter(f"unknown candidate {candidate!r}; known: {sorted(CANDIDATES)}")
+    if pairs not in ("v1", "v2"):
+        raise typer.BadParameter("--pairs is v1 (reference answers, EXP-0054-0056) or v2 (extractive, DEC-078)")
     golden, texts, ranked, corpus = load_inputs()
-    return CANDIDATES[candidate], build_pairs(golden, list(texts), ranked), texts, corpus
+    built = build_pairs(golden, list(texts), ranked) if pairs == "v1" else build_pairs_v2(golden, texts, ranked)
+    return CANDIDATES[candidate], built, texts, corpus
 
 
 @judge_app.command("probe")
@@ -411,13 +414,15 @@ def judge_run(
     candidate: str = typer.Argument(..., help="deepseek | qwen | gemini"),
     estimate_only: bool = typer.Option(False, "--estimate-only"),
     approve_cost: str = typer.Option("", "--approve-cost", help="Approval reference; required above the $2 gate."),
+    pairs_set: str = typer.Option("v1", "--pairs", help="v1 reference answers | v2 extractive (DEC-078)"),
 ) -> None:
     """All 240 pairs on one candidate judge. Estimated from its latest probe."""
-    from rag.eval.judge_check import estimate, judge_config, record_run, run_pairs, summarize
+    from rag.eval.judge_check import PAIRS_V1, PAIRS_V2, estimate, judge_config, record_run, run_pairs, summarize
     from rag.runner.cost import COST_GATE_USD
     from rag.runner.store import ResultsStore
 
-    (model, provider), pairs, texts, corpus = _judge_inputs(candidate)
+    (model, provider), pairs, texts, corpus = _judge_inputs(candidate, pairs_set)
+    version = PAIRS_V2 if pairs_set == "v2" else PAIRS_V1
     with ResultsStore() as store:
         row = store.conn.execute(
             "SELECT run_id, cost_actual_json FROM runs WHERE eval_tier='judge_check' AND name LIKE ? "
@@ -435,9 +440,11 @@ def judge_run(
         raise typer.BadParameter("--approve-cost is required: every paid run needs Krutik's go-ahead (DEC-053)")
     results, usage = run_pairs(pairs, texts, judge_config(model, provider))
     summary = summarize(results)
-    run_id = record_run(name=f"P3-04 judge check — {model} @{provider}", model=model, provider=provider, pairs=pairs,
-                        results=results, usage=usage, summary=summary, corpus=corpus, notes="P3-04 bake-off",
-                        cost_estimate=est["usd"], approval=approve_cost)
+    label = "" if pairs_set == "v1" else " [pairs v2]"
+    run_id = record_run(name=f"P3-04 judge check{label} — {model} @{provider}", model=model, provider=provider,
+                        pairs=pairs, results=results, usage=usage, summary=summary, corpus=corpus,
+                        notes=f"P3-04 bake-off, pairs {version}", cost_estimate=est["usd"], approval=approve_cost,
+                        pairs_version=version)
     typer.echo(json.dumps({"run_id": run_id, "usage": usage, **summary}, indent=2))
 
 

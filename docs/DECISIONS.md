@@ -3059,3 +3059,41 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
      the same v1 pairs.
 - **Evidence:** EXP-0054–0056 and their per-pair rows; five pairs read by hand.
 - **Revisit if:** Krutik picks option 2 or 3 — its outcome is a new entry, not an edit here.
+
+## DEC-078 — P3-04 pair set v2: "supported" built from the gold articles themselves; bar unchanged
+- **Date:** 2026-09-28
+- **Decided by:** Krutik chose to rebuild the supported set (DEC-077 option 2); Claude
+  designed the construction below, declared here before any v2 run.
+- **Status:** Active
+- **Why:** v1's supported pairs assumed WixQA reference answers are grounded in their gold
+  articles' text. EXP-0054–0056 showed that assumption fails for about half of golden_v1,
+  so criterion 2 measured the labels, not the judges (DEC-077). v1 stays recorded as a
+  failure; v2 is a new instrument, not a re-scoring of v1.
+- **Construction (`build_pairs_v2`, seed 20260928):** for each of the 80 answerable
+  golden_v1 questions, three pairs, **all judged against the same context — the question's
+  gold articles' full text**:
+  - **supported** — 3 consecutive sentences copied verbatim from one gold article;
+  - **unsupported** — 3 consecutive sentences copied from a far article (not gold, not in
+    the dense control's top 50);
+  - **hard_negative** — 3 consecutive sentences from the top-ranked non-gold article that
+    has an eligible window. Report-only, as before.
+  - A sentence is eligible when it has 6–60 words and occurs in **exactly one** corpus
+    article, so shared boilerplate can never make an unsupported pair true. Counted first:
+    all 80 questions have a gold window and a hard-negative window; 90.1% of distinct
+    sentences are unique; 5,157 of 6,221 articles have a window.
+  - The answer text and its source article are stored on every per-pair row.
+- **Unchanged:** the verdict (flag if faithfulness < 1.0), the judge path, the pins, and
+  **the DEC-076 bar — recall ≥ 0.95, supported pass rate ≥ 0.85, failures ≤ 12**. Nothing
+  about the bar is tuned after seeing v1.
+- **What v2 proves and does not:** a judge that clears it verifies literal support and
+  rejects foreign content in the same register. It does **not** measure how the judge
+  treats paraphrase, which is what generated answers do. That limitation goes in README
+  and NARRATIVE with the result.
+- **Run order and money:** DeepSeek first — the cheapest measured candidate (EXP-0054,
+  $0.00244/pair) — approved by Krutik with option 2 at "about $0.60"; `--estimate-only`
+  gives $0.6066, and v1's estimate ran 24% low for this judge. If it clears, it is the
+  production judge by DEC-076's selection rule and no other candidate is run. If it does
+  not, Qwen (est. $0.7074) and Gemini (est. $3.6627) each need a new go-ahead.
+- **Evidence:** No measured data for the construction; judgment call, declared in advance.
+- **Revisit if:** a hand read of flagged v2 supported pairs shows the flag firing on a
+  genuine extraction — which would point at the strict "< 1.0" rule rather than the labels.

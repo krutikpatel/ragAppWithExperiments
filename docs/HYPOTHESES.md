@@ -1104,3 +1104,15 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      trusted least, for the wrong reason: I doubted the judges, not the "known supported"
      set.
   3. Qwen has the most failures → **confirmed**: 22, against 1 and 0.
+
+## H-038 — DeepSeek clears the v2 bar
+- **Date written:** 2026-09-28, before the v2 run (DEC-078).
+- **Source:** Claude.
+- **Hypothesis:** on v2, DeepSeek keeps recall ≥ 0.95 and its supported pass rate rises
+  above 0.85, with failures ≤ 12. Reasoning: in v1 it scored 1.0 on the supported pairs
+  whose answers were actually in the article (the 22 all three judges passed), and v2's
+  supported answers are verbatim article text.
+- **The part I trust least:** the strict flag. Ragas splits an answer into statements
+  and rewrites them; a rewritten statement can drift from the text (a pronoun resolved
+  wrongly, a qualifier dropped) and be judged unsupported even though the source sentence
+  was copied. If the pass rate lands between 0.70 and 0.85, that is where I would look.
