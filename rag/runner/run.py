@@ -54,6 +54,7 @@ from rag.runner.cost import (
     format_estimate,
     format_run_estimate,
 )
+from rag.runner.model_check import format_checks, verify_config_models
 from rag.runner.promoted import check_split_policy, config_diff, load_promoted
 from rag.retrieval.query_transform import TransformingRetriever, build_transform
 from rag.runner.registry import build_reranker, build_retriever, reranker_class, retriever_class
@@ -360,6 +361,11 @@ def _run(
             + ". The run has not started and nothing was recorded. Get approval, record it in "
             "docs/DECISIONS.md, and re-run with --approve-cost '<DEC-NNN or reason>' (P2-06)."
         )
+    # P3-02: a retired slug or a provider that stopped serving it fails here, before the
+    # first paid call, rather than as a 404 halfway through the questions.
+    model_checks = verify_config_models(config)
+    if model_checks:
+        print(format_checks(model_checks))
     if index is None:
         index, chunk_text = build_index(config, chunker, generation_cache=generation_cache)
     chunking_profile = index.profile(corpus_docs)

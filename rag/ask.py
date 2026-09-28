@@ -17,6 +17,7 @@ from rag.corpus.loader import load_corpus
 from rag.eval.generation_metrics import deterministic_metrics, find_urls
 from rag.generation.base import GeneratedAnswer, GeneratorConfig, OpenRouterGenerator
 from rag.runner.config import RunConfig, load_config_file
+from rag.runner.model_check import configured_models, verify_models
 from rag.runner.registry import build_retriever
 from rag.runner.run import build_index
 
@@ -60,6 +61,8 @@ def answer_question(
         reference = str(row["answer"])
     assert question is not None
 
+    # P3-02: `ask` never judges, so the judge's slugs are not its concern.
+    verify_models([r for r in configured_models(config) if not r.role.startswith("judge")])
     corpus = load_corpus()
     index, chunk_text = build_index(config)
     retriever = build_retriever(

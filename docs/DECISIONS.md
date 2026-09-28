@@ -2756,3 +2756,65 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
     two splits never sharing an id — true today (0 of 200).
 - **Revisit if:** any cache is added to the answer or judge path (re-run this audit on
   the first run that uses it), or a new held-out split is built.
+
+## DEC-071 — P3-02: Phase 2 carry-overs resolved, and the Phase 3 baseline frozen at `phase3-baseline`
+- **Date:** 2026-09-27
+- **Decided by:** Claude. The story fixes the shape of this (resolve carry-overs, tag,
+  record slugs); the disposition of the one unrun carry-over — moving it rather than
+  buying it — is my call, made without Krutik in the loop, and is flagged to him in chat.
+- **Status:** Active
+- **Context:** P3-02 needs one fixed reference point for every later CI comparison, and
+  the Phase 3 non-goals say Phase 2 carry-overs either finish before the freeze or go to
+  `OPEN_QUESTIONS.md` — never after.
+- **Carry-overs:**
+  1. **The `top_k=10` run** — *run and recorded.* EXP-0051 (`run_20260927_235029_2216`)
+     answered OQ-040: `gold_in_context` +0.150, citation precision −0.0851 against an MDD
+     of 0.080. Not promoted.
+  2. **The reranker headroom diagnostic on the recall@5 → recall@20 gap** — *not run;
+     stays in `OPEN_QUESTIONS.md` as OQ-038* (status note appended there). It is a paid
+     run (roughly $0.20 + $0.90, OQ-038's own estimate) on an axis that returned "no
+     measurable difference" at every depth (EXP-0024), and Phase 3 does not reopen
+     retrieval axes. Buying it would need Krutik's go-ahead (DEC-053) and would not
+     change what the gate protects.
+  3. Other open Phase 2 questions (OQ-034, OQ-035, OQ-041–OQ-046) are not carry-overs of
+     a named run; they stay open with their decision rules, unchanged.
+- **Options considered for the freeze:**
+  1. Freeze `promoted.yaml` alone — rejected: it is Tier 1 and names no generator, judge
+     or prompt (OQ-042), so it cannot pin what Phase 3's answer-side gate compares.
+  2. Freeze `promoted.yaml` **and** the Tier 2 control `configs/baseline_dense_tier2.yaml`,
+     which is the same retrieval plus `baseline_answer@v1`, the generator and the judge —
+     chosen.
+- **Decision:** tag `phase3-baseline` on the commit that lands this entry. Recorded in
+  `ci/phase3_baseline.yaml`:
+  - `promoted.yaml`: file sha256 `229f22ec…50ee`, `config_hash` 7c99bc8e9a88e878,
+    `identity_hash` 70610a6119fb9223.
+  - Tier 2 control: `config_hash` 86cd401cbdac80c7; reference runs
+    `run_20260913_205058_dc03` (dev) and `run_20260913_060733_6a9b` (unanswerable).
+  - Prompt `baseline_answer@v1`, content hash `sha256:a5e9b4d9…61ac`.
+  - Models, each verified on OpenRouter **2026-09-27** by `rag models verify`:
+    embedder `qwen/qwen3-embedding-8b` pinned to DeepInfra; generator `openai/gpt-5-nano`
+    (unpinned); judge `openai/gpt-oss-120b` with provider order [Cerebras, Groq]; judge
+    embedder `qwen/qwen3-embedding-8b`.
+  - Corpus hash, `norm-v1`, dev split hash, Ragas 0.4.3.
+- **The judge slug is still the DEC-018 placeholder.** It is recorded because it is what
+  the Tier 2 control runs. P3-04 is its validation; P3-04 allows one judge change, and
+  that change would be a new version of the record and a new DEC entry, not an edit.
+  Choosing the production judge is Krutik's call (CLAUDE.md section 10) and is open.
+- **Startup check:** `rag/runner/model_check.py`. Before the first paid call of every run
+  (after the free estimate and the cost gate, before the retriever is built), and at the
+  start of `rag ask`, each configured slug is probed on `GET /models/<id>/endpoints`. A
+  404 or a hard-pinned provider missing from the served list raises
+  `ModelResolutionError` naming the slug; nothing has been spent. OpenRouter being
+  unreachable is a separate `ModelCheckUnavailable` — an infrastructure failure, not a
+  configuration one (P3-10 needs that distinction). The judge needs one provider of its
+  order, because it is sent with fallbacks allowed.
+- **Evidence:** EXP-0051 for carry-over 1; `rag models verify` output of 2026-09-27;
+  hashes from `RunConfig`, `load_prompt` and `shasum -a 256`. No new measurement.
+- **Consequences:**
+  - `tests/test_model_check_p3_02.py` asserts the record matches the files it names. A
+    change to `promoted.yaml`, the Tier 2 control or the answer prompt fails the suite
+    until the record is re-versioned under a new DEC.
+  - Every run now makes one free HTTP GET per distinct slug before it spends. A run with
+    no hosted model (the toy smoke configs) makes none.
+- **Revisit if:** P3-04 changes the judge; any slug stops resolving; or Krutik wants
+  OQ-038 bought before the gate is built (the tag would then move, with a new entry).

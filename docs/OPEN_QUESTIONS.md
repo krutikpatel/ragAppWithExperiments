@@ -581,6 +581,10 @@ separation between the ratios. Roughly $0.20 and $0.90. **Blocked: the OpenRoute
 account has no credit (MIS-031).**
 **Status:** open, **not queued** — cut from P2-10 by DEC-060. Returns if P2-13 shows
 context depth is the binding constraint.
+**Status note (2026-09-27, DEC-071):** the Phase 3 handover names this as a Phase 2
+carry-over ("the reranker headroom diagnostic on the recall@5→recall@20 gap"). It was
+**not run before the `phase3-baseline` freeze** and stays open here, unqueued. Phase 3
+does not reopen retrieval axes.
 
 ## OQ-039 — Should the cost gate check the account balance, not just the estimate?
 Every cost control here is per-run: the $2 gate, the estimate, the approval, the

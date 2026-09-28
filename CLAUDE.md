@@ -479,7 +479,9 @@ rag/
                     stats, actual cost), store.py (SQLite runs + run_questions),
                     diff.py (rag diff), audit.py (`rag audit provenance` — P3-01: were two
                     runs independent? shared ids, cache reuse, copied answers; no model
-                    calls), compare.py (rag compare — paired bootstrap CI +
+                    calls), model_check.py (P3-02: every configured slug and pinned
+                    provider must resolve on GET /models/<id>/endpoints before a run's
+                    first paid call; `rag models verify <config>`), compare.py (rag compare — paired bootstrap CI +
                     permutation p per question, per slice, P2-01), promoted.py (the
                     promoted.yaml pointer, P2-04 split policy, `rag promote`, resolves
                     `promoted` as a run ref), cost.py (PricingTable over
@@ -542,6 +544,10 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     smoke_toy*.yaml, smoke_p2_03_llm_rewrite.yaml,
                     smoke_p2_10_rerank.yaml and tier2_smoke.yaml are harness smoke
                     tests, not experiments.
+ci/                 Phase 3 CI gate files. phase3_baseline.yaml records what the
+                    `phase3-baseline` tag froze — configs, prompt, hashes and model slugs
+                    with their OpenRouter verification date (P3-02, DEC-071); a test
+                    fails if the files it names drift from it
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
                     chunker_id, model_id, revision, prefix_convention).

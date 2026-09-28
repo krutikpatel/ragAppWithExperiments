@@ -326,6 +326,30 @@ def runs_test_openings() -> None:
         typer.echo(f"  {opening['timestamp']}  {opening['run_id']}  {opening['notes'] or ''}")
 
 
+models_app = typer.Typer(help="Configured model checks (P3-02).", no_args_is_help=True)
+app.add_typer(models_app, name="models")
+
+
+@models_app.command("verify")
+def models_verify(
+    config_paths: list[str] = typer.Argument(..., help="One or more config YAMLs."),
+) -> None:
+    """Check every model slug (and pinned provider) the configs name still resolves on
+    OpenRouter. Free — no API key, no model call. Exits 1 on any failure."""
+    from rag.runner.config import load_config_file
+    from rag.runner.model_check import ModelResolutionError, format_checks, verify_config_models
+
+    failed = False
+    for path in config_paths:
+        typer.echo(path)
+        try:
+            typer.echo(format_checks(verify_config_models(load_config_file(path))))
+        except ModelResolutionError as exc:
+            typer.echo(str(exc))
+            failed = True
+    raise typer.Exit(1 if failed else 0)
+
+
 audit_app = typer.Typer(help="Provenance audits over the results store (P3-01).", no_args_is_help=True)
 app.add_typer(audit_app, name="audit")
 
