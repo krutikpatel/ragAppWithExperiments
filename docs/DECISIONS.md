@@ -3004,3 +3004,26 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** no measured data yet; the design is a judgment call.
 - **Revisit if:** a probe shows a candidate cannot return structured output on its pinned
   host, or fails more than one call in six.
+
+## DEC-076 — The P3-04 pass/fail bar, declared before the bake-off runs
+- **Date:** 2026-09-28
+- **Decided by:** Joint — proposed by Claude, approved by Krutik in chat before any full run.
+- **Status:** Active
+- **The bar**, on the 160 gating pairs (80 supported, 80 unsupported; DEC-075), with the
+  flag "unsupported if faithfulness < 1.0":
+  1. **Unsupported-flag recall ≥ 0.95** — at least 76 of 80 clearly unsupported pairs flagged.
+  2. **Supported pass rate ≥ 0.85** — at least 68 of 80 expert answers with their own gold
+     articles NOT flagged. Looser than (1) on purpose: the strict flag fires on one
+     unsupported claim, and long procedural expert answers can paraphrase their article.
+  3. **Judge failures ≤ 5% of all 240 pairs** — at most 12.
+  Hard negatives, accuracy and AUROC are reported and never part of the bar.
+- **Selection:** the cheapest candidate, by measured `cost_actual_usd` on its full run, that
+  clears all three becomes the production judge. If none clears the bar, judged metrics
+  are **report-only** in CI (P3-09), one judge change (prompt or model) is allowed, and it
+  is re-measured once. The outcome is recorded either way.
+- **Approval:** Krutik, in chat 2026-09-28, on the estimates DeepSeek $0.4739, Qwen $0.5526,
+  Gemini $2.8614 (above the $2 gate; approved explicitly). Balance $11.01.
+- **Evidence:** No measured data for the thresholds; judgment call, made before the data.
+- **Revisit if:** a candidate misses only (2) and the misses read as paraphrase rather than
+  unsupported content — which would say the strict flag, not the judge, is the problem,
+  and that belongs to P3-05's definition, not to this bar.

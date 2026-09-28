@@ -1077,3 +1077,19 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
     (p = 0.119).
   - **The "surprise" I named did not happen:** 100 docs improved nothing; it lost 3
     questions and gained 0.
+
+## H-037 — All three judges clear the unsupported-flag bar; the supported pass rate is where they differ
+- **Date written:** 2026-09-28, before the three P3-04 full runs (DEC-076).
+- **Source:** Claude.
+- **Hypothesis:**
+  1. All three clear **recall ≥ 0.95** on clearly unsupported pairs. Random articles far
+     from the question give a judge nothing to hold on to; every probe scored those 0.0.
+  2. The **supported pass rate** is the criterion that separates them, and at least one
+     candidate falls below 0.85 on it. The strict flag needs *every* claim supported, and
+     reference answers are long procedures written by people who knew the product beyond
+     the article.
+  3. Qwen's failure count is the highest of the three. It was the only probe with a failed
+     call (1 of 6); at that rate it would exceed 12 of 240, so I expect it close to or over
+     the failure bar.
+- **The part I trust least:** (2). Two probe questions put both DeepSeek and Gemini at 1.0
+  on supported pairs, which is weak evidence in either direction.
