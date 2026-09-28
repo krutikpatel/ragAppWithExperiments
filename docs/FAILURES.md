@@ -283,6 +283,65 @@ Generalisable form: a diversity technique assumes the documents a question needs
 and the assumption inverts. Any future diversity-based method (and P2-12's multi-query
 expansion has a related shape) should be checked against this measurement first.
 
+### F18 — The answer applies the article to the user's own case, and that part is unsupported
+Stage: `generation`. Not an error in the usual sense: the generator does what a support
+agent would, and restates the steps with the user's specifics. No help article names the
+user's domain or product, so the judge marks those claims unsupported.
+
+| Run | Question id | Claim | Fixed by |
+|---|---|---|---|
+| EXP-0058 | `926d5b0f` | "…submit the homepage URL of www.momsroots.com to search engines" | — |
+| EXP-0058 | `07e6923e` | "The user can ensure the sample still ships when the main product does not qualify." | — |
+| EXP-0058 | `c407f4b9` | "The appropriate payments-related role allows the developer to work on the integration…" | — |
+
+### F19 — Conversational filler and navigation talk counted as claims
+Stage: `generation`. Politeness, sign-posting and "see the other article" sentences are
+split into statements that no article asserts.
+
+| Run | Question id | Claim | Fixed by |
+|---|---|---|---|
+| EXP-0058 | `6781a9f3` | "The user is thanked for using automations." | — |
+| EXP-0058 | `294aab11` | "Related articles provide a general approach." | — |
+| EXP-0058 | `525df6df` | "If more details are needed on any single option, specify the option to set up first." | — |
+
+### F20 — Procedural drift: a step paraphrased, implied or renamed
+Stage: `generation`. The answer says "Open Wix Editor" where the article starts inside
+it, or names a panel ("Plan card settings") the article calls something else.
+
+| Run | Question id | Claim | Fixed by |
+|---|---|---|---|
+| EXP-0058 | `7ca21618` | "Open Wix Editor." | — |
+| EXP-0058 | `f5ba9bc3` | "In the Plan card settings, find the ribbon option." | — |
+| EXP-0058 | `f3709b4f` | "Then confirm the default business hours are applied to the booking interface of the live site." | — |
+
+### F21 — A factual error against the context the generator was given
+Stage: `generation`. The rarest pattern and the one the faithfulness eval exists for: the
+answer contradicts or misstates its own evidence.
+
+| Run | Question id | Claim | Context says | Fixed by |
+|---|---|---|---|---|
+| EXP-0058 | `5c3ab38e` | "Wix Events automatically adds custom fields to an invoice for an event." | it is **not possible** to add them automatically | — |
+| EXP-0058 | `886b25a0` | "…the user may need to ensure the room is already set up within a hotel first." | add the room without the address, come back after setting up the hotel | — |
+| EXP-0058 | `d3db98e7` | "Checkout Preview simulates a purchase without charging customers." | the site owner is not charged | — |
+
+### F22 — Claim-splitting artifact: the judge's rewrite, not the answer's meaning
+Stage: `judging`. Ragas rewrites the answer into standalone statements; some rewrites are
+garbled or turn the user's intent into a claim. A measurement error, not a system error.
+
+| Run | Question id | Claim as rewritten | Fixed by |
+|---|---|---|---|
+| EXP-0058 | `a951bb42` | "The website owner upgraded the site of the website owner." | — |
+| EXP-0058 | `d88d9427` | "The user wants to reveal the full text." | — |
+
+### F23 — The answer cites a document id that exists nowhere in the corpus
+Stage: `generation`. Caught by citation integrity (P3-05). A zero-tolerance failure under
+P3-09.
+
+| Run | Question id | Cited id | Fixed by |
+|---|---|---|---|
+| EXP-0058 | `07e6923e` | `e0d9a442…` — not a corpus id | — |
+| EXP-0058 | `f1ad8664` | `1294bb65…` (63 characters) — not a corpus id | — |
+
 ## Counts by run
 
 | Run | F1 answered on miss | F2 answered unanswerable | F3 refused with gold | F4 neighbour cited | F5 step cov 0 with gold | F6 detector miss | F7 prompt echo |
@@ -327,3 +386,9 @@ Axis 1 (chunking), same method:
 | EXP-0023 (control re-embed) | — | 2 (F13, the floor) |
 
 "Not swept" means the category was found by reading a sample, not counted over the run.
+
+P3-06 (EXP-0058), unsupported claims by pattern — a seeded sample of 30 of 144, read by hand:
+
+| Run | F18 user's case | F19 filler | F20 procedural drift | F21 factual error | F22 split artifact |
+|---|---|---|---|---|---|
+| EXP-0058 (dev sub100, 92 answered) | 8 | 8 | 7 | 3 | 4 |

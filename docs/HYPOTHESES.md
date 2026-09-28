@@ -1142,3 +1142,13 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   articles are complete enough, the without-gold answers may be as grounded as the
   with-gold ones — in which case "answered without gold" is not a grounding problem at all,
   only a labelling one (OQ-047).
+- **Resolution (2026-09-28, EXP-0058 `run_20260928_175207_f723`):**
+  1. Partially supported is the largest bucket without gold → **confirmed**: 21 of 27.
+  2. Gold in context has a higher fully-supported share → **right direction, not a
+     finding**: 0.385 vs 0.222, difference CI [−0.034, +0.359].
+  3. Fewer than half of the 14 no-gold answers fully supported → **confirmed**: 4 of 14.
+  - **The part I trusted least came true.** Without gold, answers were about as grounded
+    as with it: mean faithfulness 0.854 vs 0.866, CI [−0.045, +0.069]. "Answered without
+    gold" is not measurably a grounding problem on this sample — the near-neighbour
+    articles carry most of what the answers say. And "partially supported" turned out to
+    mean mostly style, not invention: 3 of 30 unsupported claims read were factual errors.

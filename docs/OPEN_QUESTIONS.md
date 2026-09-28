@@ -775,3 +775,11 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   golden slice that are examples or hypotheticals, by hand on a seeded sample of 30. If
   more than a quarter are, propose a v2 definition with its own DEC — never by editing
   the declared one mid-phase.
+- **Evidence, 2026-09-28 (EXP-0058):** of 30 unsupported claims read from 92 real answers,
+  only **3 are factual errors**; 8 apply the article to the user's case, 8 are filler, 7
+  are paraphrased steps, 4 are claim-splitting artifacts (FAILURES F18–F22). The decision
+  rule above ("more than a quarter are examples or hypotheticals") was written for one
+  kind of style effect; the measured share of *all* style effects is 27 of 30. It stays
+  open until the rule's own count is done, but the direction is clear: the strict
+  unsupported-answer rate (0.663 on this run) measures mostly style. Any v2 definition
+  needs its own DEC and does not change P3-05's declared one mid-phase.

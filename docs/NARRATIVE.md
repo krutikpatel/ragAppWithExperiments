@@ -964,6 +964,30 @@ What this proves is narrow, and I have written it down as narrowly: the judge ve
 literal support and rejects foreign content. How it treats paraphrase, which is what a
 generated answer is, remains unmeasured, and no human checked it.
 
+### Were the answers written without their evidence invented? (EXP-0058)
+
+Phase 2 left one number unexplained: about a quarter of questions were answered with the
+gold article missing from the context. I ran the new faithfulness evaluation over the 92
+answers the Phase 2 control had stored, judging every claim against the exact context the
+generator had seen ($0.31, EXP-0058).
+
+The answers written without gold were not invented. Their mean faithfulness was 0.854,
+against 0.866 for answers that had their gold article, a gap well inside its uncertainty
+(95% CI −0.045 to +0.069). None of the 92 answers, in either group, was wholly unsupported.
+The retriever had handed the generator near-neighbour articles, and those carried most of
+what the answers said.
+
+The more useful finding was underneath. Two thirds of all answers had at least one
+unsupported claim, which sounds alarming until you read the claims. In a sample of 30,
+three were real errors: one answer said Wix Events adds custom fields to invoices
+automatically, where its own article said that was not possible. The other 27 were the
+answer talking to the user: restating the steps with the user's own domain name, thanking
+them, paraphrasing a menu name, or an artifact of how the judge splits sentences into
+claims. The strict metric I had declared before any data, "one unsupported claim makes the
+answer unsupported", mostly measures style on this system. I left the definition alone,
+because changing a metric after seeing its value is exactly the move this project exists
+to avoid, and recorded the question instead (OQ-048).
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control
