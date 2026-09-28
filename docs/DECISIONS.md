@@ -2972,6 +2972,9 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   | `deepseek/deepseek-v4.1-flash` | DeepInfra | 0.14 / 0.42, fp8 | Krutik: 99.99% uptime, structured outputs; the cheapest host (InferenceNet) does not state quantization and showed 94% uptime |
   | `qwen/qwen3.8-flash` | Alibaba | 0.15 / 0.47 | the only host |
   | `google/gemini-3.8-flash` | Google AI Studio | tiered, from 0.375 / 1.875 | Claude: same listed price as Vertex ("Google"); AI Studio is the host EXP-0011 already used for a Gemini model |
+  > **CORRECTED on 2026-09-28** (same day, from the probe `run_20260928_050025_932e`): the
+  > probe was billed at the **$0.75 / $3.75** tier — 15,105 × 0.75 + 10,245 × 3.75 per Mtok =
+  > $0.0497, exactly the recorded cost. The bottom tier quoted in the row does not apply.
 
   Families `deepseek`, `qwen`, `google` — none is the generator's lab (DEC-073). Qwen is
   also the lab of the retrieval embedder and the answer-relevance embedder; the P0-07
