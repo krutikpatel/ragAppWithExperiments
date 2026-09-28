@@ -223,6 +223,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
     the stored-output test counts both. Five parsers here dropped the unrecognised silently.
     (MIS-045)
 
+56. **Lint a workflow with `actionlint` before pushing it.** `yaml.safe_load` parses a line
+    that YAML has silently truncated at ` #`. (MIS-046)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
