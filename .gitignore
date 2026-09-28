@@ -58,3 +58,6 @@ temp
 .vscode/
 *.swp
 results/
+
+# P3-08: rag ci-eval artifacts (uploaded by CI, not committed)
+ci/out/

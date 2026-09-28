@@ -406,6 +406,9 @@ rag/
                     (norm-vN), loader.py (the ONLY runtime read path),
                     profile.py (`rag corpus profile` — lengths, one-chunk fit,
                     procedure-block cuts; a characterization, not an experiment)
+  call_cache.py     P3-08 opt-in cache of QUERY embeddings and generated answers, switched on
+                    only inside `rag ci-eval` (DEC-084); experiments always call. Run rows
+                    made under it record their hits/misses in `metrics_json.call_cache`
   dataset/          adapter.py (DatasetAdapter, QARow), wixqa.py (WixQAAdapter),
                     golden.py (P3-03: the seeded golden CI slice, `rag data golden`),
                     loader.py (reads frozen splits, and `golden_vN` via golden.py — DEC-082;
@@ -497,7 +500,11 @@ rag/
                     decision_log.py (machine-appended tables in DECISIONS.md, bounded
                     at the next heading — MIS-018), test_openings.py and
                     cost_approvals.py (the openings and approvals rows),
-                    registry.py (retrievers by name), subsample.py (fixed Tier 2 subsample)
+                    registry.py (retrievers by name), subsample.py (fixed Tier 2 subsample),
+                    ci_eval.py (P3-08 `rag ci-eval`: dev retrieval + golden generation +
+                    faithfulness under the call cache, compared to ci/baseline.json by
+                    exact McNemar and measured MDDs; exit 0/1/2/3 = pass/fail/error/needs
+                    approval; `rag ci-baseline update --reason DEC-NNN`, DEC-084)
   embedding/        base.py — Embedder interface with explicit input_type (query |
                     passage) and a per-family prefix table that REFUSES unknown
                     models; backends: sentence_transformers (local, pinned revision)
@@ -562,7 +569,11 @@ ci/                 Phase 3 CI gate files. phase3_baseline.yaml records what the
                     latest baseline tag froze — v2, `phase3-baseline-v2`: configs, prompt,
                     golden slice, hashes and model slugs with their OpenRouter verification
                     date (DEC-080; v1 at tag `phase3-baseline`, DEC-071); a test
-                    fails if the files it names drift from it
+                    fails if the files it names drift from it. DETECTION_FLOOR.md (P3-07,
+                    DEC-083). gate.yaml — the rules `rag ci-eval` applies (DRAFT until
+                    P3-09). baseline.json — what CI compares to, written only by
+                    `rag ci-baseline update --reason DEC-NNN`. out/ is GITIGNORED (the
+                    ci-eval artifacts)
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
                     chunker_id, model_id, revision, prefix_convention).

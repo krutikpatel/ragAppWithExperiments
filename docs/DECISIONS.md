@@ -3256,3 +3256,45 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** EXP-0059's eight runs; the retrieval table from `mcnemar_exact_p`.
 - **Revisit if:** the judge, host, generator, prompt or golden slice changes (the floors are
   for this family only), or P3-12's drills show a planted regression inside the floor.
+
+## DEC-084 — P3-08: how `rag ci-eval` works, and the opt-in call cache it needs
+- **Date:** 2026-09-28
+- **Decided by:** Claude (implementation of P3-08), not yet reviewed by Krutik. The gate
+  rules in `ci/gate.yaml` are a DRAFT; P3-09 declares them.
+- **Status:** Active
+- **What it does:** `rag ci-eval --baseline ci/baseline.json` runs (1) Tier 1 retrieval on
+  all of `dev` with `configs/promoted.yaml`, (2) Tier 2 generation on `golden_v1` with
+  `configs/golden_generate_v2.yaml`, (3) `rag faithfulness` on those answers with the v2
+  judge, then (4) compares to the baseline and writes `ci/out/ci_eval.json` (the artifact)
+  and `ci/out/ci_eval.md` (the PR comment). Exit codes: **0 pass, 1 gated quality failure,
+  2 error, 3 needs approval** — an outage or a retired slug is 2, never 1 (P3-10).
+- **Choices the story left open:**
+  1. **An opt-in call cache** (`rag/call_cache.py`, `results/ci_call_cache.sqlite`):
+     query embeddings and generated answers are replayed **only inside `ci-eval`**, so an
+     unchanged pipeline is near-free and compares equal to its baseline. Experiments never
+     see it — P1-11 and P3-07 measure noise from fresh calls. Keys cover everything that
+     shapes the output (embedding: model, pinned host, prefix, dimensions, prefixed text;
+     answer: model, prompt ref, temperature, max_tokens, reasoning effort, the full rendered
+     prompt). Passages are never cached (they live in the index). Every run row made under
+     it records its own hits and misses (`metrics_json.call_cache`), so a replay never
+     passes for a fresh measurement. The judge uses its own cache (DEC-081).
+  2. **The baseline carries per-question outcomes** (dev recall@5, golden recall@5, golden
+     answer flags). The comparison needs no results store, which a CI machine does not have.
+  3. **Retrieval is gated with the exact McNemar test** at the gate's α — the same test
+     `ci/DETECTION_FLOOR.md` is computed from. Lost and gained ids are always listed.
+  4. **Judged metrics fail only beyond the MDD** of the family the faithfulness run matches.
+     **No matching family ⇒ FAIL (fail closed)**: a changed judge cannot be gated until
+     P3-07 is re-measured for it.
+  5. **Hard fails in the draft:** empty answer, judge failure, a changed question set, a
+     changed provenance (corpus, splits, judge, judge prompt version). Citation integrity is
+     **report-only** in the draft (DEC-083).
+  6. **`rag ci-baseline update --from ci/out/ci_eval.json --reason DEC-NNN`** writes the
+     baseline, and refuses without an existing DEC entry or from a run with empty answers
+     or judge failures. P3-11 adds the ratchet (the PR rule and the drift job).
+- **Cost of one run, estimated:** uncached — generation $0.03, query embeddings under
+  $0.001, judging ~$0.30 at EXP-0059's measured rate; cached (nothing changed) — near zero.
+  The draft budget is `ci_budget_usd: 1.00`: above it the command stops before spending
+  (exit 3) unless `--approve-cost` is given.
+- **Evidence:** offline tests; no real ci-eval run yet — the first one creates the baseline.
+- **Revisit if:** a cached run and a fresh run of the same config disagree on a gated
+  metric beyond its MDD — the cache key would be missing something that shapes the output.

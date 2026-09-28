@@ -122,9 +122,26 @@ class Generator(ABC):
         return self._complete(prompt_text)
 
     def generate(self, question: str, context: str) -> GeneratedAnswer:
+        from rag.call_cache import CallCache, active
+
         prompt = load_prompt(self.config.prompt_id, self.config.prompt_version)
+        rendered = prompt.render(question=question, context=context)
         started = time.perf_counter()
-        completion = self._complete(prompt.render(question=question, context=context))
+        cache = active()  # only inside `rag ci-eval` (DEC-084); experiments always call
+        if cache is None:
+            completion = self._complete(rendered)
+        else:
+            identity = {"model": self.config.model, "prompt": prompt.ref, "temperature": self.config.temperature,
+                        "max_tokens": self.config.max_tokens, "reasoning_effort": self.config.reasoning_effort}
+            key = CallCache.completion_key(identity, rendered)
+            hit = cache.get_completion(key)
+            if hit is not None:
+                cache.stats["completion_hits"] += 1
+                completion = Completion(**hit)
+            else:
+                cache.stats["completion_misses"] += 1
+                completion = self._complete(rendered)
+                cache.put_completion(key, completion.__dict__)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         return GeneratedAnswer(
             text=completion.text,

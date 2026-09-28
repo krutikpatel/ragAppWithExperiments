@@ -698,6 +698,12 @@ def _execute(
     # build the index, so the chunker is a call site like the retriever and reranker.
     chunker: Chunker | None = None,
 ) -> dict[str, Any]:
+    # DEC-084: when `rag ci-eval` switched the call cache on, this run's share of its hits
+    # and misses goes on the row, so a replayed run never passes for a fresh measurement.
+    from rag.call_cache import active as active_call_cache
+
+    call_cache = active_call_cache()
+    call_cache_before = dict(call_cache.stats) if call_cache is not None else None
     retriever = build_retriever(
         config.retriever,
         chunk_to_doc=index.chunk_to_doc,
@@ -1030,6 +1036,8 @@ def _execute(
         ]
     )
 
+    if call_cache is not None:
+        aggregate["call_cache"] = {k: call_cache.stats[k] - call_cache_before[k] for k in call_cache.stats}
     store.finish_run(
         run_id,
         status="VALID",

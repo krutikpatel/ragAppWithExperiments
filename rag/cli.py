@@ -381,60 +381,78 @@ def faithfulness_cmd(
 ) -> None:
     """P3-05: per-claim faithfulness of every stored answer, plus unsupported-answer,
     refusal, false-answer and citation-integrity rates, by stratum. Judge calls are cached."""
-    from pathlib import Path
+    from rag.eval.faithfulness import NeedsApproval, run_faithfulness
 
-    from rag.eval.faithfulness import (
-        REPORTS_DIR, JudgeCache, aggregate, estimate, evaluate, judge_identity, judge_prompt_version,
-        load_run, record, report_markdown,
-    )
-    from rag.eval.judge import RagasJudge
-    from rag.runner.config import load_config_file
-    from rag.runner.cost import COST_GATE_USD
-    from rag.runner.model_check import configured_models, verify_models
-    from rag.runner.run import _judge_config
-    from rag.runner.store import ResultsStore
+    try:
+        result = run_faithfulness(run_id, judge_config_path=judge_config, approve_cost=approve_cost,
+                                  no_cache=no_cache, limit=limit, estimate_only=estimate_only)
+    except NeedsApproval as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    est = result.estimate
+    typer.echo(f"*** P3-05 ESTIMATE: ${est['usd']:.4f} — {est['n_to_judge']} answers to judge, "
+               f"{est['n_cached']} cached, {est['n_refused']} refusals not judged, "
+               f"{est['context_words']:,} context words ({est['source']})")
+    if estimate_only:
+        return
+    typer.echo(json.dumps({"run_id": result.run_id, "report": str(result.report_path), "usage": result.usage,
+                           "cache": result.cache_stats, "by_stratum": result.metrics}, indent=2))
 
-    jconf = load_config_file(judge_config)
-    from dataclasses import replace
 
-    judge_cfg = replace(_judge_config(jconf), only=("faithfulness",))
-    identity, version = judge_identity(judge_cfg), judge_prompt_version()
-    with ResultsStore() as store:
-        meta, inputs = load_run(run_id, store)
-        if limit:
-            inputs = inputs[:limit]
-        cache = None if no_cache else JudgeCache()
-        cached = set()
-        if cache is not None:
-            for i in inputs:
-                if not i.refused and cache.get(JudgeCache.key(identity, version, i.question, i.contexts, i.answer)):
-                    cached.add(i.question_id)
-        est = estimate(inputs, cached)
-        typer.echo(f"*** P3-05 ESTIMATE {judge_cfg.model} @{','.join(judge_cfg.provider_order)}: ${est['usd']:.4f} — "
-                   f"{est['n_to_judge']} answers to judge, {est['n_cached']} cached, {est['n_refused']} refusals not judged, "
-                   f"{est['context_words']:,} context words ({est['source']})")
-        if estimate_only:
-            return
-        if est["usd"] > 0 and not approve_cost.strip():
-            raise typer.BadParameter("--approve-cost is required for any uncached spend (DEC-053)")
-        if est["usd"] > COST_GATE_USD and "gate" not in approve_cost.lower() and "DEC-" not in approve_cost:
-            raise typer.BadParameter(f"estimate above the ${COST_GATE_USD:.2f} gate: cite the DEC or approval")
-        verify_models([r for r in configured_models(jconf) if r.role == "judge"])
-        judge = RagasJudge(judge_cfg)
-        rows = evaluate(inputs, judge, cache, identity=identity, prompt_version=version)
-        metrics = aggregate(rows)
-        stats = {"hits": cache.hits if cache else 0,
-                 "misses": cache.misses if cache else est["n_to_judge"], "bypassed": no_cache}
-        new_id = record(source_meta=meta, judge_cfg=judge_cfg, judge_config_path=judge_config, rows=rows,
-                        metrics=metrics, usage=judge.usage.as_dict(), cache_stats=stats, est=est,
-                        approval=approve_cost, store=store)
-        if cache is not None:
-            cache.close()
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    path = Path(REPORTS_DIR) / f"faithfulness_{new_id}.md"
-    path.write_text(report_markdown(run_id, new_id, rows, metrics))
-    typer.echo(json.dumps({"run_id": new_id, "report": str(path), "usage": judge.usage.as_dict(), "cache": stats,
-                           "by_stratum": metrics}, indent=2))
+@app.command("ci-eval")
+def ci_eval_cmd(
+    gate: str = typer.Option("ci/gate.yaml", "--gate"),
+    baseline: str = typer.Option("ci/baseline.json", "--baseline"),
+    out: str = typer.Option("ci/out", "--out", help="Where ci_eval.json and ci_eval.md are written."),
+    approve_cost: str = typer.Option("", "--approve-cost", help="Approval reference; lifts the CI budget."),
+    estimate_only: bool = typer.Option(False, "--estimate-only"),
+    allow_no_baseline: bool = typer.Option(False, "--allow-no-baseline", help="Record metrics when no baseline exists."),
+) -> None:
+    """P3-08: the whole quality gate. Exit 0 pass, 1 gated failure, 2 error, 3 needs approval."""
+    import traceback
+
+    from rag.runner.ci_eval import EXIT_ERROR, EXIT_NEEDS_APPROVAL, CIError, ci_eval
+
+    try:
+        code, doc = ci_eval(gate_path=gate, baseline_path=baseline, out_dir=out, approve_cost=approve_cost,
+                            estimate_only=estimate_only, allow_no_baseline=allow_no_baseline)
+    except CIError as exc:
+        typer.echo(f"ci-eval ERROR (not a quality failure): {exc}", err=True)
+        raise typer.Exit(EXIT_ERROR)
+    except Exception as exc:  # a provider outage ends as an error, never a quality fail (P3-10)
+        typer.echo(f"ci-eval ERROR (not a quality failure): {type(exc).__name__}: {exc}", err=True)
+        traceback.print_exc()
+        raise typer.Exit(EXIT_ERROR)
+    if code == EXIT_NEEDS_APPROVAL:
+        typer.echo(f"ci-eval NEEDS APPROVAL: {json.dumps(doc)}")
+    elif estimate_only:
+        typer.echo(json.dumps(doc, indent=2))
+    else:
+        from pathlib import Path
+
+        typer.echo(Path(out, "ci_eval.md").read_text())
+    raise typer.Exit(code)
+
+
+ci_baseline_app = typer.Typer(help="The CI baseline file (P3-08 / P3-11).", no_args_is_help=True)
+app.add_typer(ci_baseline_app, name="ci-baseline")
+
+
+@ci_baseline_app.command("update")
+def ci_baseline_update(
+    source: str = typer.Option("ci/out/ci_eval.json", "--from"),
+    reason: str = typer.Option(..., "--reason", help="An existing DEC id in docs/DECISIONS.md."),
+    baseline: str = typer.Option("ci/baseline.json", "--baseline"),
+) -> None:
+    """Write ci/baseline.json from a ci-eval result. Requires an existing DEC entry."""
+    from rag.paths import DOCS_DIR
+    from rag.runner.ci_eval import CIError, update_baseline
+
+    try:
+        b = update_baseline(source=source, reason=reason, baseline_path=baseline,
+                            decisions_path=str(DOCS_DIR / "DECISIONS.md"))
+    except CIError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"{baseline} <- {source} ({reason}); runs {b['result']['runs']}")
 
 
 judge_app = typer.Typer(help="P3-04 synthetic judge sanity check.", no_args_is_help=True)

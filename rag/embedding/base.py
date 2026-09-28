@@ -156,9 +156,29 @@ class Embedder(ABC):
         """Backend call on already-prefixed texts. One vector per input, in order."""
 
     def embed_texts(self, texts: list[str], *, input_type: InputType) -> list[list[float]]:
-        """Embed with the family's prefix for `input_type` applied to every text."""
+        """Embed with the family's prefix for `input_type` applied to every text.
+
+        Query embeddings go through the opt-in call cache when `rag ci-eval` switched it
+        on (DEC-084); passages never do — they live in the dense index."""
+        from rag.call_cache import CallCache, active
+
         prefixed = [self.prefix.apply(t, input_type) for t in texts]
-        vectors = self._embed(prefixed)
+        cache = active() if input_type == "query" else None
+        if cache is None:
+            vectors = self._embed(prefixed)
+        else:
+            identity = {"model": self.config.model, "pinned": self.pinned_identity,
+                        "prefix": self.prefix.name, "dimensions": getattr(self.config, "dimensions", None)}
+            keys = [CallCache.embedding_key(identity, t) for t in prefixed]
+            found = [cache.get_embedding(k) for k in keys]
+            todo = [i for i, v in enumerate(found) if v is None]
+            fresh = self._embed([prefixed[i] for i in todo]) if todo else []
+            for i, vector in zip(todo, fresh, strict=True):
+                cache.put_embedding(keys[i], vector)
+                found[i] = vector
+            cache.stats["embedding_hits"] += len(texts) - len(todo)
+            cache.stats["embedding_misses"] += len(todo)
+            vectors = found
         if len(vectors) != len(texts):
             raise RuntimeError(f"embedder returned {len(vectors)} vectors for {len(texts)} inputs")
         return vectors

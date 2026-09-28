@@ -1,0 +1,45 @@
+# ci/gate.yaml — the rules `rag ci-eval` applies.
+#
+# STATUS: DRAFT (P3-08, DEC-084). P3-09 declares the rules, with a DECISIONS.md entry,
+# before the first gated PR, and sets `status: declared`. Until then `rag ci-eval` runs
+# these and labels its verdict DRAFT. Every threshold below comes from a measurement,
+# not a guess: α from DEC-082, MDDs from `rag/eval/noise_floor.py` (DEC-083).
+status: draft
+version: 0
+
+# What runs.
+configs:
+  dev_retrieval: configs/promoted.yaml            # Tier 1 on all of dev
+  golden: configs/golden_generate_v2.yaml         # Tier 2 generation on golden_v1
+  judge: configs/baseline_dense_tier2_v2.yaml     # judge fields for `rag faithfulness`
+
+# Spend: a run estimated above this stops with "needs approval" (P3-10).
+ci_budget_usd: 1.00
+
+alpha: 0.05
+noise_floor_family: golden-v1-deepseek
+
+# Retrieval: fail when the metric drops AND the paired test is significant at alpha.
+# Newly failed question ids are always listed, pass or fail.
+retrieval:
+  - {metric: strict_recall@5, run: dev, gating: true}
+  - {metric: strict_recall@5, run: golden, gating: false}
+
+# Judged / generated: fail when the change in the bad direction exceeds the MDD of the
+# noise-floor family the run matches. No matching family -> the metric cannot be gated
+# and the verdict is FAIL (fail closed): re-measure P3-07 first.
+judged:
+  - {metric: mean_faithfulness, better: higher, gating: true}
+  - {metric: unsupported_answer_rate, better: lower, gating: true}
+  - {metric: false_answer_rate, better: lower, gating: true}
+  - {metric: refusal_rate, better: lower, gating: false}
+  # DEC-083: identical runs invent 1-2 citation ids by chance, so zero tolerance would
+  # fail every build. Report-only until P3-09 decides.
+  - {metric: citation_integrity, better: higher, gating: false}
+
+# Deterministic hard fails, zero tolerance.
+hard_fails:
+  - empty_answer          # a generated answer with no text
+  - judge_failure         # a judged answer the judge could not score
+  - question_set_changed  # the run's question ids differ from the baseline's
+  - provenance_changed    # corpus, split, judge, generator or prompt differs from the baseline's

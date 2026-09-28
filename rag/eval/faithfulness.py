@@ -374,3 +374,74 @@ def record(*, source_meta: dict[str, Any], judge_cfg: Any, judge_config_path: st
     store.finish_run(run_id, status="VALID", metrics={"by_stratum": metrics, "usage": usage, "cache": cache_stats},
                      n_questions=len(rows), notes=f"P3-05 on {source_meta['run_id']}")
     return run_id
+
+
+class NeedsApproval(RuntimeError):
+    """Uncached spend without an approval reference (DEC-053), or above a budget."""
+
+
+@dataclass
+class FaithfulnessResult:
+    run_id: str | None
+    rows: list[dict[str, Any]]
+    metrics: dict[str, Any]
+    usage: dict[str, Any]
+    cache_stats: dict[str, Any]
+    estimate: dict[str, Any]
+    report_path: Path | None
+
+
+def run_faithfulness(run_id: str, *, judge_config_path: str = DEFAULT_JUDGE_CONFIG, approve_cost: str = "",
+                     no_cache: bool = False, limit: int = 0, estimate_only: bool = False,
+                     max_usd: float | None = None, store: Any = None) -> FaithfulnessResult:
+    """The whole P3-05 pipeline as one call: load, estimate, gate the spend, judge,
+    aggregate, record, report. The CLI and `rag ci-eval` both use this."""
+    from dataclasses import replace
+
+    from rag.eval.judge import RagasJudge
+    from rag.runner.config import load_config_file
+    from rag.runner.cost import COST_GATE_USD
+    from rag.runner.model_check import configured_models, verify_models
+    from rag.runner.run import _judge_config
+    from rag.runner.store import ResultsStore
+
+    jconf = load_config_file(judge_config_path)
+    judge_cfg = replace(_judge_config(jconf), only=("faithfulness",))
+    identity, version = judge_identity(judge_cfg), judge_prompt_version()
+    owns = store is None
+    store = store if store is not None else ResultsStore()
+    cache = None if no_cache else JudgeCache()
+    try:
+        meta, inputs = load_run(run_id, store)
+        if limit:
+            inputs = inputs[:limit]
+        cached = {i.question_id for i in inputs if cache is not None and not i.refused
+                  and cache.get(JudgeCache.key(identity, version, i.question, i.contexts, i.answer))}
+        est = estimate(inputs, cached)
+        if estimate_only:
+            return FaithfulnessResult(None, [], {}, {}, {}, est, None)
+        if max_usd is not None and est["usd"] > max_usd:
+            raise NeedsApproval(f"faithfulness estimate ${est['usd']:.4f} is above the ${max_usd:.2f} budget")
+        if est["usd"] > 0 and not approve_cost.strip():
+            raise NeedsApproval("an approval reference is required for any uncached spend (DEC-053)")
+        if est["usd"] > COST_GATE_USD and "DEC-" not in approve_cost:
+            raise NeedsApproval(f"estimate above the ${COST_GATE_USD:.2f} gate: cite the DEC")
+        judge = RagasJudge(judge_cfg)
+        if est["n_to_judge"]:
+            verify_models([r for r in configured_models(jconf) if r.role == "judge"])
+        rows = evaluate(inputs, judge, cache, identity=identity, prompt_version=version)
+        metrics = aggregate(rows)
+        stats = {"hits": cache.hits if cache else 0,
+                 "misses": cache.misses if cache else est["n_to_judge"], "bypassed": no_cache}
+        new_id = record(source_meta=meta, judge_cfg=judge_cfg, judge_config_path=judge_config_path, rows=rows,
+                        metrics=metrics, usage=judge.usage.as_dict(), cache_stats=stats, est=est,
+                        approval=approve_cost, store=store)
+    finally:
+        if cache is not None:
+            cache.close()
+        if owns:
+            store.close()
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = REPORTS_DIR / f"faithfulness_{new_id}.md"
+    path.write_text(report_markdown(run_id, new_id, rows, metrics))
+    return FaithfulnessResult(new_id, rows, metrics, judge.usage.as_dict(), stats, est, path)
