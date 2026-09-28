@@ -102,9 +102,12 @@ def test_hard_fails():
     new = _result(answers=answers)
     new["provenance"]["judge"] = "another judge"
     del new["per_question"]["dev"]["d000"]
-    rules = {h["rule"] for h in compare(new, BASELINE, GATE)["hard_fails"]}
-    assert rules == {"empty_answer", "judge_failure", "provenance_changed", "question_set_changed",
+    v = compare(new, BASELINE, GATE)
+    rules = {h["rule"] for h in v["hard_fails"]}
+    assert rules == {"empty_answer", "provenance_changed", "question_set_changed",
                      "schema_invalid"}, "a missing dev question also breaks the declared counts"
+    assert [e["rule"] for e in v["errors"]] == ["judge_failure"] and v["status"] == "ERROR", \
+        "a judge that could not score is infrastructure, not quality (P3-10)"
 
 
 def test_the_baseline_needs_an_existing_decision_and_a_clean_run(tmp_path):
@@ -220,7 +223,7 @@ def test_answers_replay_inside_ci_eval_and_a_changed_prompt_misses(tmp_path):
 # --- P3-09: the declared rules (DEC-087) -----------------------------------------------
 
 def test_the_declared_gate_is_version_1_with_every_story_rule():
-    assert GATE["status"] == "declared" and GATE["version"] == 1 and GATE["baseline_updates"] == "manual"
+    assert GATE["status"] == "declared" and GATE["version"] == 2 and GATE["baseline_updates"] == "manual"
     gating = {r["metric"] for r in GATE["judged"] if r["gating"]}
     assert gating == {"mean_faithfulness", "unsupported_answer_rate", "false_answer_rate", "citation_validity"}
     assert {"cites_unretrieved_article", "schema_invalid"} <= set(GATE["hard_fails"])
@@ -258,3 +261,35 @@ def test_a_gating_metric_missing_from_the_baseline_fails_closed():
     del base["result"]["metrics"]["judged"]["citation_validity"]
     r = _rule(compare(_result(), base, GATE), "judged", "citation_validity")
     assert r["verdict"] == "FAIL" and "re-baseline" in r["note"]
+
+
+def test_a_provider_outage_exits_as_error_never_as_a_quality_failure(monkeypatch):
+    """P3-10: infrastructure failure is distinct from quality failure."""
+    import httpx
+    from typer.testing import CliRunner
+
+    import rag.runner.ci_eval as ce
+    from rag.cli import app
+
+    def outage(**kw):
+        raise httpx.ConnectError("provider unreachable after retries")
+
+    monkeypatch.setattr(ce, "ci_eval", outage)
+    result = CliRunner().invoke(app, ["ci-eval"])
+    assert result.exit_code == ce.EXIT_ERROR == 2
+    assert "not a quality failure" in result.output
+
+
+def test_the_gate_script_skips_docs_only_changes_and_blocks_without_a_key(tmp_path):
+    """ci/run_gate.sh: no pipeline change -> SKIPPED (0); a pipeline change without the key
+    -> NOT VERIFIED (1). Run against HEAD so no model is called."""
+    import os
+    import subprocess
+
+    env = {k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"}
+    env["GITHUB_STEP_SUMMARY"] = str(tmp_path / "summary.md")
+    skipped = subprocess.run(["ci/run_gate.sh", "HEAD"], env=env, capture_output=True, text=True)
+    assert skipped.returncode == 0 and "eval skipped: no pipeline change" in skipped.stdout
+    blocked = subprocess.run(["ci/run_gate.sh", "HEAD"], env={**env, "FORCE_EVAL": "1"}, capture_output=True, text=True)
+    assert blocked.returncode == 1 and "NOT VERIFIED" in blocked.stdout
+    assert "NOT VERIFIED" in (tmp_path / "summary.md").read_text()

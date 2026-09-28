@@ -208,10 +208,13 @@ def compare(new: dict[str, Any], baseline: dict[str, Any], gate: dict[str, Any])
         empty = [q for q, a in new["per_question"]["answers"].items() if a["empty"]]
         if empty:
             hard.append({"rule": "empty_answer", "question_ids": empty})
-    if "judge_failure" in gate["hard_fails"]:
+    # P3-10 (DEC-088): a judge that could not score an answer after its retries is an
+    # infrastructure failure, never a quality one. It is an ERROR (exit 2, "not verified").
+    errors = []
+    if "judge_failure" in gate.get("errors", []):
         failed = [q for q, a in new["per_question"]["answers"].items() if a["judge_failed"]]
         if failed:
-            hard.append({"rule": "judge_failure", "question_ids": failed})
+            errors.append({"rule": "judge_failure", "question_ids": failed})
     if "question_set_changed" in gate["hard_fails"]:
         for part in ("dev", "golden", "answers"):
             if set(new["per_question"][part]) != set(base["per_question"][part]):
@@ -228,7 +231,8 @@ def compare(new: dict[str, Any], baseline: dict[str, Any], gate: dict[str, Any])
     retrieval = [_retrieval_rule(r, new, base, gate["alpha"]) for r in gate["retrieval"]]
     judged = [_judged_rule(r, new, base, floors) for r in gate["judged"]]
     failed = bool(hard) or any(r["verdict"] == "FAIL" for r in retrieval + judged)
-    return {"status": "FAIL" if failed else "PASS", "draft": gate["status"] != "declared",
+    status = "ERROR" if errors else ("FAIL" if failed else "PASS")
+    return {"status": status, "draft": gate["status"] != "declared", "errors": errors,
             "baseline_runs": base["runs"], "hard_fails": hard, "retrieval": retrieval, "judged": judged,
             "noise_floor_family": family if floors else None,
             "changed_answers": _changed_answers(new, base)}
@@ -243,8 +247,11 @@ def summary_markdown(result: dict[str, Any], verdict: dict[str, Any] | None) -> 
                   "No `ci/baseline.json` to compare against. Metrics are recorded below; "
                   "create a baseline with `rag ci-baseline update --reason <DEC-id>`.", ""]
     else:
-        badge = "✅ PASS" if verdict["status"] == "PASS" else "❌ FAIL"
+        badge = {"PASS": "✅ PASS", "FAIL": "❌ FAIL",
+                 "ERROR": "⚠️ ERROR — infrastructure, not a quality result (not verified)"}[verdict["status"]]
         lines += [f"## RAG quality gate — {badge}" + (" (DRAFT rules, P3-09 pending)" if verdict["draft"] else ""), ""]
+        for e in verdict.get("errors", []):
+            lines.append(f"- **ERROR `{e['rule']}`** — {json.dumps({k: v for k, v in e.items() if k != 'rule'})[:300]}")
         for h in verdict["hard_fails"]:
             lines.append(f"- **HARD FAIL `{h['rule']}`** — {json.dumps({k: v for k, v in h.items() if k != 'rule'})[:300]}")
         lines += ["", "| Metric | Gating | Baseline | This run | Δ | Threshold | Verdict |", "|---|---|---|---|---|---|---|"]
@@ -348,7 +355,7 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
     (out / "ci_eval.md").write_text(summary_markdown(result, verdict))
     if verdict is None:
         return EXIT_PASS, doc
-    return (EXIT_FAIL if verdict["status"] == "FAIL" else EXIT_PASS), doc
+    return {"PASS": EXIT_PASS, "FAIL": EXIT_FAIL, "ERROR": EXIT_ERROR}[verdict["status"]], doc
 
 
 # --- the baseline file -----------------------------------------------------------------

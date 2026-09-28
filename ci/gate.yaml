@@ -1,12 +1,13 @@
 # ci/gate.yaml — the rules `rag ci-eval` applies.
 #
-# STATUS: DECLARED (P3-09, DEC-087), version 1, before the first gated PR. Changing any
+# STATUS: DECLARED (P3-09, DEC-087), version 2 (DEC-088: judge failures are errors, and
+# the CI budget is set), before the first gated PR. Changing any
 # rule or threshold is a new version with its own DECISIONS.md entry. Every threshold
 # comes from a measurement, not a guess: α from DEC-082, MDDs from rag/eval/noise_floor.py
 # (DEC-083, DEC-087). Published detection floors: ci/DETECTION_FLOOR.md.
 status: declared
-version: 1
-decision: DEC-087
+version: 2
+decision: DEC-088
 
 # What runs.
 configs:
@@ -17,7 +18,9 @@ configs:
 # A result that does not have exactly these question counts is schema-invalid.
 expected_questions: {dev: 200, golden: 95, answers: 95}
 
-# Spend: a run estimated above this stops with "needs approval" (P3-10 sets the final value).
+# Spend: a run estimated above this stops with "needs approval"; a maintainer's
+# `eval-approved` label re-runs it with approval (P3-10, DEC-088). An uncached run costs
+# about $0.30 (EXP-0060), a cached one $0.
 ci_budget_usd: 1.00
 
 alpha: 0.05
@@ -50,6 +53,10 @@ hard_fails:
   - cites_unretrieved_article   # a citation to a REAL article that was not in the answer's context: 0 in 481 answers, six fresh runs
   - schema_invalid              # the result is missing fields, mistyped, or has the wrong question counts
   - empty_answer                # a generated answer with no text
-  - judge_failure               # an answered question the judge could not score
   - question_set_changed        # the run's question ids differ from the baseline's
   - provenance_changed          # corpus, split, judge or judge prompt version differs from the baseline's
+
+# Errors, not quality failures (P3-10): the job ends as ERROR / "not verified", which also
+# blocks merge, but never reads as the system getting worse.
+errors:
+  - judge_failure               # an answered question the judge could not score after its retries

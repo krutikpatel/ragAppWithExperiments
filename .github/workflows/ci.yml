@@ -1,0 +1,112 @@
+# P3-10 (DEC-088): unit tests on every PR; the RAG quality gate on every PR that touches a
+# pipeline path. Required status checks on `main`: `unit-tests` and `ci-eval`.
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    # A label other than `eval-approved` changes nothing, so it re-runs nothing.
+    if: github.event.action != 'labeled' || github.event.label.name == 'eval-approved'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - uses: astral-sh/setup-uv@v5
+      - run: uv pip install --system -e ".[dev]"
+      # Tests that need the frozen corpus or a results store skip themselves here.
+      - run: pytest -q
+
+  ci-eval:
+    if: github.event.action != 'labeled' || github.event.label.name == 'eval-approved'
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    # A cold first run builds the dense index (~20 min, ~$0.03) and judges ~80 answers.
+    timeout-minutes: 90
+    env:
+      # Fork PRs receive no secrets: run_gate.sh then reports NOT VERIFIED, which blocks merge.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+      APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'eval-approved') && format('eval-approved label on PR #{0}', github.event.pull_request.number) || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - uses: astral-sh/setup-uv@v5
+      - run: uv pip install --system -e ".[dev]"
+
+      # Frozen corpus and splits are gitignored and rebuilt from a pinned HF revision.
+      - name: restore frozen data
+        uses: actions/cache@v4
+        with:
+          path: data/frozen
+          key: frozen-${{ hashFiles('rag/corpus/**', 'rag/dataset/**', 'data/authored/**') }}
+      # The dense index: rebuilt only when chunking, embedding or the promoted config changes.
+      - name: restore dense index
+        uses: actions/cache@v4
+        with:
+          path: indexes
+          key: indexes-${{ hashFiles('rag/chunking/**', 'rag/embedding/**', 'configs/promoted.yaml') }}
+      # The model-call caches (DEC-084, DEC-081): restored from the newest run, saved as a new
+      # entry after every run, so an unchanged pipeline replays everything for ~$0.
+      - name: restore model-call caches
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            results/ci_call_cache.sqlite
+            results/judge_cache.sqlite
+          key: model-cache-${{ github.run_id }}
+          restore-keys: model-cache-
+
+      - name: build frozen data if missing
+        run: |
+          [ -f data/frozen/corpus.parquet ] || rag corpus freeze
+          [ -f data/frozen/dev.parquet ] || rag data splits
+
+      - name: quality gate
+        id: gate
+        run: ci/run_gate.sh "$BASE_REF" "$APPROVED"
+
+      - name: save model-call caches
+        if: always() && hashFiles('results/ci_call_cache.sqlite') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            results/ci_call_cache.sqlite
+            results/judge_cache.sqlite
+          key: model-cache-${{ github.run_id }}
+
+      - name: upload ci-eval artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: {name: ci-eval, path: ci/out, if-no-files-found: ignore}
+
+      - name: comment on the PR
+        if: always() && github.event_name == 'pull_request'
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          body=ci/out/ci_eval.md; [ -f "$body" ] || body=ci/out/ci_eval_status.md
+          [ -f "$body" ] || exit 0
+          { echo "<!-- rag-ci-eval -->"; cat "$body"; } > ci/out/comment.md
+          id=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+               --jq '[.[] | select(.body | startswith("<!-- rag-ci-eval -->"))][0].id // empty')
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -F body=@ci/out/comment.md > /dev/null
+          else
+            gh pr comment "${{ github.event.pull_request.number }}" --body-file ci/out/comment.md
+          fi

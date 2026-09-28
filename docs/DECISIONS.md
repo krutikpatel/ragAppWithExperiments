@@ -3383,3 +3383,48 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** the six runs above; `tests/test_ci_eval_p3_08.py` pins every rule.
 - **Revisit if:** a planted regression in P3-12 passes a rule it should fail, or any run
   records a `cites_unretrieved_article` that turns out to be a near-duplicate article.
+
+## DEC-088 — P3-10: the CI workflow; judge failures are errors; the CI budget is $1.00
+- **Date:** 2026-09-28
+- **Decided by:** Joint. Krutik asked for P3-10 finished. Claude: the budget figure (Krutik
+  named none — flagged in chat for confirmation), the workflow design, and moving judge
+  failures from quality to error. Enabling required checks on `main` and adding the
+  secret are **Krutik's**, and are not done by this entry.
+- **Status:** Active. `ci/gate.yaml` becomes **version 2**.
+- **The workflow** (`.github/workflows/ci.yml`, logic in `ci/run_gate.sh`, runnable locally):
+  - `unit-tests` on every PR and push to `main`. Tests needing the frozen corpus or a
+    results store skip themselves.
+  - `ci-eval` after it. **No pipeline path changed** (`rag/`, `configs/`, `prompts/`,
+    `eval/golden/`, `data/authored/`, `ci/gate.yaml`, `ci/baseline.json`, `pyproject.toml`,
+    `uv.lock`) ⇒ status succeeds with **"eval skipped: no pipeline change"** in the job
+    summary. Otherwise: frozen data and the dense index restored from cache (rebuilt from
+    the pinned revision if missing), the model-call caches restored from the newest run, a
+    **cost-estimate step before any model call**, then `rag ci-eval`.
+  - **Exit → status:** 0 PASS · 1 FAIL (quality) · 2 ERROR (infrastructure, "not
+    verified") · 3 NEEDS APPROVAL. Every one except 0 fails the check, so none can merge,
+    but only 1 ever reads as the system getting worse.
+  - **Budget:** `ci_budget_usd: 1.00`. An uncached run costs about $0.30 (EXP-0060), a cold
+    first run adds the index build (~$0.03), a cached run $0. Above the budget the job stops
+    with NEEDS APPROVAL; a maintainer's **`eval-approved` label** re-runs it with approval
+    (labels need write access, so only a maintainer can apply it).
+  - **Secrets:** `OPENROUTER_API_KEY` from repository secrets. **Fork PRs get none**, so the
+    job reports **NOT VERIFIED** and fails — blocking merge rather than passing unjudged.
+  - **Caches:** `results/ci_call_cache.sqlite` and `results/judge_cache.sqlite` are restored
+    from the newest `model-cache-*` entry and saved under a new key after every run, so an
+    unchanged pipeline replays everything; hit rates are in the summary (DEC-084).
+  - **Outputs:** the summary goes to the job summary and to one sticky PR comment (updated
+    in place, marked `<!-- rag-ci-eval -->`); `ci/out` is uploaded as the `ci-eval` artifact.
+- **Judge failures are errors, not quality failures.** P3-10: "a provider outage ends the
+  job as `error`, never as a quality `fail`". A judge that cannot score an answer after its
+  retries is exactly that, so `judge_failure` moves from `hard_fails` to a new `errors`
+  list: verdict ERROR, exit 2. Transient errors already get bounded, backed-off retries at
+  every call site (generator: 4 attempts plus a 429 budget, MIS-010/024; embedder: same;
+  judge: the OpenAI client's retries; rerank and pipeline LLM: their own).
+- **Verified locally:** no pipeline change ⇒ SKIPPED (0); pipeline change without the key ⇒
+  NOT VERIFIED (1); with the key ⇒ estimate, then PASS at $0.0000 with every cache at 100%;
+  an outage raised through the CLI ⇒ exit 2. The workflow itself has **not run on GitHub**.
+- **Not done here, needs Krutik:** (1) add the `OPENROUTER_API_KEY` repository secret;
+  (2) make `unit-tests` and `ci-eval` required checks on `main` — which also stops direct
+  pushes to `main`, so from then on every change goes through a PR.
+- **Revisit if:** the first GitHub run differs from the local one (runner OS, HF download,
+  cache sizes), or a cold run's cost exceeds the budget.
