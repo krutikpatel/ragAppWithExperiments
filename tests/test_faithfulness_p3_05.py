@@ -165,3 +165,18 @@ def test_the_phase_2_dev_run_rebuilds_for_every_answer():
         _, inputs = load_run("run_20260913_205058_dc03", store)
     assert len(inputs) == 100 and all(len(i.contexts) == 5 for i in inputs)
     assert sum(1 for i in inputs if i.refused) == 8
+
+
+def test_a_faithfulness_row_under_the_production_judge_gets_the_golden_floors():
+    """P3-07/DEC-083: the family is found from the row's provenance, not assumed."""
+    from rag.eval.noise_floor import FLOOR_FAMILIES, family_for_run
+
+    row = {"judge_model": "deepseek/deepseek-v4.1-flash", "judge_provider_order": '["DeepInfra"]',
+           "judge_embedding_model": None, "ragas_version": "0.4.3",
+           "metric_prompt_versions": '{"faithfulness": "sha256:475517e1d53e61ad"}',
+           "generator_model": "openai/gpt-5-nano", "prompt_versions": '{"answer": "baseline_answer@v1"}'}
+    family, _ = family_for_run(row)
+    assert family == "golden-v1-deepseek"
+    floors = FLOOR_FAMILIES[family]["floors"]
+    assert floors["mean_faithfulness"] == 0.026 and floors["unsupported_answer_rate"] == 0.064
+    assert family_for_run({**row, "judge_provider_order": '["Groq"]'})[0] is None, "another host is another judge"

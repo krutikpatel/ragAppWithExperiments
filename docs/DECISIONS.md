@@ -3224,3 +3224,35 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** no measured data; method choices.
 - **Revisit if:** the three golden runs disagree on which questions are refused by more
   than a handful — the floor would then be dominated by refusal flips, not faithfulness.
+
+## DEC-083 — P3-07: the measured floors are the gate's thresholds; three consequences for P3-09
+- **Date:** 2026-09-28
+- **Decided by:** Claude (reading the measurement); the thresholds themselves are P3-09's
+  to declare and Krutik's to approve.
+- **Status:** Active
+- **Result:** EXP-0059. Corpus-level MDDs on `golden_v1` (three fresh full runs): mean
+  faithfulness **0.026**, unsupported-answer rate **0.064**, false-answer rate **0.077**,
+  refusal rate **0.073**, citation integrity **0.016**. Registered as noise-floor family
+  `golden-v1-deepseek` in `rag/eval/noise_floor.py`, matched from a faithfulness row's
+  provenance (judge, host, Ragas, generator, prompt) so a changed judge gets "no MDD
+  measured". Published as `ci/DETECTION_FLOOR.md`. Retrieval: α = 0.05 (DEC-082).
+- **Consequences P3-09 has to face before it declares rules:**
+  1. **Citation integrity cannot be zero-tolerance as the story wrote it.** Identical runs
+     produce 1–2 answers citing ids outside their context. Options for P3-09: gate on the
+     rate against its MDD like the judged metrics, or keep zero tolerance only for ids that
+     exist nowhere in the corpus *and* show it is also noisy (both P3-06 cases were of that
+     kind). Not decided here.
+  2. **The judge is most of the judged noise** (0.023 of 0.026). A cheaper floor would need
+     a steadier judge, not more generator control.
+  3. **False-answer rate is gated in whole questions**: 2 of 15. The slice has only 15
+     unanswerable questions; if the gate must catch one more false answer, the slice needs
+     more of them (a golden_v2, P3-03's versioning rule).
+- **Also decided:** one reviewed URL exception. Run `run_20260928_194258_4916`, question
+  `47337149535f21c6` quotes `www.mystunningwebsite.com`, Wix's example domain, from an
+  article in its context (36 corpus articles contain it). P1-05's rule is about links the
+  generator writes; this is an illustration copied from evidence. Listed in
+  `tests/test_prompts.py::REVIEWED_URL_EXCEPTIONS`, scoped to that run and the faithfulness
+  rows copying it; any other URL still fails the test.
+- **Evidence:** EXP-0059's eight runs; the retrieval table from `mcnemar_exact_p`.
+- **Revisit if:** the judge, host, generator, prompt or golden slice changes (the floors are
+  for this family only), or P3-12's drills show a planted regression inside the floor.

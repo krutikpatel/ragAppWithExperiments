@@ -112,6 +112,18 @@ def test_url_detector_matches_links_not_domain_names():
     assert find_urls("") == [] and find_urls(None) == []
 
 
+# Reviewed exceptions, each with a DEC entry: (generation run, question) -> the URL-shaped
+# strings accepted and why. A faithfulness row that copies the answer inherits it through
+# its `source_run`. Anything not listed here still fails the test.
+REVIEWED_URL_EXCEPTIONS = {
+    ("run_20260928_194258_4916", "47337149535f21c6"): {
+        "urls": ["www.mystunningwebsite.com"],
+        "why": "DEC-083: Wix's example domain, quoted verbatim from an article in the answer's "
+               "context (it appears in 36 corpus articles); an illustration, not a link",
+    },
+}
+
+
 def test_recorded_generated_answers_contain_no_urls():
     """P1-05's acceptance test on real model output: every stored answer produced
     with baseline_answer@v1 is URL-free. Skips when no such run exists yet."""
@@ -133,9 +145,12 @@ def test_recorded_generated_answers_contain_no_urls():
             pytest.skip("no VALID run with baseline_answer@v1 recorded yet")
         offenders = []
         for run in runs:
+            source = json.loads(run["config_json"] or "{}").get("source_run") or run["run_id"]
             for qid, row in store.get_questions(run["run_id"]).items():
-                if row["generated_answer"] and find_urls(row["generated_answer"]):
-                    offenders.append((run["run_id"], qid, find_urls(row["generated_answer"])))
+                urls = find_urls(row["generated_answer"]) if row["generated_answer"] else []
+                reviewed = REVIEWED_URL_EXCEPTIONS.get((source, qid), {}).get("urls", [])
+                if [u for u in urls if u not in reviewed]:
+                    offenders.append((run["run_id"], qid, urls))
     assert offenders == [], f"URL-shaped strings in raw model output: {offenders[:5]}"
 
 

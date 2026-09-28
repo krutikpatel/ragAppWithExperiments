@@ -1168,3 +1168,12 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
 - **The part I trust least:** (3). DeepSeek is a reasoning model at temperature 0, and
   MIS-034 showed a reasoning model's output is not deterministic at temperature 0; its
   claim splitting alone could vary as much as the generator.
+- **Resolution (2026-09-28, EXP-0059):**
+  1. Mean faithfulness MDD between 0.02 and 0.05 → **confirmed**: 0.026.
+  2. Unsupported-answer rate MDD above 0.08 → **wrong**: 0.064. The yes/no metric was
+     steadier than I argued; answers near the line mostly stay on the same side.
+  3. Re-judges vary less than half as much as fresh runs → **wrong, and it was the part I
+     trusted least**: judge-only 0.023 against 0.026 full. The judge is nearly all of the
+     judged noise; regenerating answers adds little on top. The reason I gave for doubting
+     it — a reasoning model is not deterministic at temperature 0 (MIS-034) — is the reason
+     it was wrong.

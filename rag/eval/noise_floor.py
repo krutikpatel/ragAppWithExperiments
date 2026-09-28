@@ -187,6 +187,73 @@ FLOOR_FAMILIES: dict[str, dict] = {
             "q_len:long": {"faithfulness": 0.047, "answer_correctness": 0.050, "answer_relevance": 0.067},
         },
     },
+    # P3-07 (DEC-083): the production judge on the golden CI slice, as `rag faithfulness`
+    # rows record it. Three FULL runs (fresh generation + fresh judging, --no-cache),
+    # 79 / 76 / 76 answers judged. `judge_only_floors` are two extra re-judges of run 1's
+    # answers: the judge alone, generator held fixed. Matches faithfulness rows only (their
+    # metric_prompt_versions name faithfulness alone and no judge embedder).
+    "golden-v1-deepseek": {
+        "effective_date": "2026-09-28",
+        "decision": "DEC-083",
+        "measured_on": {
+            "generation_runs": [
+                "run_20260928_194258_4916", "run_20260928_201450_6074", "run_20260928_203058_bc14",
+            ],
+            "runs": [
+                "run_20260928_200150_ffb0", "run_20260928_203053_9597", "run_20260928_204237_e726",
+            ],
+            "judge_only_runs": [
+                "run_20260928_200150_ffb0", "run_20260928_200828_9a46", "run_20260928_201447_9e59",
+            ],
+            "config": "configs/golden_generate_v2.yaml + rag faithfulness (configs/baseline_dense_tier2_v2.yaml judge)",
+            "judge": "deepseek/deepseek-v4.1-flash",
+            "provider_order": ["DeepInfra"],
+            "ragas_version": "0.4.3",
+            "generator": "openai/gpt-5-nano",
+            "prompt": "baseline_answer@v1",
+            "retriever": "dense (qwen/qwen3-embedding-8b, DeepInfra)",
+            "subsample": "golden_v1 (95 questions, full)",
+            "date": "2026-09-28",
+            "rule": MDD_RULE,
+        },
+        "match": {
+            "judge_model": "deepseek/deepseek-v4.1-flash",
+            "judge_provider_order": ["DeepInfra"],
+            "judge_embedding_model": None,  # faithfulness rows record NULL, not ""
+            "ragas_version": "0.4.3",
+            "metric_prompt_versions": {"faithfulness": _RAGAS_0_4_3_PROMPTS["faithfulness"]},
+            "generator_model": "openai/gpt-5-nano",
+            "prompt_versions": {"answer": "baseline_answer@v1"},
+        },
+        "context": {"retriever": None, "eval_subsample_id": "full:sha256:253982866"},
+        # Corpus level ("all": 95 questions). Names are `rag faithfulness` metrics.
+        "floors": {
+            "mean_faithfulness": 0.026,
+            "unsupported_answer_rate": 0.064,
+            "refusal_rate": 0.073,
+            "false_answer_rate": 0.077,
+            "citation_integrity": 0.016,
+        },
+        "judge_only_floors": {
+            "mean_faithfulness": 0.023,
+            "unsupported_answer_rate": 0.057,
+            "refusal_rate": 0.0,
+            "false_answer_rate": 0.0,
+            "citation_integrity": 0.0,
+        },
+        "slice_floors": {
+            "answerable": {"mean_faithfulness": 0.031, "unsupported_answer_rate": 0.051,
+                           "refusal_rate": 0.073, "citation_integrity": 0.017},
+            "unanswerable": {"mean_faithfulness": 0.092, "unsupported_answer_rate": 0.306,
+                             "false_answer_rate": 0.077, "citation_integrity": 0.0},
+            "stratum:single_doc": {"mean_faithfulness": 0.041, "unsupported_answer_rate": 0.016,
+                                   "refusal_rate": 0.161, "citation_integrity": 0.039},
+            "stratum:multi_doc": {"mean_faithfulness": 0.028, "unsupported_answer_rate": 0.095,
+                                  "refusal_rate": 0.058, "citation_integrity": 0.065},
+            "stratum:answered_without_gold": {"mean_faithfulness": 0.067, "unsupported_answer_rate": 0.079,
+                                              "refusal_rate": 0.043, "citation_integrity": 0.049},
+        },
+    },
 }
 
 ACTIVE_FAMILY = "dense-control-v1"
