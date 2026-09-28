@@ -369,6 +369,74 @@ def models_verify(
     raise typer.Exit(1 if failed else 0)
 
 
+@app.command("faithfulness")
+def faithfulness_cmd(
+    run_id: str = typer.Argument(..., help="A Tier 2 run with stored answers."),
+    judge_config: str = typer.Option("configs/baseline_dense_tier2_v2.yaml", "--judge-config",
+                                      help="Config whose judge fields are used (default: the production judge, DEC-079)."),
+    estimate_only: bool = typer.Option(False, "--estimate-only"),
+    approve_cost: str = typer.Option("", "--approve-cost", help="Approval reference. Required for any uncached spend."),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Bypass the judge cache: read nothing, write nothing (P3-07)."),
+    limit: int = typer.Option(0, "--limit", help="Judge only the first N questions (a smoke run)."),
+) -> None:
+    """P3-05: per-claim faithfulness of every stored answer, plus unsupported-answer,
+    refusal, false-answer and citation-integrity rates, by stratum. Judge calls are cached."""
+    from pathlib import Path
+
+    from rag.eval.faithfulness import (
+        REPORTS_DIR, JudgeCache, aggregate, estimate, evaluate, judge_identity, judge_prompt_version,
+        load_run, record, report_markdown,
+    )
+    from rag.eval.judge import RagasJudge
+    from rag.runner.config import load_config_file
+    from rag.runner.cost import COST_GATE_USD
+    from rag.runner.model_check import configured_models, verify_models
+    from rag.runner.run import _judge_config
+    from rag.runner.store import ResultsStore
+
+    jconf = load_config_file(judge_config)
+    from dataclasses import replace
+
+    judge_cfg = replace(_judge_config(jconf), only=("faithfulness",))
+    identity, version = judge_identity(judge_cfg), judge_prompt_version()
+    with ResultsStore() as store:
+        meta, inputs = load_run(run_id, store)
+        if limit:
+            inputs = inputs[:limit]
+        cache = None if no_cache else JudgeCache()
+        cached = set()
+        if cache is not None:
+            for i in inputs:
+                if not i.refused and cache.get(JudgeCache.key(identity, version, i.question, i.contexts, i.answer)):
+                    cached.add(i.question_id)
+        est = estimate(inputs, cached)
+        typer.echo(f"*** P3-05 ESTIMATE {judge_cfg.model} @{','.join(judge_cfg.provider_order)}: ${est['usd']:.4f} — "
+                   f"{est['n_to_judge']} answers to judge, {est['n_cached']} cached, {est['n_refused']} refusals not judged, "
+                   f"{est['context_words']:,} context words ({est['source']})")
+        if estimate_only:
+            return
+        if est["usd"] > 0 and not approve_cost.strip():
+            raise typer.BadParameter("--approve-cost is required for any uncached spend (DEC-053)")
+        if est["usd"] > COST_GATE_USD and "gate" not in approve_cost.lower() and "DEC-" not in approve_cost:
+            raise typer.BadParameter(f"estimate above the ${COST_GATE_USD:.2f} gate: cite the DEC or approval")
+        verify_models([r for r in configured_models(jconf) if r.role == "judge"])
+        judge = RagasJudge(judge_cfg)
+        rows = evaluate(inputs, judge, cache, identity=identity, prompt_version=version)
+        metrics = aggregate(rows)
+        stats = {"hits": cache.hits if cache else 0,
+                 "misses": cache.misses if cache else est["n_to_judge"], "bypassed": no_cache}
+        new_id = record(source_meta=meta, judge_cfg=judge_cfg, judge_config_path=judge_config, rows=rows,
+                        metrics=metrics, usage=judge.usage.as_dict(), cache_stats=stats, est=est,
+                        approval=approve_cost, store=store)
+        if cache is not None:
+            cache.close()
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = Path(REPORTS_DIR) / f"faithfulness_{new_id}.md"
+    path.write_text(report_markdown(run_id, new_id, rows, metrics))
+    typer.echo(json.dumps({"run_id": new_id, "report": str(path), "usage": judge.usage.as_dict(), "cache": stats,
+                           "by_stratum": metrics}, indent=2))
+
+
 judge_app = typer.Typer(help="P3-04 synthetic judge sanity check.", no_args_is_help=True)
 app.add_typer(judge_app, name="judge-check")
 

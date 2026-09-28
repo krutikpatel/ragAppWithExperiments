@@ -411,6 +411,72 @@ class RagasJudge(Judge):
         return scores
 
 
+@dataclass(frozen=True)
+class ClaimVerdict:
+    statement: str
+    supported: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class ClaimJudgment:
+    """Ragas faithfulness, with the claims it scored (P3-05).
+
+    `score` is None when the judge failed or extracted no statements — a failure, never
+    a verdict (MIS-011, MIS-043)."""
+
+    score: float | None
+    claims: tuple[ClaimVerdict, ...] = ()
+    error: str | None = None
+
+
+class FaithfulnessClaims:
+    """Claim-level faithfulness through Ragas's OWN two steps and prompts.
+
+    `Faithfulness.ascore` returns only a number. P3-05 needs each claim and its verdict,
+    so this calls the metric's `_create_statements` and `_create_verdicts` and its
+    `_compute_score` in the order `ascore` does — the score is identical by construction,
+    and a test asserts it on a fake LLM. These are private Ragas methods: safe only
+    because Ragas is pinned exactly (0.4.3) and `metric_fingerprint` records the package
+    hash on every score (MIS-004).
+    """
+
+    def __init__(self, judge: "RagasJudge") -> None:
+        if "faithfulness" not in judge.config.criteria:
+            raise ValueError("the judge is not configured to score faithfulness")
+        self.judge = judge
+
+    def score_batch(self, items: list[dict[str, Any]]) -> list[ClaimJudgment]:
+        if self.judge._metrics is None:
+            self.judge._metrics = self.judge._build_metrics()
+        metric = self.judge._metrics["faithfulness"]
+        return asyncio.run(self._batch(metric, items))
+
+    async def _batch(self, metric: Any, items: list[dict[str, Any]]) -> list[ClaimJudgment]:
+        semaphore = asyncio.Semaphore(self.judge.config.concurrency)
+
+        async def one(item: dict[str, Any]) -> ClaimJudgment:
+            async with semaphore:
+                try:
+                    return await self._one(metric, item)
+                except Exception as exc:  # recorded per answer; the batch continues (MIS-011)
+                    return ClaimJudgment(score=None, error=f"{type(exc).__name__}: {str(exc)[:200]}")
+
+        return list(await asyncio.gather(*(one(item) for item in items)))
+
+    @staticmethod
+    async def _one(metric: Any, item: dict[str, Any]) -> ClaimJudgment:
+        statements = await metric._create_statements(item["question"], item["answer"])
+        if not statements:
+            return ClaimJudgment(score=None, error="no statements extracted")
+        verdicts = await metric._create_verdicts(statements, "\n".join(item["contexts"]))
+        score = float(metric._compute_score(verdicts))
+        if math.isnan(score):
+            return ClaimJudgment(score=None, error="NaN score from Ragas (no verdicts)")
+        claims = tuple(ClaimVerdict(v.statement, bool(v.verdict), v.reason) for v in verdicts.statements)
+        return ClaimJudgment(score=score, claims=claims)
+
+
 def judge_provenance(config: JudgeConfig) -> dict[str, Any]:
     """The provenance a run row records for its judge, computed without calling one."""
     return {

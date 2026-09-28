@@ -3154,3 +3154,47 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** the hash comparison over 76 configs; `rag models verify` output; tests.
 - **Revisit if:** the judge, generator, prompt, retrieval config or golden slice changes —
   each is a version 3 with its own entry.
+
+## DEC-081 — P3-05: how `rag faithfulness` measures, and where it had to choose
+- **Date:** 2026-09-28
+- **Decided by:** Claude (implementation of P3-05's declared metrics), not yet reviewed by Krutik.
+- **Status:** Active
+- **What it does:** `rag faithfulness <run_id>` reads a Tier 2 run's stored answers,
+  rebuilds each answer's prompt context from its stored `context_chunk_ids` through the
+  same `ConcatAssembler` (asserted equal to the assembler's own output), judges every
+  non-refused answer claim by claim, and records one `faithfulness` row plus one row per
+  answer in the results store. A markdown report of the 10 lowest-faithfulness answers
+  (claim, verdict, judge's reason, chunk) goes to `results/reports/`.
+- **The declared metrics, exactly as P3-05 lists them:** mean faithfulness; unsupported-
+  answer rate (≥ 1 unsupported claim, strict); refusal rate on answerable questions
+  (`refusal-lexical-v3`); false-answer rate on unanswerable ones; citation integrity. All
+  per stratum: all, answerable, unanswerable, `gold_docs:single|multi`,
+  `gold_in_context|gold_not_in_context` (the run's own stored flag — all gold present).
+- **Choices P3-05 left open:**
+  1. **Claims come from Ragas's own two steps** (`_create_statements`, `_create_verdicts`,
+     `_compute_score`), in `ascore`'s order, because `ascore` returns only a number. A test
+     on a fake Ragas LLM asserts the score equals `ascore`'s. Private methods: acceptable
+     only because Ragas is pinned exactly and fingerprinted (MIS-004).
+  2. **Supporting chunk = `attribution-lexical-v1`**, a heuristic: the context chunk with
+     the largest share of the claim's content words. Ragas judges against the joined
+     context and names no chunk. The verdict is the judge's; the pointer is ours, and the
+     report says so.
+  3. **Citation integrity is document-level**: every cited `[doc:<id>]` must be a document
+     in the assembled context. This project cites documents, not chunks (P1-06). On the
+     Phase 2 dev run it already finds 2 of 92 answers citing ids that exist nowhere in the
+     corpus (one a near-copy of a real id).
+  4. **The judge comes from a config, never from the run row** — default
+     `configs/baseline_dense_tier2_v2.yaml` (DEC-079). Phase 0–2 rows name a refused judge.
+  5. **Not applicable first:** refusals have no claims and are not judged; a judge failure
+     or NaN is `None`, counted, never zero, and **never cached**.
+  6. **Cache** (`results/judge_cache.sqlite`, gitignored) keyed on (judge identity incl.
+     host and fallback flag, Ragas version + faithfulness fingerprint, question, context
+     hash, answer hash). `--no-cache` reads and writes nothing, for P3-07's variance runs.
+  7. **Estimate:** linear in context words, calibrated on EXP-0054 (the same judge on
+     realistic-length answers), $0.00292 per 1,000 words. Any uncached spend needs
+     `--approve-cost` (DEC-053); above $2 it must cite a DEC.
+- **Evidence:** offline tests (10) and a free dry run on `run_20260913_205058_dc03`: all 100
+  contexts rebuild, 8 refusals, estimate $0.4681 for 92 answers. **No judged run yet** —
+  P3-06 is the first.
+- **Revisit if:** P3-06's report shows the attribution heuristic pointing at the wrong chunk
+  often enough to mislead a reader, or P3-07 needs claim-level variance the cache hides.

@@ -454,6 +454,9 @@ rag/
                     generation_metrics.py (citations, refusal — no LLM calls),
                     steps.py (procedural step coverage), slices.py (P0-08),
                     judge.py — the ONLY module that may import Ragas,
+                    faithfulness.py — P3-05 `rag faithfulness <run_id>`: per-claim verdicts on a
+                    run's stored answers (context rebuilt and asserted equal to the assembler's),
+                    the five declared metrics per stratum, judge cache, report (DEC-081),
                     judge_check.py — P3-04 synthetic judge check (`rag judge-check probe|run`):
                     240 pairs from golden_v1, verdict = faithfulness < 1.0, recorded as
                     eval_tier `judge_check` rows (DEC-075),
@@ -563,7 +566,8 @@ indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     sentence_distances/<embedder key>.json is the semantic chunker's
                     cache of consecutive-sentence distances per article text (P2-07)
 results/            runs.sqlite — the results store; generation_cache.sqlite — the
-                    in-pipeline LLM cache (P2-03). Both GITIGNORED.
+                    in-pipeline LLM cache (P2-03); judge_cache.sqlite — P3-05's judge cache;
+                    reports/ — faithfulness reports. All GITIGNORED.
   corpus_profile/   <key>.json written by `rag corpus profile`; the EXPERIMENTS.md
                     profile block mirrors it
 
