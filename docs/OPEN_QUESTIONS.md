@@ -747,3 +747,19 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   they do not, the reconstruction has a bug and EXP-0038's curve is wrong.
 - **Why it was not done here:** P2-14's experiment count is four and this would be a
   fifth. The curve, not the implementation, is what the story asks for.
+
+## OQ-047 — How much of a WixQA reference answer is supported by its gold articles' text?
+- **Status:** open. Surfaced 2026-09-28 by the P3-04 judge check (EXP-0054–0056).
+- **What was measured:** three judges from three labs passed only 35–40% of reference
+  answers paired with their own gold articles, and agreed on 58 of 73. Five of the 36 all
+  three rejected, read by hand, make claims their gold articles do not. Simulated answers
+  are over-represented among them (21 of 36, against 7 of the 22 all three passed).
+- **Why it matters beyond P3-04:** Phase 3 fact 4 treats these answers as grounded in the
+  frozen KB. If about half are not grounded in their *gold* articles, then (a) any
+  answer-correctness metric against them rewards knowledge outside the corpus, and (b) the
+  "incomplete gold" limitation is larger than a near-duplicate problem — some gold labels
+  point at the wrong article.
+- **Decided by:** per-question agreement of two or more cross-lab judges on the 80 supported
+  pairs already scored (free — the rows exist), plus a hand read of a seeded sample of 20
+  with the verdict recorded per claim. Reported by source (ExpertWritten vs Simulated) and
+  stratum. No new model call is needed for the first half.

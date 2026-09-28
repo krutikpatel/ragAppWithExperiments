@@ -1093,3 +1093,14 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      the failure bar.
 - **The part I trust least:** (2). Two probe questions put both DeepSeek and Gemini at 1.0
   on supported pairs, which is weak evidence in either direction.
+- **Resolution (2026-09-28, EXP-0054 `run_20260928_052254_e257`, EXP-0055
+  `run_20260928_054308_6f23`, EXP-0056 `run_20260928_054455_44bb`):**
+  1. All three clear recall ≥ 0.95 → **confirmed**: 1.0000 for all three.
+  2. The supported pass rate separates them and at least one is below 0.85 → **half right,
+     and the half that is wrong matters.** All three are below 0.85, by a wide margin
+     (0.35–0.40) — and that criterion does **not** separate them: they agree on 58 of 73
+     supported pairs. I expected the judges to differ in leniency on long procedures. They
+     did not differ much at all; the labels were the problem. I named (2) as the part I
+     trusted least, for the wrong reason: I doubted the judges, not the "known supported"
+     set.
+  3. Qwen has the most failures → **confirmed**: 22, against 1 and 0.

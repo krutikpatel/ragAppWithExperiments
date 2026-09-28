@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import math
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -393,6 +394,13 @@ class RagasJudge(Judge):
                     score=None,
                     error=f"{type(result).__name__}: {str(result)[:200]}",
                     **common,
+                )
+            elif result.value is None or math.isnan(float(result.value)):
+                # Ragas returns NaN when it extracts no statements to verify. That is a
+                # failed judgment, not a score: NaN compares False with everything, so
+                # a NaN on a "< 1.0" flag silently reads as "fully supported" (MIS-043).
+                scores[criterion] = JudgeScore(
+                    score=None, error="NaN score from Ragas (no statements extracted)", **common,
                 )
             else:
                 scores[criterion] = JudgeScore(

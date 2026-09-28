@@ -24,6 +24,7 @@ answers, and no human agreement is measured.
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
 import time
@@ -104,8 +105,14 @@ def build_pairs(golden: list[dict[str, Any]], corpus_ids: list[str],
     return pairs
 
 
+def clean_score(score: float | None) -> float | None:
+    """NaN is a failed judgment, never a verdict (MIS-043)."""
+    return None if score is None or math.isnan(score) else score
+
+
 def verdict_flag(score: float | None) -> bool | None:
     """True = flagged unsupported. P3-05's strict definition: any unsupported claim."""
+    score = clean_score(score)
     return None if score is None else score < 1.0
 
 
@@ -120,6 +127,7 @@ def _auroc(pos: list[float], neg: list[float]) -> float | None:
 
 def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     """Confusion matrix on the gating kinds; hard negatives separately."""
+    results = [{**r, "score": clean_score(r["score"]), "flag": verdict_flag(r["score"])} for r in results]
     scored = [r for r in results if r["score"] is not None]
     gating = [r for r in scored if r["kind"] in GATING_KINDS]
     tp = sum(1 for r in gating if r["kind"] == "unsupported" and r["flag"])

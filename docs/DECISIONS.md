@@ -3027,3 +3027,35 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** a candidate misses only (2) and the misses read as paraphrase rather than
   unsupported content — which would say the strict flag, not the judge, is the problem,
   and that belongs to P3-05's definition, not to this bar.
+
+## DEC-077 — P3-04 outcome: no judge clears the bar, so judged metrics are report-only in CI for now
+- **Date:** 2026-09-28
+- **Decided by:** the rule pre-declared in DEC-076 (Krutik-approved); the reading of the
+  evidence is Claude's. What to do next is open for Krutik (below).
+- **Status:** Active
+- **Result** (EXP-0054–0056): all three judges flag 100% of clearly unsupported pairs and
+  pass only **35–40%** of the "known supported" pairs, against a bar of 85%. Qwen also
+  fails the failure bar (22 of 240). Under DEC-076: **judged faithfulness, unsupported-answer
+  rate and false-answer rate are `report-only` in CI (P3-09)**. The gate relies on
+  retrieval and deterministic metrics until a judge clears a bar.
+- **Why this is not simply "the judges are bad":** the three judges agree on 58 of 73
+  supported pairs, and five of the 36 they all flag, read against their articles, contain
+  claims the gold articles do not make (EXP-0054 Observations). The supported set assumed
+  WixQA reference answers are grounded in their gold articles' text (Phase 3 fact 4). For
+  about half of this slice they are not. **Criterion 2 as built cannot tell a correct
+  judge from a lenient one.** That is DEC-076's own revisit trigger.
+- **What the story allows next:** "one judge change (prompt or model), followed by one
+  re-measurement". The evidence points at the instrument, not the judge, so a judge change
+  is unlikely to be the informative move. The options, for Krutik:
+  1. **Accept report-only** and move on to P3-05 with a judge chosen for reporting only.
+     Among candidates meeting criteria 1 and 3, DeepSeek is cheapest (measured $0.00244
+     per pair against Gemini's $0.01003).
+  2. **Rebuild the supported set so it is supported by construction** (for example: claims
+     quoted verbatim from the gold article, or reference answers screened for article
+     support by a rule declared in advance), keep the DEC-076 thresholds unchanged, and
+     re-measure. The v1 result stays recorded as a failure; v2 is a new instrument with
+     its own DEC entry, not a re-scoring.
+  3. **Use the judge change the story allows** on the cheapest candidate and re-measure on
+     the same v1 pairs.
+- **Evidence:** EXP-0054–0056 and their per-pair rows; five pairs read by hand.
+- **Revisit if:** Krutik picks option 2 or 3 — its outcome is a new entry, not an edit here.

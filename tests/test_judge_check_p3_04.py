@@ -98,3 +98,13 @@ def test_no_url_survives_in_any_stored_reference_answer():
     any_url_marker = re.compile(r"https?://|www\.")
     assert sum(len(whole_url.findall(a)) for a in answers) == 75
     assert sum(len(any_url_marker.findall(strip_links(a))) for a in answers) == 0
+
+
+def test_a_nan_score_is_a_failure_not_a_pass():
+    """MIS-043: NaN < 1.0 is False, so a NaN read as a verdict means 'fully supported'."""
+    nan = float("nan")
+    assert verdict_flag(nan) is None
+    s = summarize([{"kind": "unsupported", "score": nan, "flag": False},
+                   {"kind": "unsupported", "score": 0.0, "flag": True}])
+    assert s["unsupported_flag_recall"] == 1.0
+    assert s["judge_failures"] == 1 and s["mean_faithfulness"]["unsupported"] == 0.0

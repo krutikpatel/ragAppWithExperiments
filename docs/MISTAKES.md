@@ -213,6 +213,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
     and a different product name do not make a model independent of its lab's other
     models. Check lineage before calling a judge or checker cross-family. (MIS-042)
 
+53. **Check every library float for NaN where it is stored.** `NaN < 1.0` is False and
+    raises nothing, so a NaN silently takes whichever branch "False" means. (MIS-043)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1468,3 +1471,23 @@ Derived from the prevention rules below. Run through it and say in chat that you
   question that a decision rests on is a debt: when a second decision builds on it,
   settle it first.
 - **Added to preflight:** yes — item 52.
+
+## MIS-043 — A NaN faithfulness score was stored as a score, and read as "fully supported"
+- **Date:** 2026-09-28
+- **Severity:** Low — one pair of 720; it did not change EXP-0055's outcome. But the same
+  path runs every judged Tier 2 metric, where a NaN would have been averaged or compared.
+- **What happened:** Ragas returned `NaN` faithfulness for one Qwen pair
+  (`af054e67…:unsupported`), presumably when no statements were extracted. `RagasJudge`
+  stored `float(result.value)` without checking. The harness flag is `score < 1.0`, and
+  `NaN < 1.0` is False, so a clearly unsupported pair was counted as passed: recall 0.9861
+  instead of 1.0, and a mean of `NaN` on the unsupported kind.
+- **How it was caught:** `mean_faithfulness.unsupported` printed as `NaN` in the summary.
+- **Root cause:** the not-applicable case designed for failures (`None`, MIS-011) did not
+  cover a library returning a float that is not a number. Preflight 6 and 15, one level down.
+- **Fix applied:** `RagasJudge` records a NaN as a failure with a reason; the harness
+  treats NaN as a failure too; a test pins it. The three summaries were recomputed from the
+  stored per-pair rows and written beside the originals as `summary_mis043`.
+- **Prevention rule:** any float that comes back from a library and feeds a comparison is
+  checked for NaN at the point it is stored. A comparison with NaN never raises; it quietly
+  answers False.
+- **Added to preflight:** yes — item 53.
