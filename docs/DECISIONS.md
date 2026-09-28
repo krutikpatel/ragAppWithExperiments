@@ -3423,6 +3423,11 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Verified locally:** no pipeline change ⇒ SKIPPED (0); pipeline change without the key ⇒
   NOT VERIFIED (1); with the key ⇒ estimate, then PASS at $0.0000 with every cache at 100%;
   an outage raised through the CLI ⇒ exit 2. The workflow itself has **not run on GitHub**.
+  > **Update 2026-09-28:** first GitHub runs. The first push was rejected at parse time
+  > (MIS-046); after the fix, run `36500537238` on `main`: `unit-tests` 456 passed / 29 skipped,
+  > `ci-eval` SKIPPED (docs-only push) — both green. **A real ci-eval on GitHub has not run yet:**
+  > it needs the `OPENROUTER_API_KEY` secret and a pipeline change; the first one is cold
+  > (frozen data rebuilt from HF, dense index built, nothing cached), estimated ~$0.33.
 - **Not done here, needs Krutik:** (1) add the `OPENROUTER_API_KEY` repository secret;
   (2) make `unit-tests` and `ci-eval` required checks on `main` — which also stops direct
   pushes to `main`, so from then on every change goes through a PR.
