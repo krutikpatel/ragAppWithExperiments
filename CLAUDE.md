@@ -454,6 +454,9 @@ rag/
                     generation_metrics.py (citations, refusal — no LLM calls),
                     steps.py (procedural step coverage), slices.py (P0-08),
                     judge.py — the ONLY module that may import Ragas,
+                    judge_check.py — P3-04 synthetic judge check (`rag judge-check probe|run`):
+                    240 pairs from golden_v1, verdict = faithfulness < 1.0, recorded as
+                    eval_tier `judge_check` rows (DEC-075),
                     noise_floor.py — measured run-to-run spread (MDD) per configuration
                     family, matched from a run row's judge/generator/prompt provenance;
                     labels every delta significant / within judge noise / no MDD

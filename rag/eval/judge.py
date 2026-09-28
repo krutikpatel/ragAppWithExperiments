@@ -112,6 +112,9 @@ class JudgeConfig:
     # reproducibility fix. See DEC-032.
     provider_order: tuple[str, ...] = ("Cerebras", "Groq")
     provider_allow_fallbacks: bool = True
+    # Score only these criteria (P3-04 needs faithfulness alone). Empty = every
+    # criterion the configuration can score, which is what every Phase 0–2 run did.
+    only: tuple[str, ...] = ()
     # Judging one question never depends on another, so this is bounded only by
     # provider rate limits.
     concurrency: int = 20
@@ -124,21 +127,21 @@ class JudgeConfig:
     @property
     def extra_body(self) -> dict[str, Any]:
         """OpenRouter routing preferences, sent on every judge call."""
-        if not self.provider_order:
-            return {}
-        return {
-            "provider": {
+        # `usage.include` makes OpenRouter return exact tokens and cost on every
+        # response; `JudgeUsage` reads them (P3-04). It changes no output.
+        body: dict[str, Any] = {"usage": {"include": True}}
+        if self.provider_order:
+            body["provider"] = {
                 "order": list(self.provider_order),
                 "allow_fallbacks": self.provider_allow_fallbacks,
             }
-        }
+        return body
 
     @property
     def criteria(self) -> tuple[str, ...]:
         """Which criteria this configuration can actually score."""
-        if self.embedding_model:
-            return CRITERIA
-        return CRITERIA_WITHOUT_EMBEDDINGS
+        able = CRITERIA if self.embedding_model else CRITERIA_WITHOUT_EMBEDDINGS
+        return tuple(c for c in able if c in self.only) if self.only else able
 
     @property
     def skipped_criteria(self) -> tuple[str, ...]:
@@ -190,6 +193,39 @@ class Judge(ABC):
         """Return one JudgeScore per criterion this judge can compute."""
 
 
+@dataclass
+class JudgeUsage:
+    """Exact tokens and cost, read off every judge response (OpenRouter `usage`).
+
+    Ragas hides the responses, so this is an httpx response hook on the judge's own
+    client. Reasoning tokens are counted separately because every Phase 3 candidate is
+    a reasoning model, and they are billed as output (MIS-006, MIS-034)."""
+
+    calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    reasoning_tokens: int = 0
+    cost_usd: float = 0.0
+    providers_seen: set[str] = field(default_factory=set)
+
+    def add(self, body: dict[str, Any]) -> None:
+        usage = body.get("usage") or {}
+        self.calls += 1
+        self.prompt_tokens += int(usage.get("prompt_tokens") or 0)
+        self.completion_tokens += int(usage.get("completion_tokens") or 0)
+        details = usage.get("completion_tokens_details") or {}
+        self.reasoning_tokens += int(details.get("reasoning_tokens") or 0)
+        self.cost_usd += float(usage.get("cost") or 0.0)
+        if body.get("provider"):
+            self.providers_seen.add(str(body["provider"]))
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"calls": self.calls, "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+                "reasoning_tokens": self.reasoning_tokens,
+                "cost_usd": round(self.cost_usd, 6), "providers_seen": sorted(self.providers_seen)}
+
+
 class RagasJudge(Judge):
     """Ragas metrics driven through an OpenRouter-backed instructor LLM."""
 
@@ -204,6 +240,7 @@ class RagasJudge(Judge):
     def __init__(self, config: JudgeConfig) -> None:
         super().__init__(config)
         self._metrics: dict[str, Any] | None = None
+        self.usage = JudgeUsage()
 
     def _openrouter_client(self) -> Any:
         """An **async** OpenAI-compatible client pointed at OpenRouter.
@@ -220,8 +257,19 @@ class RagasJudge(Judge):
                 "OPENROUTER_API_KEY is not set. It lives in .env at the repo root; "
                 "load it into the environment before a Tier 2 run."
             )
+        import httpx
+
+        async def record(response: httpx.Response) -> None:
+            if response.request.url.path.endswith("/chat/completions") and response.status_code == 200:
+                await response.aread()
+                try:
+                    self.usage.add(response.json())
+                except ValueError:
+                    pass
+
         return AsyncOpenAI(
-            api_key=api_key, base_url=OPENROUTER_BASE_URL, timeout=self.config.timeout_s
+            api_key=api_key, base_url=OPENROUTER_BASE_URL, timeout=self.config.timeout_s,
+            http_client=httpx.AsyncClient(timeout=self.config.timeout_s, event_hooks={"response": [record]}),
         )
 
     def _build_metrics(self) -> dict[str, Any]:
@@ -244,6 +292,8 @@ class RagasJudge(Judge):
                 llm=llm, weights=list(self.config.answer_correctness_weights)
             ),
         }
+        if self.config.only:
+            return {k: v for k, v in metrics.items() if k in self.config.criteria}
         if self.config.embedding_model:
             from ragas.metrics.collections import AnswerRelevancy
 

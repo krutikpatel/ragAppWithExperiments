@@ -123,7 +123,8 @@ def test_judge_pins_providers_on_every_call():
     assert body["provider"]["order"] == ["Cerebras", "Groq"]
 
     unpinned = JudgeConfig(model="openai/gpt-oss-120b", provider_order=())
-    assert unpinned.extra_body == {}, "an empty order must send no routing preference"
+    assert "provider" not in unpinned.extra_body, "an empty order must send no routing preference"
+    assert unpinned.extra_body["usage"] == {"include": True}, "exact usage and cost on every response (P3-04)"
 
 
 def test_provider_order_is_recorded_and_compared():

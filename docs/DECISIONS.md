@@ -2957,3 +2957,47 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   `rag data golden --check`. Baseline strict recall per stratum is in `EXPERIMENTS.md`.
 - **Revisit if:** P3-07 shows the slice cannot detect a regression the gate must catch,
   or a stratum's MDD makes its per-stratum number meaningless.
+
+## DEC-075 — P3-04 bake-off: three cross-lab judges, each pinned to one host, one fixed pair set
+- **Date:** 2026-09-28
+- **Decided by:** Joint. Krutik: the candidates, the DeepSeek host (DeepInfra), including
+  Qwen, and the probes. Claude: the Gemini host, the pair construction, the verdict rule
+  and the link rule below, flagged in chat.
+- **Status:** Active
+- **Candidates and pins** (all `allow_fallbacks: false`, temperature 0, faithfulness only,
+  through the unchanged `RagasJudge` path):
+
+  | Candidate | Pinned host | Host price $/Mtok in/out | Why this host |
+  |---|---|---|---|
+  | `deepseek/deepseek-v4.1-flash` | DeepInfra | 0.14 / 0.42, fp8 | Krutik: 99.99% uptime, structured outputs; the cheapest host (InferenceNet) does not state quantization and showed 94% uptime |
+  | `qwen/qwen3.8-flash` | Alibaba | 0.15 / 0.47 | the only host |
+  | `google/gemini-3.8-flash` | Google AI Studio | tiered, from 0.375 / 1.875 | Claude: same listed price as Vertex ("Google"); AI Studio is the host EXP-0011 already used for a Gemini model |
+
+  Families `deepseek`, `qwen`, `google` — none is the generator's lab (DEC-073). Qwen is
+  also the lab of the retrieval embedder and the answer-relevance embedder; the P0-07
+  rule is about the judge and the generator, so it does not apply, and it is recorded here.
+- **Pairs** (`rag/eval/judge_check.py`, seed 20260928): each of the 80 answerable
+  `golden_v1` questions gives three pairs, 240 in all, with the same article count per pair:
+  - **supported** — WixQA's reference answer with its gold articles' full frozen text;
+  - **unsupported** — the same answer with random articles that are neither gold nor in the
+    dense control's top 50 for that question (`run_20260912_225005_be04`). The corpus has
+    no product-area field, so distance in retrieval stands in for "a different area";
+  - **hard_negative** — the dense control's top-ranked non-gold articles. **Report-only,
+    never part of the bar**: near-duplicate articles may genuinely support the answer.
+- **Verdict:** a pair is flagged unsupported when faithfulness < 1.0 — the strict
+  "≥ 1 unsupported claim" definition P3-05 gates on, so the check tests the flag CI uses.
+  A threshold-free AUROC on the raw score is reported beside it. A judge failure is
+  counted, never scored as a verdict.
+- **Reference links (`reference-links-v1`):** 26 of 80 reference answers contain 75 URLs.
+  The corpus was frozen with link targets stripped (norm-v1) and the generator is told
+  never to write URLs, so an unstripped URL is a claim no article can support, and the
+  strict flag would fire on a supported pair over formatting. norm-v1's regex matches only
+  35 of the 75 (these answers write `[text] (url)` and nest URLs); the new rule keeps link
+  text, drops targets, and is validated on all 80 answers: 75 → 0.
+- **Order:** one probe per candidate (2 questions × 3 kinds; approved by Krutik) to measure
+  tokens, reasoning and failures on the real prompt (preflight 42). Then the pass/fail bar
+  is declared in its own entry **before** any full run, and each full run is approved on
+  its estimate.
+- **Evidence:** no measured data yet; the design is a judgment call.
+- **Revisit if:** a probe shows a candidate cannot return structured output on its pinned
+  host, or fails more than one call in six.

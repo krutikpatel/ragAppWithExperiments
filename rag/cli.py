@@ -369,6 +369,78 @@ def models_verify(
     raise typer.Exit(1 if failed else 0)
 
 
+judge_app = typer.Typer(help="P3-04 synthetic judge sanity check.", no_args_is_help=True)
+app.add_typer(judge_app, name="judge-check")
+
+PROBE_QUESTIONS = 2
+
+
+def _judge_inputs(candidate: str):
+    from rag.eval.judge_check import CANDIDATES, build_pairs, load_inputs
+
+    if candidate not in CANDIDATES:
+        raise typer.BadParameter(f"unknown candidate {candidate!r}; known: {sorted(CANDIDATES)}")
+    golden, texts, ranked, corpus = load_inputs()
+    return CANDIDATES[candidate], build_pairs(golden, list(texts), ranked), texts, corpus
+
+
+@judge_app.command("probe")
+def judge_probe(candidate: str = typer.Argument(..., help="deepseek | qwen | gemini")) -> None:
+    """A few real calls (2 questions x 3 kinds) to measure tokens, reasoning, cost and
+    failures on the REAL prompt before costing the full run (preflight 42). Recorded."""
+    import random
+
+    from rag.eval.judge_check import SEED, judge_config, record_run, run_pairs, summarize
+
+    (model, provider), pairs, texts, corpus = _judge_inputs(candidate)
+    qids = sorted({p.question_id for p in pairs})
+    chosen = set(random.Random(f"{SEED}:probe").sample(qids, PROBE_QUESTIONS))
+    probe = [p for p in pairs if p.question_id in chosen]
+    results, usage = run_pairs(probe, texts, judge_config(model, provider))
+    usage["context_words"] = sum(len(texts[a].split()) for p in probe for a in p.article_ids)
+    summary = summarize(results)
+    run_id = record_run(name=f"P3-04 probe — {model} @{provider}", model=model, provider=provider, pairs=probe,
+                        results=results, usage=usage, summary=summary, corpus=corpus,
+                        notes="probe: 2 questions x 3 kinds, preflight 42", cost_estimate=None, approval="probe approved by Krutik 2026-09-28")
+    typer.echo(json.dumps({"run_id": run_id, "usage": usage,
+                           "results": [{k: r[k] for k in ("pair_id", "score", "flag", "error")} for r in results]}, indent=2))
+
+
+@judge_app.command("run")
+def judge_run(
+    candidate: str = typer.Argument(..., help="deepseek | qwen | gemini"),
+    estimate_only: bool = typer.Option(False, "--estimate-only"),
+    approve_cost: str = typer.Option("", "--approve-cost", help="Approval reference; required above the $2 gate."),
+) -> None:
+    """All 240 pairs on one candidate judge. Estimated from its latest probe."""
+    from rag.eval.judge_check import estimate, judge_config, record_run, run_pairs, summarize
+    from rag.runner.cost import COST_GATE_USD
+    from rag.runner.store import ResultsStore
+
+    (model, provider), pairs, texts, corpus = _judge_inputs(candidate)
+    with ResultsStore() as store:
+        row = store.conn.execute(
+            "SELECT run_id, cost_actual_json FROM runs WHERE eval_tier='judge_check' AND name LIKE ? "
+            "AND status='VALID' ORDER BY timestamp DESC LIMIT 1", (f"P3-04 probe — {model} @{provider}",)).fetchone()
+    if row is None:
+        raise typer.BadParameter(f"no probe recorded for {model} @{provider}; run `rag judge-check probe {candidate}` first")
+    est = estimate(pairs, texts, {"run_id": row["run_id"], **json.loads(row["cost_actual_json"])})
+    typer.echo(f"*** P3-04 ESTIMATE (calibrated on a {PROBE_QUESTIONS}-question probe) {model} @{provider}: "
+               f"${est['usd']:.4f} for {est['n_pairs']} pairs, {est['context_words']:,} context words ({est['source']})")
+    if estimate_only:
+        return
+    if est["usd"] > COST_GATE_USD and not approve_cost.strip():
+        raise typer.Exit(f"estimate above the ${COST_GATE_USD:.2f} gate; re-run with --approve-cost")
+    if not approve_cost.strip():
+        raise typer.BadParameter("--approve-cost is required: every paid run needs Krutik's go-ahead (DEC-053)")
+    results, usage = run_pairs(pairs, texts, judge_config(model, provider))
+    summary = summarize(results)
+    run_id = record_run(name=f"P3-04 judge check — {model} @{provider}", model=model, provider=provider, pairs=pairs,
+                        results=results, usage=usage, summary=summary, corpus=corpus, notes="P3-04 bake-off",
+                        cost_estimate=est["usd"], approval=approve_cost)
+    typer.echo(json.dumps({"run_id": run_id, "usage": usage, **summary}, indent=2))
+
+
 audit_app = typer.Typer(help="Provenance audits over the results store (P3-01).", no_args_is_help=True)
 app.add_typer(audit_app, name="audit")
 
