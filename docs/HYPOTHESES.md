@@ -1152,3 +1152,19 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
     gold" is not measurably a grounding problem on this sample — the near-neighbour
     articles carry most of what the answers say. And "partially supported" turned out to
     mean mostly style, not invention: 3 of 30 unsupported claims read were factual errors.
+
+## H-040 — On the golden slice, the gate can catch a faithfulness drop of about 0.03 or more, and the judge is the smaller part of the noise
+- **Date written:** 2026-09-28, before the P3-07 noise runs (DEC-082).
+- **Source:** Claude.
+- **Hypothesis:**
+  1. **Mean faithfulness MDD** at golden size (≈ 85 judged answers) lands between 0.02
+     and 0.05. P1-11 measured 0.014 for the old judge on 100 answers, and regenerating the
+     answers adds the generator's noise on top.
+  2. **Unsupported-answer rate MDD** is much larger — above 0.08. It is a yes/no per
+     answer and two thirds of answers sit near the line (EXP-0058: 61 of 92 partially
+     supported), so one flipped claim flips an answer.
+  3. **The re-judges vary less than the fresh runs**: judge-only spread on mean
+     faithfulness is under half the full-run spread.
+- **The part I trust least:** (3). DeepSeek is a reasoning model at temperature 0, and
+  MIS-034 showed a reasoning model's output is not deterministic at temperature 0; its
+  claim splitting alone could vary as much as the generator.
