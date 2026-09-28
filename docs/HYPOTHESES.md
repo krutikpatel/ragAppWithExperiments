@@ -1122,3 +1122,23 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   the extraction cutting in questions, headings and UI labels, 2 from hypothetical
   examples, 1 is a plain miss. My worry was about the judge's rewriting; the larger effect
   was my own instrument's sentence cuts.
+
+## H-039 — Answers written without their gold article are mostly partially supported, not invented
+- **Date written:** 2026-09-28, before the P3-06 run (`rag faithfulness run_20260913_205058_dc03`).
+- **Source:** Claude.
+- **Buckets, declared now:** per answered question, **fully supported** = faithfulness
+  1.0; **partially supported** = 0 < faithfulness < 1; **unsupported** = faithfulness 0.
+  Judge failures are counted apart. Groups: gold in context (65 answered),
+  answered-without-gold (27: 14 with no gold article in context, 13 multi-doc with only
+  part of their gold).
+- **Hypothesis:**
+  1. In the answered-without-gold group, **partially supported is the largest bucket.** The
+     retriever returns near-neighbour articles (F9, F12, F16), and a generator told to cite
+     them will write some claims they support and some they do not.
+  2. The gold-in-context group has a **higher share fully supported** than the
+     answered-without-gold group.
+  3. Of the 14 answers with no gold article at all, **fewer than half are fully supported.**
+- **The part I trust least:** (2) could fail in a direction that matters. If near-neighbour
+  articles are complete enough, the without-gold answers may be as grounded as the
+  with-gold ones — in which case "answered without gold" is not a grounding problem at all,
+  only a labelling one (OQ-047).
