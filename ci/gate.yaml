@@ -1,11 +1,12 @@
 # ci/gate.yaml — the rules `rag ci-eval` applies.
 #
-# STATUS: DRAFT (P3-08, DEC-084). P3-09 declares the rules, with a DECISIONS.md entry,
-# before the first gated PR, and sets `status: declared`. Until then `rag ci-eval` runs
-# these and labels its verdict DRAFT. Every threshold below comes from a measurement,
-# not a guess: α from DEC-082, MDDs from `rag/eval/noise_floor.py` (DEC-083).
-status: draft
-version: 0
+# STATUS: DECLARED (P3-09, DEC-087), version 1, before the first gated PR. Changing any
+# rule or threshold is a new version with its own DECISIONS.md entry. Every threshold
+# comes from a measurement, not a guess: α from DEC-082, MDDs from rag/eval/noise_floor.py
+# (DEC-083, DEC-087). Published detection floors: ci/DETECTION_FLOOR.md.
+status: declared
+version: 1
+decision: DEC-087
 
 # What runs.
 configs:
@@ -13,33 +14,42 @@ configs:
   golden: configs/golden_generate_v2.yaml         # Tier 2 generation on golden_v1
   judge: configs/baseline_dense_tier2_v2.yaml     # judge fields for `rag faithfulness`
 
-# Spend: a run estimated above this stops with "needs approval" (P3-10).
+# A result that does not have exactly these question counts is schema-invalid.
+expected_questions: {dev: 200, golden: 95, answers: 95}
+
+# Spend: a run estimated above this stops with "needs approval" (P3-10 sets the final value).
 ci_budget_usd: 1.00
 
 alpha: 0.05
 noise_floor_family: golden-v1-deepseek
 
-# Retrieval: fail when the metric drops AND the paired test is significant at alpha.
-# Newly failed question ids are always listed, pass or fail.
+# The baseline changes only through `rag ci-baseline update --reason <DEC-id>`. An
+# improvement NEVER updates it automatically.
+baseline_updates: manual
+
+# Retrieval: fail when recall@5 on dev drops AND the exact paired test is significant at
+# alpha. Lost and gained question ids are always listed, pass or fail.
 retrieval:
   - {metric: strict_recall@5, run: dev, gating: true}
   - {metric: strict_recall@5, run: golden, gating: false}
 
-# Judged / generated: fail when the change in the bad direction exceeds the MDD of the
-# noise-floor family the run matches. No matching family -> the metric cannot be gated
-# and the verdict is FAIL (fail closed): re-measure P3-07 first.
+# Judged and generated: fail when the change in the bad direction exceeds the metric's MDD
+# in the matched noise-floor family; smaller changes pass "within noise". No matching family
+# means the metric cannot be gated and the verdict is FAIL (fail closed). All three judged
+# metrics are gating because the production judge passed P3-04 (DEC-079).
 judged:
-  - {metric: mean_faithfulness, better: higher, gating: true}
-  - {metric: unsupported_answer_rate, better: lower, gating: true}
-  - {metric: false_answer_rate, better: lower, gating: true}
-  - {metric: refusal_rate, better: lower, gating: false}
-  # DEC-083: identical runs invent 1-2 citation ids by chance, so zero tolerance would
-  # fail every build. Report-only until P3-09 decides.
-  - {metric: citation_integrity, better: higher, gating: false}
+  - {metric: mean_faithfulness, better: higher, gating: true}        # MDD 0.026
+  - {metric: unsupported_answer_rate, better: lower, gating: true}   # MDD 0.064
+  - {metric: false_answer_rate, better: lower, gating: true}         # MDD 0.077 (2 of 15)
+  - {metric: citation_validity, better: higher, gating: true}        # MDD 0.041 (DEC-087)
+  - {metric: refusal_rate, better: lower, gating: false}             # MDD 0.073
+  - {metric: citation_integrity, better: higher, gating: false}      # superseded by citation_validity
 
 # Deterministic hard fails, zero tolerance.
 hard_fails:
-  - empty_answer          # a generated answer with no text
-  - judge_failure         # a judged answer the judge could not score
-  - question_set_changed  # the run's question ids differ from the baseline's
-  - provenance_changed    # corpus, split, judge, generator or prompt differs from the baseline's
+  - cites_unretrieved_article   # a citation to a REAL article that was not in the answer's context: 0 in 481 answers, six fresh runs
+  - schema_invalid              # the result is missing fields, mistyped, or has the wrong question counts
+  - empty_answer                # a generated answer with no text
+  - judge_failure               # an answered question the judge could not score
+  - question_set_changed        # the run's question ids differ from the baseline's
+  - provenance_changed          # corpus, split, judge or judge prompt version differs from the baseline's

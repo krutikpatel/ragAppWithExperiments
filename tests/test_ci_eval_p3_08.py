@@ -28,9 +28,11 @@ def _result(dev_hits=None, golden_hits=None, judged=None, answers=None, family=F
                                                                for i in range(95)}
     answers = answers if answers is not None else {
         f"g{i:02d}": {"faithfulness": 0.85, "unsupported": i % 3 == 0, "refused": i >= 90, "unanswerable": i >= 80,
-                      "citation_integrity": True, "empty": False, "judge_failed": False} for i in range(95)}
+                      "citation_integrity": True, "empty": False, "judge_failed": False,
+                      "citation_valid": True, "unretrieved_real_citations": []} for i in range(95)}
     judged = judged or {"mean_faithfulness": 0.85, "unsupported_answer_rate": 0.62, "false_answer_rate": 0.33,
-                        "refusal_rate": 0.08, "citation_integrity": 0.98, "judge_failures": 0, "n_judged": 85}
+                        "refusal_rate": 0.08, "citation_integrity": 0.98, "citation_validity": 0.95,
+                        "cites_unretrieved_article": 0, "judge_failures": 0, "n_judged": 85}
     return {"runs": {"dev": "rd", "golden": "rg", "faithfulness": "rf"}, "git_sha": "abcdef1", "git_dirty": 0,
             "provenance": {"corpus_hash": "c", "dev_split_hash": "ds", "golden_split_hash": "gs", "judge": "j",
                            "judge_prompt_version": "v", "noise_floor_family": family,
@@ -49,7 +51,7 @@ def _rule(verdict, section, metric, run=None):
 
 def test_an_unchanged_run_passes_with_zero_deltas():
     v = compare(_result(), BASELINE, GATE)
-    assert v["status"] == "PASS" and v["draft"] is True and v["hard_fails"] == []
+    assert v["status"] == "PASS" and v["draft"] is False and v["hard_fails"] == []
     assert _rule(v, "retrieval", "strict_recall@5", "dev")["delta"] == 0.0
     assert all(r["verdict"] in ("pass", "report") for r in v["judged"])
     assert v["changed_answers"] == []
@@ -101,7 +103,8 @@ def test_hard_fails():
     new["provenance"]["judge"] = "another judge"
     del new["per_question"]["dev"]["d000"]
     rules = {h["rule"] for h in compare(new, BASELINE, GATE)["hard_fails"]}
-    assert rules == {"empty_answer", "judge_failure", "provenance_changed", "question_set_changed"}
+    assert rules == {"empty_answer", "judge_failure", "provenance_changed", "question_set_changed",
+                     "schema_invalid"}, "a missing dev question also breaks the declared counts"
 
 
 def test_the_baseline_needs_an_existing_decision_and_a_clean_run(tmp_path):
@@ -212,3 +215,39 @@ def test_answers_replay_inside_ci_eval_and_a_changed_prompt_misses(tmp_path):
     assert first.meta["cached"] is False and again.meta["cached"] is True, "a replay is marked, so it is not billed"
     snap = cache.snapshot()
     assert snap["completion_hits"] == 1 and snap["completion_misses"] == 2
+
+
+# --- P3-09: the declared rules (DEC-087) -----------------------------------------------
+
+def test_the_declared_gate_is_version_1_with_every_story_rule():
+    assert GATE["status"] == "declared" and GATE["version"] == 1 and GATE["baseline_updates"] == "manual"
+    gating = {r["metric"] for r in GATE["judged"] if r["gating"]}
+    assert gating == {"mean_faithfulness", "unsupported_answer_rate", "false_answer_rate", "citation_validity"}
+    assert {"cites_unretrieved_article", "schema_invalid"} <= set(GATE["hard_fails"])
+    assert GATE["alpha"] == 0.05
+
+
+def test_citing_a_real_article_that_was_not_retrieved_is_a_hard_fail():
+    answers = copy.deepcopy(BASELINE["result"]["per_question"]["answers"])
+    answers["g05"]["unretrieved_real_citations"] = ["a" * 64]
+    v = compare(_result(answers=answers), BASELINE, GATE)
+    hard = {h["rule"]: h for h in v["hard_fails"]}
+    assert v["status"] == "FAIL" and hard["cites_unretrieved_article"]["question_ids"] == {"g05": ["a" * 64]}
+
+
+@pytest.mark.parametrize("value, verdict", [(0.92, "pass"), (0.90, "FAIL")])
+def test_citation_validity_is_gated_against_its_four_run_mdd(value, verdict):
+    judged = {**BASELINE["result"]["metrics"]["judged"], "citation_validity": value}
+    r = _rule(compare(_result(judged=judged), BASELINE, GATE), "judged", "citation_validity")
+    assert r["mdd"] == 0.041 and r["verdict"] == verdict
+
+
+def test_a_mistyped_or_out_of_range_result_is_schema_invalid():
+    from rag.runner.ci_eval import validate_result
+
+    answers = copy.deepcopy(BASELINE["result"]["per_question"]["answers"])
+    answers["g00"]["faithfulness"] = 1.7
+    answers["g01"]["refused"] = "no"
+    errors = validate_result(_result(answers=answers), GATE)
+    assert any("outside [0, 1]" in e for e in errors) and any("g01" in e for e in errors)
+    assert validate_result(_result(), GATE) == []

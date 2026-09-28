@@ -3340,3 +3340,46 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   test previously held the generator to "no URL-shaped string at all".
 - **Revisit if:** Krutik prefers the stricter rule, or a quoted URL turns out to be one the
   frozen KB itself has since broken (the "stale" half of P1-05's reason).
+
+## DEC-087 — P3-09: the gate rules, declared (`ci/gate.yaml` version 1)
+- **Date:** 2026-09-28
+- **Decided by:** Joint. Krutik asked for P3-09 finished; the rules follow the story, and
+  the citation rule below departs from its wording on measured data — Claude's call,
+  flagged to Krutik in chat for approval or veto.
+- **Status:** Active — declared before the first gated PR. Supersedes the DRAFT of DEC-084.
+- **The rules** (`ci/gate.yaml`, `status: declared`, `version: 1`):
+  - **Retrieval:** fail when strict recall@5 on `dev` drops and the exact paired test is
+    significant at **α = 0.05** (DEC-082). Lost and gained ids are always listed. Golden
+    recall@5 is reported, not gated.
+  - **Judged:** mean faithfulness, unsupported-answer rate and false-answer rate — all
+    **gating**, because the production judge passed P3-04 (DEC-079). Fail when the change
+    in the bad direction exceeds the metric's MDD (0.026 / 0.064 / 0.077, DEC-083);
+    smaller changes pass "within noise". No matching noise-floor family ⇒ fail closed.
+  - **Citation validity — gating against its MDD, 0.041** (new, below).
+  - **Report-only:** refusal rate; the old citation integrity (superseded by validity).
+  - **Hard fails, zero tolerance:** `cites_unretrieved_article`, `schema_invalid`,
+    `empty_answer`, `judge_failure`, `question_set_changed`, `provenance_changed`.
+  - **Improvements never update the baseline** (`baseline_updates: manual`): only
+    `rag ci-baseline update --reason <DEC-id>` writes it.
+- **The citation rule, and why it departs from the story's wording.** P3-09 asks for zero
+  tolerance on "a citation to a non-retrieved chunk". Measured on six fresh runs (P3-06,
+  P3-07 ×3, ci-eval run 1; 481 answered questions):
+  - citations to a **real article the generator was not given: 0** in every run. That is the
+    error the rule is about, it is stable at zero, and it is the hard fail;
+  - **garbled ids** (a mis-copied 64-character hash matching no article) in 1–2 answers per
+    run, and **malformed markers** the parser rejects (wrong-length ids, articles cited by
+    title) in 2–4 answers per run. Zero tolerance on these would fail every build. They are
+    folded into **citation validity** (share of answers with no garbled, malformed or
+    out-of-context citation) and gated against its MDD.
+  - The MDD is **0.041**, measured on **four** fresh identical runs (0.9625, 0.9474, 0.9474,
+    0.9221): the three P3-07 runs gave 0.018, and the fourth fell 0.025 outside it, so three
+    runs underestimate a count this small. Added to family `golden-v1-deepseek`.
+- **Schema-invalid output** is the gate's own result: missing fields, wrong types, a
+  faithfulness outside [0, 1], or question counts other than 200 / 95 / 95.
+- **Baseline refresh:** the DEC-085 baseline predates the citation fields. It is replaced by
+  a fully cached re-run of the same pipeline — the same answers and judgments, with the new
+  fields computed from them — written with `--reason DEC-087`. No model call is made.
+- **CI budget** stays at the draft $1.00 until P3-10 sets it (a story open question).
+- **Evidence:** the six runs above; `tests/test_ci_eval_p3_08.py` pins every rule.
+- **Revisit if:** a planted regression in P3-12 passes a rule it should fail, or any run
+  records a `cites_unretrieved_article` that turns out to be a near-duplicate article.

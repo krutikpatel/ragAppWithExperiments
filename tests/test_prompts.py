@@ -207,3 +207,27 @@ def test_url_detector_does_not_flag_a_bare_scheme():
     # And it still catches what it exists to catch.
     assert find_urls("Go to https://support.wix.com/en/article/x") == ["https://support.wix.com/en/article/x"]
     assert find_urls("See www.wix.com/my-account.") == ["www.wix.com/my-account"]
+
+
+def test_every_doc_marker_is_either_parsed_or_flagged_malformed_on_stored_output():
+    """MIS-045 / preflight 49: `citation-v3` silently skips a `[doc:` marker it cannot
+    parse. The P3-09 detector must account for every one the parser does not, on every
+    stored answer — no marker may be neither."""
+    import re
+
+    from rag.eval.generation_metrics import malformed_citation_markers
+    from rag.runner.store import DEFAULT_DB, ResultsStore
+
+    if not DEFAULT_DB.exists():
+        pytest.skip("no results store on this machine")
+    parsed = re.compile(r"\[\s*doc\s*:\s*[0-9a-f]{8,64}\s*(?:[|#][^\]]*)?\]", re.IGNORECASE)
+    with ResultsStore() as store:
+        answers = [a for (a,) in store.conn.execute(
+            "SELECT generated_answer FROM run_questions WHERE generated_answer IS NOT NULL")]
+    gaps = [a[:80] for a in answers
+            if len(re.findall(r"\[\s*doc\s*:", a, re.IGNORECASE))
+            != len(parsed.findall(a)) + len(malformed_citation_markers(a))]
+    assert gaps == []
+    assert malformed_citation_markers("[doc:" + "a" * 66 + "] and [doc: ADI: A Payment Form]") == [
+        "a" * 66, "ADI: A Payment Form"]
+    assert malformed_citation_markers("[doc:" + "b" * 64 + "] [doc: " + "c" * 64 + " | a quote]") == []

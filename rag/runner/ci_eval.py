@@ -61,6 +61,8 @@ def collect(*, dev_row: dict[str, Any], golden_row: dict[str, Any], faith_row: d
             "unanswerable": m["unanswerable"], "citation_integrity": m["citation_integrity"],
             "empty": not (r["generated_answer"] or "").strip(),
             "judge_failed": (not m["refused"]) and m["faithfulness"] is None,
+            "citation_valid": m.get("citation_valid"),
+            "unretrieved_real_citations": m.get("unretrieved_real_citations"),
         }
     faith_metrics = json.loads(faith_row["metrics_json"])["by_stratum"]
     family, _ = family_for_run(faith_row)
@@ -86,7 +88,8 @@ def collect(*, dev_row: dict[str, Any], golden_row: dict[str, Any], faith_row: d
             },
             "judged": {k: faith_metrics["all"].get(k) for k in
                        ("mean_faithfulness", "unsupported_answer_rate", "false_answer_rate", "refusal_rate",
-                        "citation_integrity", "judge_failures", "n_judged")},
+                        "citation_integrity", "citation_validity", "cites_unretrieved_article",
+                        "garbled_citation_answers", "malformed_citation_answers", "judge_failures", "n_judged")},
             "judged_by_stratum": faith_metrics,
         },
         "per_question": {
@@ -96,6 +99,37 @@ def collect(*, dev_row: dict[str, Any], golden_row: dict[str, Any], faith_row: d
         },
         "cost_usd": cost, "call_cache": cache,
     }
+
+
+# --- the result's own shape (P3-09 "schema-invalid output") ---------------------------
+
+ANSWER_KEYS = {"faithfulness": (float, int, type(None)), "unsupported": (bool, type(None)), "refused": (bool,),
+               "unanswerable": (bool,), "citation_integrity": (bool,), "empty": (bool,), "judge_failed": (bool,),
+               "citation_valid": (bool,), "unretrieved_real_citations": (list,)}
+
+
+def validate_result(result: dict[str, Any], gate: dict[str, Any]) -> list[str]:
+    """Everything the comparison relies on is present and well-typed, and the question
+    counts are the gate's. A result that fails this cannot be compared (hard fail)."""
+    errors = []
+    for key in ("runs", "provenance", "metrics", "per_question"):
+        if key not in result:
+            errors.append(f"missing `{key}`")
+    if errors:
+        return errors
+    expected = gate.get("expected_questions", {})
+    for part, n in expected.items():
+        got = len(result["per_question"].get(part, {}))
+        if got != n:
+            errors.append(f"per_question.{part}: {got} questions, gate expects {n}")
+    for qid, a in result["per_question"].get("answers", {}).items():
+        for key, types in ANSWER_KEYS.items():
+            if key not in a or not isinstance(a[key], types):
+                errors.append(f"answer {qid}: `{key}` missing or {type(a.get(key)).__name__}")
+                break
+        if a.get("faithfulness") is not None and not 0.0 <= a["faithfulness"] <= 1.0:
+            errors.append(f"answer {qid}: faithfulness {a['faithfulness']} outside [0, 1]")
+    return errors[:20]
 
 
 # --- comparing to the baseline ---------------------------------------------------------
@@ -144,7 +178,7 @@ def _changed_answers(new: dict[str, Any], base: dict[str, Any]) -> list[dict[str
         n = new["per_question"]["answers"].get(qid)
         if n is None:
             continue
-        flips = [k for k in ("refused", "unsupported", "citation_integrity") if b.get(k) != n.get(k)]
+        flips = [k for k in ("refused", "unsupported", "citation_integrity", "citation_valid") if b.get(k) != n.get(k)]
         if flips or b.get("faithfulness") != n.get("faithfulness"):
             changed.append({"question_id": qid, "flipped": flips,
                             "faithfulness": [b.get("faithfulness"), n.get("faithfulness")]})
@@ -156,6 +190,15 @@ def compare(new: dict[str, Any], baseline: dict[str, Any], gate: dict[str, Any])
 
     base = baseline["result"]
     hard = []
+    if "schema_invalid" in gate["hard_fails"]:
+        errors = validate_result(new, gate)
+        if errors:
+            hard.append({"rule": "schema_invalid", "errors": errors})
+    if "cites_unretrieved_article" in gate["hard_fails"]:
+        offenders = {q: a["unretrieved_real_citations"] for q, a in new["per_question"]["answers"].items()
+                     if a.get("unretrieved_real_citations")}
+        if offenders:
+            hard.append({"rule": "cites_unretrieved_article", "question_ids": offenders})
     if "empty_answer" in gate["hard_fails"]:
         empty = [q for q, a in new["per_question"]["answers"].items() if a["empty"]]
         if empty:

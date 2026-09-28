@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from rag.eval.generation_metrics import REFUSAL_DETECTOR_VERSION, is_refusal
+from rag.eval.generation_metrics import REFUSAL_DETECTOR_VERSION, is_refusal, malformed_citation_markers
 from rag.paths import RESULTS_DIR
 
 JUDGE_CACHE = RESULTS_DIR / "judge_cache.sqlite"
@@ -204,6 +204,34 @@ def citation_integrity(cited: list[str], context_docs: list[str]) -> tuple[bool,
     return not invented, invented
 
 
+_CORPUS_IDS: set[str] | None = None
+
+
+def corpus_ids() -> set[str]:
+    global _CORPUS_IDS
+    if _CORPUS_IDS is None:
+        from rag.corpus.loader import load_corpus
+
+        _CORPUS_IDS = set(load_corpus().frame["id"])
+    return _CORPUS_IDS
+
+
+def citation_checks(answer: str, cited: list[str], context_docs: list[str],
+                    known_ids: set[str]) -> dict[str, Any]:
+    """P3-09 (DEC-087). Three different errors, separated because they behave differently:
+    - `cites_unretrieved_article`: a REAL corpus article the generator was not given —
+      0 in 481 answers across six fresh runs; the gate's zero-tolerance hard fail;
+    - `garbled_citations`: a well-formed id that matches no article (a mis-copied hash);
+    - `malformed_citations`: a `[doc:` marker the parser rejects (wrong-length id, a title).
+    `citation_valid` is none of the three."""
+    _, outside = citation_integrity(cited, context_docs)
+    real = [d for d in outside if d in known_ids]
+    garbled = [d for d in outside if d not in known_ids]
+    malformed = malformed_citation_markers(answer)
+    return {"unretrieved_real_citations": real, "garbled_citations": garbled,
+            "malformed_citations": malformed, "citation_valid": not (outside or malformed)}
+
+
 # --- aggregation ---------------------------------------------------------------------
 
 def strata_of(item: AnswerInput) -> list[str]:
@@ -239,6 +267,10 @@ def aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "false_answer_rate": rate(sum(1 for r in unanswerable if not r["refused"]), len(unanswerable)),
             "citation_integrity": rate(sum(1 for r in answered if r["citation_integrity"]), len(answered)),
             "invented_citations": sum(len(r["invented_citations"]) for r in answered),
+            "citation_validity": rate(sum(1 for r in answered if r.get("citation_valid", r["citation_integrity"])), len(answered)),
+            "cites_unretrieved_article": sum(1 for r in answered if r.get("unretrieved_real_citations")),
+            "garbled_citation_answers": sum(1 for r in answered if r.get("garbled_citations")),
+            "malformed_citation_answers": sum(1 for r in answered if r.get("malformed_citations")),
             "claims": sum(r["n_claims"] for r in judged),
             "unsupported_claims": sum(r["n_unsupported"] for r in judged),
         }
@@ -256,7 +288,7 @@ def estimate(inputs: list[AnswerInput], cached: set[str]) -> dict[str, Any]:
 # --- the run -----------------------------------------------------------------------
 
 def evaluate(inputs: list[AnswerInput], judge: Any, cache: JudgeCache | None, *, identity: str,
-             prompt_version: str, score_fn: Any = None) -> list[dict[str, Any]]:
+             prompt_version: str, score_fn: Any = None, known_ids: set[str] | None = None) -> list[dict[str, Any]]:
     """Judge every answered question (cache first), then score integrity and strata.
     `score_fn(items) -> list[ClaimJudgment]` is injectable so tests need no model."""
     from rag.eval.judge import ClaimJudgment, ClaimVerdict, FaithfulnessClaims
@@ -284,6 +316,7 @@ def evaluate(inputs: list[AnswerInput], judge: Any, cache: JudgeCache | None, *,
                 cache.put(key, {"score": judgment.score, "error": judgment.error,
                                 "claims": [c.__dict__ for c in judgment.claims]})
 
+    known_ids = known_ids if known_ids is not None else corpus_ids()
     rows = []
     for item in inputs:
         j = judgments.get(item.question_id)
@@ -294,6 +327,7 @@ def evaluate(inputs: list[AnswerInput], judge: Any, cache: JudgeCache | None, *,
             claims.append({"statement": c.statement, "supported": c.supported, "reason": c.reason,
                            "chunk_id": chunk, "attribution_share": share})
         n_unsupported = sum(1 for c in claims if not c["supported"])
+        checks = citation_checks(item.answer, item.cited_doc_ids, item.context_doc_ids, known_ids)
         rows.append({
             "question_id": item.question_id, "question": item.question, "answer": item.answer,
             "strata": strata_of(item), "unanswerable": item.unanswerable, "refused": item.refused,
@@ -301,7 +335,7 @@ def evaluate(inputs: list[AnswerInput], judge: Any, cache: JudgeCache | None, *,
             "n_claims": len(claims), "n_unsupported": n_unsupported,
             "unsupported": (n_unsupported > 0) if (j and j.score is not None) else None,
             "claims": claims, "cited_doc_ids": item.cited_doc_ids, "context_doc_ids": item.context_doc_ids,
-            "citation_integrity": ok, "invented_citations": invented,
+            "citation_integrity": ok, "invented_citations": invented, **checks,
         })
     return rows
 
@@ -367,7 +401,9 @@ def record(*, source_meta: dict[str, Any], judge_cfg: Any, judge_config_path: st
         "retrieved_chunk_ids": "[]", "scores": "[]", "gold_doc_ids": "[]",
         "metrics_json": json.dumps({k: r[k] for k in ("strata", "unanswerable", "refused", "faithfulness", "error",
                                                          "n_claims", "n_unsupported", "unsupported", "claims",
-                                                         "citation_integrity", "invented_citations")}),
+                                                         "citation_integrity", "invented_citations",
+                                                         "citation_valid", "unretrieved_real_citations",
+                                                         "garbled_citations", "malformed_citations")}),
         "generated_answer": r["answer"], "cited_doc_ids": json.dumps(r["cited_doc_ids"]),
         "latency_ms": None, "tokens_in": None, "tokens_out": None, "cost_usd": None,
     } for r in rows])

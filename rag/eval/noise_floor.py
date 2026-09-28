@@ -233,6 +233,12 @@ FLOOR_FAMILIES: dict[str, dict] = {
             "refusal_rate": 0.073,
             "false_answer_rate": 0.077,
             "citation_integrity": 0.016,
+            # DEC-087, added 2026-09-28: answers with no garbled, malformed or out-of-context
+            # citation. Generator-only (the judge cannot move it). Measured on FOUR fresh
+            # identical runs — the three above plus ci-eval run 1 (`run_20260928_221629_42ad`):
+            # 0.9625 / 0.9474 / 0.9474 / 0.9221. Three runs gave 0.018, which the fourth fell
+            # outside by 0.025, so three underestimate a count this small.
+            "citation_validity": 0.041,
         },
         "judge_only_floors": {
             "mean_faithfulness": 0.023,

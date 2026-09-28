@@ -180,3 +180,16 @@ def test_a_faithfulness_row_under_the_production_judge_gets_the_golden_floors():
     floors = FLOOR_FAMILIES[family]["floors"]
     assert floors["mean_faithfulness"] == 0.026 and floors["unsupported_answer_rate"] == 0.064
     assert family_for_run({**row, "judge_provider_order": '["Groq"]'})[0] is None, "another host is another judge"
+
+
+def test_citation_checks_separate_real_unretrieved_garbled_and_malformed():
+    """DEC-087: the three errors behave differently, so they are counted apart."""
+    from rag.eval.faithfulness import citation_checks
+
+    real, other, garbled = "a" * 64, "b" * 64, "c" * 63
+    known = {real, other}
+    ok = citation_checks(f"x [doc:{real}]", [real], [real], known)
+    assert ok["citation_valid"] and not (ok["unretrieved_real_citations"] or ok["garbled_citations"])
+    bad = citation_checks(f"[doc:{other}] [doc:{garbled}] [doc: A Title]", [other, garbled], [real], known)
+    assert bad["unretrieved_real_citations"] == [other] and bad["garbled_citations"] == [garbled]
+    assert bad["malformed_citations"] == ["A Title"] and bad["citation_valid"] is False

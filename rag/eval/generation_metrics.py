@@ -19,6 +19,20 @@ from rag.eval.steps import step_coverage
 
 REFUSAL_DETECTOR_VERSION = "refusal-lexical-v3"
 
+# P3-09 (MIS-045): `citation-v3` extracts `[doc:<8–64 hex>]` and silently skips any other
+# `[doc:` marker — a 66-character garbled id, or an article cited by its title. Those are
+# malformed output, and a parser that drops them made citation integrity blind to them.
+# The parser is NOT changed (that would move every historical citation metric); this
+# counts what it rejected. Validated on every stored answer (tests/test_prompts.py).
+CITATION_MARKER_DETECTOR_VERSION = "citation-markers-v1"
+_DOC_MARKER = re.compile(r"\[\s*doc\s*:\s*([^\]|#]*)", re.IGNORECASE)
+_WELL_FORMED_ID = re.compile(r"[0-9a-f]{8,64}", re.IGNORECASE)
+
+
+def malformed_citation_markers(answer: str | None) -> list[str]:
+    """Every `[doc:` marker whose id the citation parser would not accept."""
+    return [m.strip() for m in _DOC_MARKER.findall(answer or "") if not _WELL_FORMED_ID.fullmatch(m.strip())]
+
 # Phrases a grounded system uses when it declines. Lexical on purpose: refusal rate
 # has to be computable in Tier 1 cost terms and be auditable line by line. It is a
 # proxy — tracked as OQ-008 — and v2 (DEC-045) is what OQ-008's first count showed

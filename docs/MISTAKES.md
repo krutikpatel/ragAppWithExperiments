@@ -219,6 +219,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
 54. **A cache on a paid path changes the cost path too.** Tokens recorded on a replayed call
     were bought on another run; bill only what this run generated. (MIS-044)
 
+55. **A parser of model output returns what it rejected, not just what it accepted**, and
+    the stored-output test counts both. Five parsers here dropped the unrecognised silently.
+    (MIS-045)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1512,3 +1516,28 @@ Derived from the prevention rules below. Run through it and say in chat that you
   it in the same change. A cost computed from recorded tokens is only right if those tokens
   were bought on this run.
 - **Added to preflight:** yes — item 54.
+
+## MIS-045 — The citation parser silently skipped malformed markers, so citation integrity could not see them
+- **Date:** 2026-09-28
+- **Severity:** Medium — every citation metric since `citation-v3` treated a garbled or
+  title-form citation as no citation at all; 181 such markers sit in stored answers.
+- **What happened:** `_CITATION` accepts `[doc:<8–64 hex>]`. A 66-character mis-copied id or
+  `[doc: ADI: Adding and Setting up a Payment Form]` matches nothing and is dropped without
+  a count. P3-05's citation integrity is computed from the parsed ids, so it only ever saw
+  the garbled ids that happened to be 8–64 characters long.
+- **How it was caught:** classifying out-of-context citations for P3-09 and counting every
+  `[doc:` marker against what the parser returned.
+- **Root cause:** the fifth parser of model output in this project that drops what it does
+  not recognise instead of counting it (MIS-016, DEC-045, MIS-035, MIS-038/039). Preflight
+  49 says to validate a lexical check against the full stored corpus — and it was written for
+  the *extraction*, not for the markers extraction rejects.
+- **Impact:** citation integrity (P3-05, P3-06, P3-07, EXP-0058–0060) understated malformed
+  output. Citation precision/recall are unchanged by this entry: a malformed marker cites no
+  resolvable document either way.
+- **Fix applied:** `malformed_citation_markers` (`citation-markers-v1`) counts every rejected
+  marker; faithfulness rows record them; the gate's citation validity includes them. The
+  parser itself is not changed, so no historical number moves. A test asserts that on every
+  stored answer each `[doc:` marker is either parsed or flagged — 3,168 answers, 0 gaps.
+- **Prevention rule:** a parser of model output must return what it rejected alongside what
+  it accepted, and the test counts both.
+- **Added to preflight:** yes — item 55.

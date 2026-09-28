@@ -19,6 +19,7 @@ prompt `baseline_answer@v1`.
 | **false-answer rate** (15 unanswerable questions) | **0.077** (rise) — i.e. **2 questions** | 1 question | 0.000 | 0.2667 / 0.3333 / 0.3333 |
 | refusal rate (80 answerable questions) | 0.073 (rise) — 6 questions | ≤ 5 questions | 0.000 | 0.0500 / 0.1125 / 0.1125 |
 | citation integrity | 0.016 (drop) — see warning | | 0.000 | 0.9875 / 0.9737 / 0.9868 |
+| **citation validity** (DEC-087) | **0.041** (drop) — about 3 answers | < 0.041 | 0.000 | 0.9625 / 0.9474 / 0.9474 (+ 0.9221, a fourth fresh run) |
 
 In plain words: **"This gate catches a drop of ≥ 0.026 in mean faithfulness. Smaller drops
 pass."** Likewise a rise of ≥ 0.064 in the share of answers with an unsupported claim, and
@@ -56,7 +57,7 @@ churn the Phase 2 rerankers produced."** Smaller drops pass.
 
 ## Warnings for the gate rules (P3-09)
 
-- **Citation integrity is not stable under no change.** Identical runs invent a document id
+- **Citation integrity is not stable under no change** (resolved by DEC-087: a real-but-unretrieved citation is a hard fail — 0 in six runs; garbled and malformed citations are gated as citation validity against its MDD). Identical runs invent a document id
   in 1–2 answers of ~80 by chance (0.9737–0.9875). A zero-tolerance rule on invented
   citations would fail every build. P3-09 must decide how to gate it (DEC-083).
 - **Refusal and false-answer rates move in whole questions.** On 15 unanswerable questions
