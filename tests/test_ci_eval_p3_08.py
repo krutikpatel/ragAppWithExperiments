@@ -251,3 +251,10 @@ def test_a_mistyped_or_out_of_range_result_is_schema_invalid():
     errors = validate_result(_result(answers=answers), GATE)
     assert any("outside [0, 1]" in e for e in errors) and any("g01" in e for e in errors)
     assert validate_result(_result(), GATE) == []
+
+
+def test_a_gating_metric_missing_from_the_baseline_fails_closed():
+    base = copy.deepcopy(BASELINE)
+    del base["result"]["metrics"]["judged"]["citation_validity"]
+    r = _rule(compare(_result(), base, GATE), "judged", "citation_validity")
+    assert r["verdict"] == "FAIL" and "re-baseline" in r["note"]

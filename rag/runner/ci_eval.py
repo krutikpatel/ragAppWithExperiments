@@ -158,6 +158,11 @@ def _judged_rule(rule: dict[str, Any], new: dict[str, Any], base: dict[str, Any]
     b, v = base["metrics"]["judged"].get(metric), new["metrics"]["judged"].get(metric)
     out = {"metric": metric, "gating": rule["gating"], "better": rule["better"], "baseline": b, "value": v}
     if b is None or v is None:
+        if rule["gating"] and b is None and v is not None:
+            # Fail closed (DEC-087): a gating metric the baseline does not have cannot be
+            # gated, and passing it silently would be a gate that looks on but is off.
+            return {**out, "delta": None, "mdd": None, "verdict": "FAIL",
+                    "note": "the baseline lacks this gating metric — re-baseline with a DEC entry"}
         return {**out, "delta": None, "mdd": None, "verdict": "n/a", "note": "not applicable on one side"}
     delta = round(v - b, 4)
     worse = -delta if rule["better"] == "higher" else delta
