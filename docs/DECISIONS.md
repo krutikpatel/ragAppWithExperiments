@@ -3097,3 +3097,31 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** No measured data for the construction; judgment call, declared in advance.
 - **Revisit if:** a hand read of flagged v2 supported pairs shows the flag firing on a
   genuine extraction — which would point at the strict "< 1.0" rule rather than the labels.
+
+## DEC-079 — P3-04 closed: `deepseek/deepseek-v4.1-flash` @DeepInfra is the production judge; judged metrics are gating
+- **Date:** 2026-09-28
+- **Decided by:** the selection rule pre-declared in DEC-076 (Krutik-approved), applied by Claude.
+- **Status:** Active — **supersedes DEC-077's "report-only"** (DEC-077's v1 outcome stands as recorded).
+- **Result:** EXP-0057 (`run_20260928_143152_c11c`): on the v2 pairs, recall 1.0000,
+  supported pass rate 0.9000, failures 0 — all three DEC-076 criteria met. DeepSeek is the
+  cheapest measured candidate ($0.00138/pair on v2, $0.00244 on v1 against Qwen $0.00292
+  and Gemini $0.01003), so by the selection rule it is the production judge and Qwen and
+  Gemini are not run on v2.
+- **P3-09 marking (from P3-04):** faithfulness, unsupported-answer rate and false-answer
+  rate are **`gating`**.
+- **The judge, exactly:** `deepseek/deepseek-v4.1-flash`, provider DeepInfra only,
+  `allow_fallbacks: false`, temperature 0, Ragas 0.4.3, slug verified on OpenRouter
+  2026-09-28. Family `deepseek` — not the generator's lab (DEC-073).
+- **Limits carried forward, stated in README and NARRATIVE:** the check proves literal
+  support is verified and foreign content rejected; paraphrase behaviour and human
+  agreement are unmeasured. Two of the eight false flags were verbatim *hypothetical
+  examples*: the strict "≥ 1 unsupported claim" rule reacts to illustrations. P3-05 declares
+  that rule up front and it is not changed here; the effect is tracked as OQ-048.
+- **Next, in this order:** (1) a v2 Tier 2 control config with this judge, and
+  `ci/phase3_baseline.yaml` version 2 under tag `phase3-baseline-v2` (DEC-073); RunConfig
+  has no field for `allow_fallbacks` yet, so pinning without fallbacks at run level needs
+  one, costed for hash movement first (MIS-019). (2) P3-05. (3) Re-score the Phase 2 judged
+  runs from stored answers (DEC-073).
+- **Evidence:** EXP-0057; EXP-0054 for the per-pair cost ranking.
+- **Revisit if:** P3-07's variance runs show this judge's MDD at golden-slice size too wide
+  to catch the regressions P3-12 must catch, or the slug stops resolving.

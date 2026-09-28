@@ -929,6 +929,41 @@ prompt or the model changes. It is bounded and affordable here, and a standing b
 there. That difference belongs with the result rather than in a footnote.
 
 
+### Choosing a judge, and a check that failed its own labels (EXP-0054 to EXP-0057)
+
+Phase 3 needed a faithfulness judge good enough to fail a build on. Before choosing one
+I found that my existing judge was not independent of my generator. I had classed
+`gpt-oss-120b` as a separate family from `gpt-5-nano` because its weights are open. Both
+are OpenAI models, and the bias the different-family rule guards against comes from
+shared training, not from how the weights are distributed. I reclassified family as the
+training lab, which retired that judge and caveated the Phase 2 judged noise floors and
+the Axis 7 self-check that had used a same-lab model (DEC-073, MIS-042).
+
+The replacement was chosen by a bake-off on a synthetic check, with the pass bar written
+down before any run: flag at least 95% of answers paired with unrelated articles, pass at
+least 85% of expert answers paired with their own gold articles, and fail no more than 5%
+of calls (DEC-076). Three judges from three labs ran it (EXP-0054–0056, $3.69). **All three
+failed, the same way.** Each flagged every unrelated pair, and each passed only 35–40% of
+the "known supported" ones.
+
+The judges agreed with each other on 58 of 73 of those pairs, and that agreement was the
+clue. Reading the answers they all rejected against their articles, the answers said
+things the articles did not: one described group bookings while its gold article covered
+multi-service appointments; another answered with the Layers panel while its articles were
+about browser caching. The check assumed WixQA's expert answers are grounded in their gold
+articles, and for about half of my slice they are not. The test was measuring the labels.
+
+I kept the bar exactly as declared and rebuilt the supported pairs so they were true by
+construction: three sentences copied from a gold article, against three copied from an
+unrelated one, both judged against the same gold text (DEC-078). The cheapest judge,
+`deepseek-v4.1-flash`, then flagged 80 of 80 foreign extracts and passed 72 of 80 genuine
+ones, for $0.33 (EXP-0057). Five of its eight false flags came from my own extraction
+cutting in FAQ questions and headings, not from the judge.
+
+What this proves is narrow, and I have written it down as narrowly: the judge verifies
+literal support and rejects foreign content. How it treats paraphrase, which is what a
+generated answer is, remains unmeasured, and no human checked it.
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control

@@ -118,6 +118,14 @@ recorded. Each carries the rule that prevents it recurring.
   evidence** (`eval/golden/DATASHEET.md`). Its absolute scores are not `dev` scores; the
   gate only compares a run to a baseline on the same slice.
 
+- **The faithfulness judge is validated only on clear-cut synthetic cases.**
+  `deepseek/deepseek-v4.1-flash` passed the P3-04 check (EXP-0057): it flagged 80 of 80
+  answers copied from unrelated articles and passed 72 of 80 copied from the right ones.
+  That shows it verifies literal support. It does not show how it treats paraphrase, which
+  is what generated answers are, and no human agreement was measured. A first version of
+  the check, built on WixQA's expert answers, failed every judge because about half of
+  those answers are not supported by their own gold articles (EXP-0054–0056, OQ-047).
+
 ## Quickstart
 
 ```bash

@@ -763,3 +763,15 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   pairs already scored (free — the rows exist), plus a hand read of a seeded sample of 20
   with the verdict recorded per claim. Reported by source (ExpertWritten vs Simulated) and
   stratum. No new model call is needed for the first half.
+
+## OQ-048 — Does the strict unsupported-answer rule flag illustrations rather than errors?
+- **Status:** open. Surfaced 2026-09-28 by EXP-0057.
+- **What was seen:** two of eight false flags on verbatim article text were hypothetical
+  examples ("For example, you have 50 products…"). Under P3-05's declared rule, one such
+  statement makes a whole answer "unsupported".
+- **Why it matters:** generated answers write examples too. If the rule reacts to them,
+  unsupported-answer rate partly measures style, not grounding.
+- **Decided by:** once P3-05 has per-claim verdicts, count the unsupported claims on the
+  golden slice that are examples or hypotheticals, by hand on a seeded sample of 30. If
+  more than a quarter are, propose a v2 definition with its own DEC — never by editing
+  the declared one mid-phase.

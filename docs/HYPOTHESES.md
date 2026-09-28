@@ -1116,3 +1116,9 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   and rewrites them; a rewritten statement can drift from the text (a pronoun resolved
   wrongly, a qualifier dropped) and be judged unsupported even though the source sentence
   was copied. If the pass rate lands between 0.70 and 0.85, that is where I would look.
+- **Resolution (2026-09-28, EXP-0057 `run_20260928_143152_c11c`): confirmed.** Recall
+  1.0000, supported pass rate 0.9000, failures 0. The part I trusted least — statement
+  rewriting drifting from copied text — is not what the 8 false flags show: 5 come from
+  the extraction cutting in questions, headings and UI labels, 2 from hypothetical
+  examples, 1 is a plain miss. My worry was about the judge's rewriting; the larger effect
+  was my own instrument's sentence cuts.
