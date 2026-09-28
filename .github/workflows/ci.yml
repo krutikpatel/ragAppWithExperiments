@@ -41,7 +41,7 @@ jobs:
       # Fork PRs receive no secrets: run_gate.sh then reports NOT VERIFIED, which blocks merge.
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-      APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'eval-approved') && format('eval-approved label on PR #{0}', github.event.pull_request.number) || '' }}
+      APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'eval-approved') && format('eval-approved label on PR {0}', github.event.pull_request.number) || '' }}
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}

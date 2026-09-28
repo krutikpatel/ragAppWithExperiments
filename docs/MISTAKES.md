@@ -1541,3 +1541,19 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** a parser of model output must return what it rejected alongside what
   it accepted, and the test counts both.
 - **Added to preflight:** yes — item 55.
+
+## MIS-046 — Pushed a workflow file without linting it; GitHub rejected it in 0 seconds
+- **Date:** 2026-09-28
+- **Severity:** Low — no job ran, nothing was spent, and no result was affected.
+- **What happened:** the first push of `.github/workflows/ci.yml` failed at parse time:
+  `format('eval-approved label on PR #{0}', …)` in an unquoted YAML value. A space followed by
+  `#` starts a YAML comment, so the expression was cut off mid-string.
+- **How it was caught:** the run failed in 0s with "workflow file issue"; `actionlint` named
+  line 44, column 124.
+- **Root cause:** the file was checked with `yaml.safe_load` only — which parsed it
+  "successfully", as a truncated string. A YAML parser cannot tell a comment from the rest of
+  a GitHub expression; only a workflow linter can.
+- **Fix applied:** the `#` removed; `actionlint` passes.
+- **Prevention rule:** run `uvx --from actionlint-py actionlint` on any workflow change before
+  pushing it. A YAML parser succeeding says nothing about the expressions inside it.
+- **Added to preflight:** yes — item 56.
