@@ -128,6 +128,7 @@ class Generator(ABC):
         rendered = prompt.render(question=question, context=context)
         started = time.perf_counter()
         cache = active()  # only inside `rag ci-eval` (DEC-084); experiments always call
+        cached = False  # a replayed answer was not billed on this run (DEC-084)
         if cache is None:
             completion = self._complete(rendered)
         else:
@@ -138,6 +139,7 @@ class Generator(ABC):
             if hit is not None:
                 cache.stats["completion_hits"] += 1
                 completion = Completion(**hit)
+                cached = True
             else:
                 cache.stats["completion_misses"] += 1
                 completion = self._complete(rendered)
@@ -152,7 +154,7 @@ class Generator(ABC):
             tokens_out=completion.tokens_out,
             reasoning_tokens=completion.reasoning_tokens,
             latency_ms=elapsed_ms,
-            meta={"finish_reason": completion.finish_reason, "attempts": completion.attempts},
+            meta={"finish_reason": completion.finish_reason, "attempts": completion.attempts, "cached": cached},
         )
 
 

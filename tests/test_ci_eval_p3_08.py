@@ -209,5 +209,6 @@ def test_answers_replay_inside_ci_eval_and_a_changed_prompt_misses(tmp_path):
         other = gen.generate("q?", "different context")
     assert first.text == again.text == f"answer 1 [doc:{doc}]" and other.text == f"answer 2 [doc:{doc}]"
     assert again.cited_doc_ids == [doc]
+    assert first.meta["cached"] is False and again.meta["cached"] is True, "a replay is marked, so it is not billed"
     snap = cache.snapshot()
     assert snap["completion_hits"] == 1 and snap["completion_misses"] == 2

@@ -216,6 +216,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 53. **Check every library float for NaN where it is stored.** `NaN < 1.0` is False and
     raises nothing, so a NaN silently takes whichever branch "False" means. (MIS-043)
 
+54. **A cache on a paid path changes the cost path too.** Tokens recorded on a replayed call
+    were bought on another run; bill only what this run generated. (MIS-044)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1491,3 +1494,21 @@ Derived from the prevention rules below. Run through it and say in chat that you
   checked for NaN at the point it is stored. A comparison with NaN never raises; it quietly
   answers False.
 - **Added to preflight:** yes — item 53.
+
+## MIS-044 — Replayed answers were priced as if they had been generated
+- **Date:** 2026-09-28
+- **Severity:** Low — caught on the first cached run, before P3-10's budget check reads it.
+- **What happened:** ci-eval run 2 replayed all 95 answers from the call cache and reported
+  **$0.0248** spent. Nothing was billed: the runner prices the generator from each answer's
+  token counts, and a cached answer carries the token counts of the call that first made it.
+- **How it was caught:** a 100% answer hit rate beside a non-zero generator cost in the
+  same summary line.
+- **Root cause:** the cost path assumed every answer on a run was generated on that run —
+  true for every run before DEC-084 introduced replay.
+- **Fix applied:** `Generator.generate` marks a replay (`meta.cached`); the runner keeps the
+  tokens on the answer but bills only answers generated on this run. Run 3 reports $0.0000.
+  A test pins the marker.
+- **Prevention rule:** when a cache is added to a paid path, the cost path must know about
+  it in the same change. A cost computed from recorded tokens is only right if those tokens
+  were bought on this run.
+- **Added to preflight:** yes — item 54.

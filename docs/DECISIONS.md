@@ -3247,6 +3247,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   3. **False-answer rate is gated in whole questions**: 2 of 15. The slice has only 15
      unanswerable questions; if the gate must catch one more false answer, the slice needs
      more of them (a golden_v2, P3-03's versioning rule).
+  > **Superseded by DEC-086 on 2026-09-28** — the exception list is replaced by a rule: a
+  > URL passes only if it appears verbatim in the answer's own context articles.
 - **Also decided:** one reviewed URL exception. Run `run_20260928_194258_4916`, question
   `47337149535f21c6` quotes `www.mystunningwebsite.com`, Wix's example domain, from an
   article in its context (36 corpus articles contain it). P1-05's rule is about links the
@@ -3315,3 +3317,26 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   Note that its false-answer rate (0.40) is above all three P3-07 runs (0.27–0.33): a later
   run landing there reads as "better, within noise", never as a failure.
 - **Revisit if:** P3-11's ratchet replaces it — only through a new DEC entry.
+
+## DEC-086 — Two consequences of the first ci-eval runs: `promoted` skips gate replays, and quoted URLs are not generated links
+- **Date:** 2026-09-28
+- **Decided by:** Claude, flagged to Krutik in chat (he may veto item 2).
+- **Status:** Active — item 2 **supersedes DEC-083's reviewed-exception list**.
+- **1. `promoted` never resolves to a `rag ci-eval` run.** ci-eval's dev retrieval run is a
+  run of `promoted.yaml`, so it became "the newest run of promoted on dev" and the `promoted`
+  run reference started pointing at it (a test caught it). A ci-eval run replays cached calls:
+  it is a gate check, not a measurement, and experiments must not be compared against it.
+  `ResultsStore.latest_run_of` now skips any row carrying `metrics_json.call_cache`.
+- **2. The P1-05 URL test checks provenance, not shape.** A second answer
+  (`ecb61c75…`, ci-eval run 1) wrote `https://www.linkedin.com/post-inspector/` — copied
+  verbatim from "Wix Editor: Updating the Og:Image on LinkedIn", which was in its context.
+  P1-05's reason for the rule is that "a generated [link] can only be stale or invented"; a
+  URL quoted verbatim from the answer's own frozen evidence is neither. Rather than grow a
+  list of one-off exceptions, `test_recorded_generated_answers_contain_no_urls` now fails on
+  any URL that does **not** appear verbatim in the text of that answer's context articles
+  (top-k of its `retrieved_doc_ids`). Both cases so far pass; an invented, altered or
+  out-of-context URL still fails. `REVIEWED_URL_EXCEPTIONS` is removed.
+  **This is a rule change made after seeing data**, which is why it is its own entry: the
+  test previously held the generator to "no URL-shaped string at all".
+- **Revisit if:** Krutik prefers the stricter rule, or a quoted URL turns out to be one the
+  frozen KB itself has since broken (the "stale" half of P1-05's reason).

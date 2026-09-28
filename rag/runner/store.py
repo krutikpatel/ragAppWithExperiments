@@ -270,6 +270,10 @@ class ResultsStore:
             query += " AND split = ?"
             params.append(split)
         for row in self.conn.execute(query + " ORDER BY timestamp DESC", params):
+            # DEC-086: a `rag ci-eval` run replays cached calls; it is a gate check, not a
+            # measurement, so `promoted` never resolves to one.
+            if "call_cache" in json.loads(row["metrics_json"] or "{}"):
+                continue
             try:
                 # A stored row is history, including its copy onto this split (DEC-073).
                 with historical_configs():

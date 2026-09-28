@@ -987,8 +987,9 @@ def _execute(
     actual = actual_run_cost(
         retriever_meta=retriever.provenance(),
         reranker_meta=reranker.provenance() if reranker else None,
-        generator_tokens_in=sum(g.get("tokens_in", 0) for g in generated.values()),
-        generator_tokens_out=sum(g.get("tokens_out", 0) for g in generated.values()),
+        # Only answers generated on this run are billed; a call-cache replay costs nothing.
+        generator_tokens_in=sum(g.get("tokens_in", 0) for g in generated.values() if not g.get("cached")),
+        generator_tokens_out=sum(g.get("tokens_out", 0) for g in generated.values() if not g.get("cached")),
         generator_model=config.generator_model,
         judge_estimate_usd=cost_estimate.get("judge_usd") if config.eval_tier is EvalTier.TIER_2 else None,
         pipeline_llm_stats=all_stats or None,
@@ -1181,6 +1182,8 @@ def _tier2(
             # tokens are counted here. Judge cost is the pre-run estimate.
             "tokens_in": answer.tokens_in,
             "tokens_out": answer.tokens_out,
+            # DEC-084: replayed from the ci-eval call cache — recorded, never billed.
+            "cached": bool(answer.meta.get("cached")),
         }
     if grounding is not None:
         generated["__grounding__"] = grounding.provenance()
