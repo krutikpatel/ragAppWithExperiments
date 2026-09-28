@@ -3298,3 +3298,20 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** offline tests; no real ci-eval run yet — the first one creates the baseline.
 - **Revisit if:** a cached run and a fresh run of the same config disagree on a gated
   metric beyond its MDD — the cache key would be missing something that shapes the output.
+
+## DEC-085 — The first CI baseline: `rag ci-eval` run 1 of 2026-09-28
+- **Date:** 2026-09-28
+- **Decided by:** Krutik approved the two first ci-eval runs; Claude chose to baseline run 1.
+- **Status:** Active
+- **What:** `ci/baseline.json`, written by `rag ci-baseline update --from
+  ci/out/run1/ci_eval.json --reason DEC-085`, from runs `run_20260928_215614_21fb` (dev
+  retrieval), `run_20260928_220408_7f7b` (golden generation) and `run_20260928_221629_42ad`
+  (faithfulness), git `cc6945e`, clean. Cost $0.3024.
+- **Its numbers:** strict recall@5 0.72 on `dev`, 0.525 on `golden_v1`; mean faithfulness
+  0.8596, unsupported-answer rate 0.5714, false-answer rate 0.4000 (6 of 15), refusal rate
+  0.1125, citation integrity 0.9740; 77 answers judged, 0 judge failures.
+- **Why this run and not a mean of several:** the gate compares per-question outcomes, which
+  only a real run has. Noise is handled by the MDDs (DEC-083), not by averaging the baseline.
+  Note that its false-answer rate (0.40) is above all three P3-07 runs (0.27–0.33): a later
+  run landing there reads as "better, within noise", never as a failure.
+- **Revisit if:** P3-11's ratchet replaces it — only through a new DEC entry.
