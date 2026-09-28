@@ -247,6 +247,15 @@ retrieval succeeded.
 | EXP-0024 (`rerank-v3.5`) | 0.985 | 0.665 (133/200) | 64 |
 | EXP-0025 (`rerank-4-fast`) | 0.985 | 0.730 (146/200) | 51 |
 | EXP-0026 (`qwen3-reranker-8b`) | 0.985 | 0.720 (144/200) | 53 |
+| EXP-0052 (`rerank-4-fast`, **20** candidate docs) | 0.920 in its 20-doc set (184/200) | 0.750 (150/200) | 34 |
+| EXP-0053 (`rerank-4-fast`, **100** candidate docs) | ≥ 0.985 | 0.715 (143/200) | ≥ 54 |
+
+**OQ-038 (2026-09-28) varied the candidate count and this bucket did not shrink.** At 20
+documents, fewer golds are in hand (184) and fewer fail once there (34). At 100, the
+extra 50 documents added no gold that reached the top five, and three questions that 50
+had solved fell out. Question-level mechanism in EXP-0052.md: the same gold drifts
+further down as more candidates are scored above it ("Hi I would like to install
+blog": 5 → 8 → 13 at 20 / 50 / 100 docs, dense had it at 1).
 
 **Three cross-encoders have now been tried and none moved this by more than two
 questions.** It is the standing target for P2-11, the k → n ratio runs (OQ-038) and
@@ -296,6 +305,8 @@ Axis 5 (EXP-0024), counted from `rag compare` flips on strict recall@5, `dev` n=
 | EXP-0024 (cohere/rerank-v3.5, 50 → 5) | 28 | 17 | −11 (Δ −0.055, p = 0.139) |
 | EXP-0025 (cohere/rerank-4-fast, 50 → 5) | 22 | 24 | +2 (Δ +0.010, p = 0.887) |
 | EXP-0026 (qwen3-reranker-8b, 50 → 5) | 26 | 26 | **0** (Δ +0.000, p = 1.000) |
+| EXP-0052 (cohere/rerank-4-fast, **20** → 5) | 15 | 21 | +6 (Δ +0.030, p = 0.403) |
+| EXP-0053 (cohere/rerank-4-fast, **100** → 5) | 23 | 22 | −1 (Δ −0.005, p = 1.000) |
 
 Counted across all 160 single-gold questions rather than only the top-5 boundary, both
 rerankers are near-symmetric: v3.5 moved the gold up a rank band on **40** questions

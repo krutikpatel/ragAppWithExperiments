@@ -245,7 +245,22 @@ def test_rerank_cost_reproduces_what_exp_0024_was_actually_billed():
     assert estimate["search_units"] == 234
     assert estimate["rerank_usd"] == pytest.approx(0.234)
     assert RERANK_CALIBRATION_RUN_ID in estimate["source"]
-    assert "NOT yet validated out of sample" in estimate["source"]
+
+
+@pytest.mark.parametrize("docs, billed, estimated", [(20, 200, 200), (100, 425, 468)])
+def test_search_units_have_a_floor_of_one_per_query(docs, billed, estimated):
+    """MIS-040: EXP-0052 sent 20 candidate docs per query and was billed exactly one
+    unit per query (200), where the linear model predicted 94 — 2.1x low. EXP-0053 (100
+    docs) billed 425 against 468: 10% high, which is the safe side."""
+    from rag.runner.cost import PricingTable, estimate_rerank_cost
+
+    estimate = estimate_rerank_cost(
+        reranker="openrouter",
+        estimate_params={"kind": "rerank_endpoint", "model": "cohere/rerank-4-fast", "provider": "Cohere"},
+        n_questions=200, candidate_docs=docs, candidate_words=348, pricing=PricingTable.load(),
+    )
+    assert estimate["search_units"] == estimated
+    assert estimate["search_units"] >= billed, "an estimate below the bill is the failure mode"
 
 
 def test_token_billed_rerank_charges_the_query_once_per_document():

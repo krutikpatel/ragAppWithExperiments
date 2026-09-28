@@ -2770,6 +2770,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   1. **The `top_k=10` run** — *run and recorded.* EXP-0051 (`run_20260927_235029_2216`)
      answered OQ-040: `gold_in_context` +0.150, citation precision −0.0851 against an MDD
      of 0.080. Not promoted.
+  > **Carry-over 2 reversed by DEC-072 on 2026-09-27** (Krutik asked for OQ-038 to be run;
+  > answered by EXP-0052/0053). The freeze itself stands: nothing was promoted.
   2. **The reranker headroom diagnostic on the recall@5 → recall@20 gap** — *not run;
      stays in `OPEN_QUESTIONS.md` as OQ-038* (status note appended there). It is a paid
      run (roughly $0.20 + $0.90, OQ-038's own estimate) on an axis that returned "no

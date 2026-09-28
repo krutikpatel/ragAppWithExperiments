@@ -200,6 +200,15 @@ Derived from the prevention rules below. Run through it and say in chat that you
     extractive (MIS-035) and URL (MIS-039). Each was caught later by a test on stored
     output; none was caught by review. Four instances is not four accidents.
 
+50. **An estimator is calibrated at a parameter value, not for a parameter.** Before quoting
+    a price for a value it was never checked at, say so in the heads-up, and look for a
+    floor or a step in the billing unit — a whole unit per call is the usual case. 20
+    candidate docs cost 2.1x the estimate because a query never bills under one unit.
+    (MIS-040)
+
+51. **Confirm a background run actually started: a `RUNNING` row within the first
+    minute.** A launch chain's exit 0 is the exit of its last command. (MIS-041)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1383,3 +1392,47 @@ Derived from the prevention rules below. Run through it and say in chat that you
   should be validated against the full stored corpus at the moment it is written, not
   the handful of strings its author imagined.
 - **Added to preflight:** yes — item 49.
+
+## MIS-040 — The rerank cost estimator scaled search units below one per query, and was 2.1x low
+- **Date:** 2026-09-28
+- **Severity:** Low — the run was approved at $0.19 and cost $0.40; well under the $2
+  gate, and the account had $12.28. But an approval given on a number that is half the
+  bill is not the approval the rule asks for (DEC-053).
+- **What happened:** EXP-0052 sent 20 candidate documents per query to
+  `cohere/rerank-4-fast`. The estimator took the calibrated 1.17 search units per query
+  at 50 documents and scaled it linearly to 20: 0.47 units, 94 for the run, $0.1881.
+  Cohere billed **exactly 200 units — one per query**, $0.4001.
+- **How it was caught:** `cost_actual_usd` against `cost_estimate_usd` on the finished
+  row, then `usage.search_units` = 200 = `calls` in `reranker_meta`.
+- **Root cause:** the estimator was calibrated at one candidate count (50) and never
+  tested at another. A unit that is billed whole has a floor, and a linear model has
+  none. OQ-036 had named "the varying-candidate-count case untested" and it was still
+  used to quote a price for exactly that case.
+- **Impact:** $0.21 more than approved. No result affected.
+- **Fix applied:** `estimate_rerank_cost` uses `max(1, 1.17 × docs / 50)` units per
+  query. Checked against both runs: 20 docs → 200 (billed 200); 100 docs → 468 (billed
+  425, 10% high, which is the safe side). `tests/test_reranking.py` pins both.
+- **Prevention rule:** before quoting an estimate for a parameter value the estimator
+  was never calibrated at, say so in the heads-up, and check the billing unit for a
+  floor or a step — a whole unit per call is the common case.
+- **Added to preflight:** yes — item 50.
+
+## MIS-041 — A run launch wrote its log into a path that is a file, and neither run started
+- **Date:** 2026-09-28
+- **Severity:** Low — nothing ran, nothing was billed, no row was written.
+- **What happened:** the approved EXP-0052/0053 batch was launched with
+  `> temp/exp_0052.log`. `temp` at the repo root is a file, not a directory, so the shell
+  failed the redirect and never ran `rag`. The chained second run failed the same way.
+  The background job still reported exit 0, because the last command in the chain was
+  an `echo`.
+- **How it was caught:** reading the job output before writing anything up: `not a
+  directory: temp/exp_0053.log`, then an unchanged newest row in `runs`.
+- **Root cause:** a log path chosen without looking at the directory, and a launch
+  command whose own exit status hid the failure.
+- **Impact:** one relaunch, about a minute. Logs now go to the session scratchpad,
+  outside the tree (which also keeps preflight item 36's rule).
+- **Fix applied:** relaunched; confirmed the process and the `RUNNING` row before
+  waiting.
+- **Prevention rule:** after launching a background run, confirm a `RUNNING` row exists
+  within the first minute. Exit 0 from a chain is not evidence the run started.
+- **Added to preflight:** yes — item 51.

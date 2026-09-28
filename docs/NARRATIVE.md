@@ -507,6 +507,21 @@ have said something about a model.
 And it cost the most of anything here: **$0.00605 a query, about fifteen thousand times
 the control**, with 31 transient retries against Cohere's one or two.
 
+One question from this axis stayed open into Phase 3 and was bought just before the
+baseline was frozen: does the reranker do better with **fewer** candidates, or more?
+Phase 2 had only ever handed it 50. I ran `rerank-4-fast` at 20 and at 100 candidate
+documents (EXP-0052, EXP-0053, $1.25 together). Strict recall@5 came out **0.750, 0.730
+and 0.715** at 20, 50 and 100 — falling in order, and not separable: 20 against 100 is
+−0.035 at p = 0.119, and neither run is distinguishable from plain dense search.
+
+Reading the 15 questions that changed showed why the averages stay flat. Two real effects
+cancel. Fewer candidates lose the questions whose answer dense search had buried at rank
+24–33, because the reranker never sees them. More candidates bury answers dense search
+had ranked well: "Hi I would like to install blog" had its article at rank 1 under dense
+search and at 5, 8 and 13 after reranking 20, 50 and 100 documents. So "no measurable
+difference" here is not "nothing happened". It is two mechanisms of similar size pulling
+in opposite directions, and on 200 questions I cannot tell which one is larger.
+
 ### The last question: is retrieval even the bottleneck? (EXP-0051)
 
 One thing was left open at the end of the phase, and it was the largest measured effect

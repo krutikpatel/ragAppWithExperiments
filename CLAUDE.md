@@ -536,6 +536,8 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     builds the index, dev decides); exp_0024..0026_rerank_*_dev.yaml
                     are Axis 5 (DEC-058/059; dev only — reranking bills per query, so
                     dev_large costs 31x and is bought only for a winner, OQ-033).
+                    exp_0052/0053_rerank_4fast_c{20,100}_dev.yaml are OQ-038's candidate-count
+                    runs (DEC-072; the c100 one sets retrieval_depth 150).
                     exp_0031..0034_*.yaml are Axis 4 (P2-12, DEC-065 — decomposition
                     runs first per the story).
                     exp_0027_mmr_lambda*.yaml and exp_0028..0030_*.yaml are Axis 6

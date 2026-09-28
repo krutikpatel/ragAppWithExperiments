@@ -80,6 +80,9 @@ WORDS_TO_TOKENS = 1.27  # measured on this corpus, DEC-029
 RERANK_CALIBRATION_RUN_ID = "run_20260923_052941_4ada"
 # Search-unit billing (Cohere): what was actually billed, 234 units / 200 queries.
 RERANK_UNITS_PER_QUERY = 1.17
+# Out-of-sample checks (OQ-036): 20 docs billed 200 units (the floor, estimated 200);
+# 100 docs billed 425 units (estimated 468, +10%). EXP-0052 / EXP-0053.
+RERANK_VALIDATION_RUN_IDS = "run_20260928_005141_97e5, run_20260928_012526_ded9"
 # Token billing (Fireworks): a different quantity that happens to sit at nearly the
 # same number, which is exactly why it gets its own name. `rerank_candidates` counts
 # documents; a token-billed reranker is charged for every CHUNK of them the retriever
@@ -505,13 +508,18 @@ def estimate_rerank_cost(
         # Units track candidate *length*, not candidate count, and the relationship is
         # a per-query threshold. The multiplier is measured, not modelled — see above.
         units_per_query = float(rule.get("units_per_query", RERANK_UNITS_PER_QUERY))
-        units = math.ceil(n_questions * units_per_query * candidate_docs / 50)
+        # A query bills at least one whole unit however few candidates it sends
+        # (MIS-040): 20 candidate docs billed exactly 200 units for 200 queries, where
+        # scaling 1.17 down linearly predicted 94.
+        per_query = max(1.0, units_per_query * candidate_docs / 50)
+        units = math.ceil(n_questions * per_query)
         estimate["rerank_usd"] = round(units * float(rule["usd_per_unit"]), 4)
         estimate["search_units"] = units
         estimate["source"] = (
             f"measured ${rule['usd_per_unit']}/search unit x {units:,} units "
-            f"({units_per_query} units/query at 50 candidate docs, calibrated on "
-            f"{RERANK_CALIBRATION_RUN_ID}, NOT yet validated out of sample)"
+            f"({units_per_query} units/query at 50 candidate docs, minimum 1 per query, "
+            f"calibrated on {RERANK_CALIBRATION_RUN_ID}; out of sample: exact at 20 docs, "
+            f"10% high at 100 docs — {RERANK_VALIDATION_RUN_IDS})"
         )
         return estimate
     candidate_chunks = candidate_docs * RERANK_CHUNKS_PER_CANDIDATE_DOC

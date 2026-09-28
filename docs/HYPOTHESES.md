@@ -1059,3 +1059,21 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   inside the top 50 changing because of what sits beneath it — which a pointwise
   cross-encoder should not do.
 - **Not claimed:** anything about the generator. Tier 1 only; OQ-034 stays open.
+- **Resolution (2026-09-28, EXP-0052 `run_20260928_005141_97e5`, EXP-0053
+  `run_20260928_012526_ded9`): confirmed on the numbers I committed to; my reasoning
+  dismissed a mechanism that turned out to be real.**
+  1. 20 → 5 within ±0.03 of 0.730 → **0.750**. Confirmed.
+  2. 100 → 5 within ±0.03 of 0.730 → **0.715**. Confirmed.
+  3. Neither separates from EXP-0025 or promoted with a significant paired test →
+     confirmed (lowest p 0.253 against EXP-0025, 0.403 against promoted).
+  - **What I got wrong:** I argued the ratio did not matter because the reranker hits a
+    model-quality ceiling, and named drowning as the reading I was rejecting. Question by
+    question, drowning is plainly there: in 8 questions the gold's reranked rank worsens
+    steadily as candidates are added ("install blog": 5 → 8 → 13). It does not show in the
+    aggregate because fewer candidates also lose the 4 questions whose gold sat at dense
+    rank 24–33. The null is two real effects cancelling, not an absence of effect. The
+    three means fall in order (0.750 / 0.730 / 0.715), which is the drowning direction.
+    The 20-vs-100 gap of 0.035 reaches the size OQ-038 names but not significance
+    (p = 0.119).
+  - **The "surprise" I named did not happen:** 100 docs improved nothing; it lost 3
+    questions and gained 0.

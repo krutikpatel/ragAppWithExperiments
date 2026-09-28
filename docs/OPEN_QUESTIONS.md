@@ -548,6 +548,12 @@ within 0.1% of the run. So: the search-unit path has one passing out-of-sample c
 labelled as such in the estimator's own output.
 **Status:** open — search-unit path one check passed; token path uncalibrated until a
 second token-billed run; the varying-candidate-count case untested on either.
+**Third check, 2026-09-28 — the varying-candidate-count case, search-unit path.**
+EXP-0052 (20 docs) billed 200 units against 94 estimated — **2.1x low**, because a query
+bills at least one whole unit (MIS-040). EXP-0053 (100 docs) billed 425 against 468 —
+10% high. With the one-unit floor added, the estimator gives 200 and 468: exact and 10%
+high. **Status (2026-09-28):** search-unit path now checked at 20, 50 and 100 docs; token
+path still has no out-of-sample check.
 
 ## OQ-037 — Does the cross-encoder specifically rescue badly-phrased questions?
 Reading EXP-0024's 45 flipped questions, the 17 gains skew towards loose phrasing,
@@ -585,6 +591,13 @@ context depth is the binding constraint.
 carry-over ("the reranker headroom diagnostic on the recall@5→recall@20 gap"). It was
 **not run before the `phase3-baseline` freeze** and stays open here, unqueued. Phase 3
 does not reopen retrieval axes.
+**Status: answered by EXP-0052 / EXP-0053** (2026-09-28, $1.2502). **No measurable
+difference between candidate counts.** Strict recall@5 was 0.750 at 20 docs, 0.730 at 50,
+0.715 at 100; 20 vs 100 is −0.035 (p = 0.119), and neither run separates from the dense
+control. Read question by question, both readings are true at once and cancel: fewer
+candidates lose the 4 questions whose gold sat at dense rank 24–33, and more candidates
+push down gold that dense search had ranked near the top (8 questions). Documents 51–100
+rescued nobody.
 
 ## OQ-039 — Should the cost gate check the account balance, not just the estimate?
 Every cost control here is per-run: the $2 gate, the estimate, the approval, the
