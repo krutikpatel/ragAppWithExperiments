@@ -93,7 +93,7 @@ def test_refusals_are_not_judged_failures_are_none_and_every_rate_is_right(tmp_p
         _item("u2", REFUSAL, gold=(), gic=None),
     ]
     fn = _judge({"Q a": 1.0, "Q b": 0.5, "Q d": None, "Q u1": 1.0})
-    rows = evaluate(inputs, None, JudgeCache(tmp_path / "c.sqlite"), identity="j", prompt_version="v", score_fn=fn)
+    rows = evaluate(inputs, None, JudgeCache(tmp_path / "c.sqlite"), identity="j", prompt_version="v", score_fn=fn, known_ids=set())
     by = {r["question_id"]: r for r in rows}
     assert by["c"]["faithfulness"] is None and by["c"]["refused"] and by["c"]["n_claims"] == 0
     assert by["d"]["faithfulness"] is None and by["d"]["unsupported"] is None, "a failure is not a verdict"
@@ -112,15 +112,15 @@ def test_an_unchanged_answer_is_never_re_judged_and_a_failure_is_not_cached(tmp_
     cache = JudgeCache(tmp_path / "c.sqlite")
     inputs = [_item("a", "Click settings. [doc:g1]"), _item("d", "Other. [doc:g1]")]
     fn = _judge({"Q a": 1.0, "Q d": None})
-    evaluate(inputs, None, cache, identity="j", prompt_version="v", score_fn=fn)
+    evaluate(inputs, None, cache, identity="j", prompt_version="v", score_fn=fn, known_ids=set())
     fn2 = _judge({"Q a": 0.0, "Q d": 1.0})
-    rows = evaluate(inputs, None, cache, identity="j", prompt_version="v", score_fn=fn2)
+    rows = evaluate(inputs, None, cache, identity="j", prompt_version="v", score_fn=fn2, known_ids=set())
     assert fn2.calls == [1], "only the failed one is re-judged"
     assert {r["question_id"]: r["faithfulness"] for r in rows} == {"a": 1.0, "d": 1.0}
     assert cache.hits == 1
     # A different judge identity or an edited answer misses.
     fn3 = _judge({"Q a": 0.5, "Q d": 0.5})
-    evaluate(inputs, None, cache, identity="another judge", prompt_version="v", score_fn=fn3)
+    evaluate(inputs, None, cache, identity="another judge", prompt_version="v", score_fn=fn3, known_ids=set())
     assert fn3.calls == [2]
 
 
@@ -147,7 +147,7 @@ def test_rebuilt_context_is_the_assemblers_and_respects_the_budget():
 
 def test_the_report_lists_lowest_first_with_verdicts():
     rows = evaluate([_item("a", "x"), _item("b", "y")], None, None, identity="j", prompt_version="v",
-                    score_fn=_judge({"Q a": 1.0, "Q b": 0.5}))
+                    score_fn=_judge({"Q a": 1.0, "Q b": 0.5}), known_ids=set())
     md = report_markdown("src", "run_x", rows, aggregate(rows), n=1)
     assert "`b` — faithfulness 0.500" in md and "`a` —" not in md
     assert "**UNSUPPORTED**" in md and "heuristic" in md
