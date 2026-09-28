@@ -109,6 +109,15 @@ counting, a metric that scored a different ranking than the system returned, a
 capability I wrongly declared absent, and a provider pin that cost 6× more than
 recorded. Each carries the rule that prevents it recurring.
 
+## Known limitations
+
+- **Document-level gold may be incomplete.** WixQA has near-duplicate help articles, so an
+  article that is not labelled gold can support an equally correct answer. Strict recall
+  counts it as a miss. The labels are used as-is (Phase 3 fact 4); this is not fixed.
+- **The golden CI slice over-samples the questions the system answered without its
+  evidence** (`eval/golden/DATASHEET.md`). Its absolute scores are not `dev` scores; the
+  gate only compares a run to a baseline on the same slice.
+
 ## Quickstart
 
 ```bash

@@ -18,6 +18,8 @@ RESULTS_DIR = REPO_ROOT / "results"
 GENERATION_CACHE = RESULTS_DIR / "generation_cache.sqlite"
 # Dense vector indexes, keyed by provenance tuple (P1-04). Gitignored, rebuildable.
 INDEXES_DIR = REPO_ROOT / "indexes"
+# P3-03: the golden CI slice. Version controlled — small, and selected by a script.
+GOLDEN_DIR = REPO_ROOT / "eval" / "golden"
 
 CORPUS_PARQUET = FROZEN_DIR / "corpus.parquet"
 CORPUS_META = FROZEN_DIR / "corpus.meta.json"

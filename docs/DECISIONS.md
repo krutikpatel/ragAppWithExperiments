@@ -2926,3 +2926,34 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** No measured data; a judgment about where self-preference comes from.
 - **Revisit if:** a measurement shows cross-lab judges disagree with each other as much as
   a same-lab judge disagrees with them, which would say lineage is not the dominant term.
+
+## DEC-074 — P3-03: golden slice v1 is 80 answerable + 15 unanswerable, seed 20260928
+- **Date:** 2026-09-28
+- **Decided by:** Claude — Krutik delegated the choice ("make your best choice").
+- **Status:** Active
+- **Context:** P3-03 leaves slice size (50–100 answerable, 10–15 unanswerable), stratum
+  proportions and the `dev` overlap to the human.
+- **Decision:**
+  - **Answered-without-gold: all 27** from the Phase 2 closing dev Tier 2 run
+    (`run_20260913_205058_dc03`). The risk group is the reason the faithfulness eval
+    exists, and it is small, so it is taken whole rather than sampled.
+  - **Multi-doc: 20** of the 24 not already in the first stratum.
+  - **Single-doc: 33**, so the answerable total is 80.
+  - **Unanswerable: 15**, 5 per reason — the top of the story's range, so each refusal
+    type has more than a handful.
+  - **Overlap with `dev` accepted.** Phase 3 runs no tuning experiments; a later phase
+    that tunes on `dev` must hold the slice out.
+- **Why 80 and not 50 or 100:** a judgment about cost against resolution, not a
+  measurement. Every CI run that changes the pipeline judges every answer, and P3-07
+  runs the judge three times uncached, so judge cost scales with the slice. At 50, the
+  multi-doc and single-doc strata would fall to ~12 each, too few for a per-stratum
+  number to mean anything. At 100, the extra 20 would all be single-doc questions the
+  system already gets right 91% of the time. P3-07 measures what 80 can actually detect.
+- **Options considered:** 50/10 (cheapest, strata too thin); 100/15 (more single-doc,
+  little new information); 80/15 — chosen.
+- **Evidence:** No measured data; judgment call. Stratum availability counted from the
+  data first (preflight 29): 27 / 24 / 149 / 45.
+- **Consequences:** `eval/golden/golden_v1.jsonl` and `DATASHEET.md`, reproducible with
+  `rag data golden --check`. Baseline strict recall per stratum is in `EXPERIMENTS.md`.
+- **Revisit if:** P3-07 shows the slice cannot detect a regression the gate must catch,
+  or a stratum's MDD makes its per-stratum number meaningless.

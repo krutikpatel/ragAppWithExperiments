@@ -83,6 +83,25 @@ def data_splits(
     typer.echo(json.dumps(meta, indent=2))
 
 
+@data_app.command("golden")
+def data_golden(
+    check: bool = typer.Option(False, "--check", help="Verify the committed slice re-derives exactly; write nothing."),
+) -> None:
+    """Select the golden CI slice (P3-03): seeded, scripted, from dev + unanswerable."""
+    from collections import Counter
+
+    from rag.dataset.golden import build_golden, golden_hash, golden_path, load_golden, write_golden
+
+    rows = build_golden()
+    counts = dict(Counter(r["stratum"] for r in rows))
+    if check:
+        same = load_golden() == rows
+        typer.echo(f"{golden_path()}: {'matches' if same else 'DIFFERS FROM'} a fresh selection  {golden_hash(rows)}")
+        raise typer.Exit(0 if same else 1)
+    path = write_golden(rows)
+    typer.echo(f"{path}: {len(rows)} questions {counts}  {golden_hash(rows)}")
+
+
 @data_app.command("describe")
 def data_describe(split: str = typer.Argument(..., help="test | dev | dev_large | unanswerable")) -> None:
     """Print the shape and slice counts of a built split."""

@@ -407,6 +407,7 @@ rag/
                     profile.py (`rag corpus profile` — lengths, one-chunk fit,
                     procedure-block cuts; a characterization, not an experiment)
   dataset/          adapter.py (DatasetAdapter, QARow), wixqa.py (WixQAAdapter),
+                    golden.py (P3-03: the seeded golden CI slice, `rag data golden`),
                     loader.py (reads frozen splits — NO benchmark import; the
                     runner's only dataset dependency), splits.py (builds them),
                     unanswerable.py (the authored refusal set)
@@ -567,6 +568,11 @@ data/
   frozen/           materialized corpus and splits + *.meta.json. GITIGNORED,
                     rebuilt by `rag corpus freeze` and `rag data splits`,
                     tracked by hash rather than by content.
+
+eval/
+  golden/           golden_vN.jsonl + DATASHEET.md — the CI slice (P3-03, DEC-074).
+                    VERSION CONTROLLED: selected by `rag data golden`, never by hand;
+                    any change is a new version
 
 docs/               the documentation contract (section 2). Deliverables.
   experiments/      per-experiment EXP-NNNN.md files, written from the results store

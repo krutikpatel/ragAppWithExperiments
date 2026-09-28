@@ -1270,3 +1270,29 @@ A block no longer than the overlap cannot be cut: whichever stride boundary it s
 | known_issue | 512/0 | 63 | 63 (100.0%) | 0 (0.0%) | 0 (0.0%) |
 
 <!-- corpus-profile:c852878d74a8 end -->
+
+## Phase 3 — golden slice v1: baseline strict recall per stratum (P3-03)
+
+Not an experiment and no new run: the promoted configuration's existing `dev` Tier 1 run,
+`run_20260912_225005_be04` (EXP-0005, strict recall@5 0.720 on all 200), read on the 80
+answerable questions of `golden_v1` (DEC-074, `eval/golden/DATASHEET.md`). Original
+WixQA qrels, document level.
+
+| Stratum | n | strict R@1 | **strict R@5** | strict R@10 | strict R@20 |
+|---|---|---|---|---|---|
+| single_doc | 33 | 0.2727 | **0.9091** | 0.9697 | 1.0000 |
+| multi_doc | 20 | 0.0000 | **0.6000** | 0.8500 | 0.9500 |
+| answered_without_gold | 27 | 0.0000 | **0.0000** | 0.4815 | 0.7037 |
+| **all answerable** | **80** | 0.1125 | **0.5250** | 0.7750 | 0.8875 |
+| unanswerable | 15 | — | — | — | — |
+
+- **The 0.0000 for `answered_without_gold` is true by definition, not a finding.** The
+  stratum is the set of questions whose gold was not in the top-5 context, which is a
+  strict recall@5 miss. Its recall@10 and @20 show where those golds actually sat.
+- Multi-doc R@1 is 0 by definition: strict recall needs every gold in the top k, and two
+  golds cannot both be at rank 1.
+- **0.5250 is not a system number.** The slice over-samples the risk group on purpose
+  (DATASHEET), so it is lower than `dev`'s 0.720. It is the reference the gate compares
+  against, on the same 80 questions.
+- The stratum was defined from the Tier 2 run `run_20260913_205058_dc03`; this Tier 1 run
+  embedded the same questions separately. They agree on all 27 (0 hits at 5 in both).
