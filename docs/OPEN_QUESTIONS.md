@@ -795,3 +795,14 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   its pairwise threshold over ≥ 8 fresh runs. If it exceeds 0.15, or P3-12's planted
   regressions are caught by faithfulness alone, propose making it report-only — a gate v4
   decision for Krutik, never a quiet edit.
+
+## OQ-050 — The gate cannot see an answer that stopped citing
+- **Status:** open. Surfaced 2026-09-29 by drill 2 (EXP-0064).
+- **What was measured:** with the citation rule removed, citation validity and integrity rose to
+  1.000 — an answer that cites nothing has no bad citation. Drill 2 still failed, on faithfulness.
+  A change that only stopped citing, and kept answers grounded, would pass every gate rule.
+- **Also:** the CI artifact carries per-answer flags, not answer text, so a drill's answers
+  cannot be read after the fact.
+- **Decided by:** add a per-answer "cited nothing" flag (already a Tier 2 metric, `cited_nothing`)
+  and the answer text to `ci_eval.json`; measure its pairwise threshold over the fresh golden
+  runs; then propose gating it — a gate v6 decision for Krutik.
