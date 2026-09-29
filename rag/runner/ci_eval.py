@@ -281,7 +281,8 @@ def summary_markdown(result: dict[str, Any], verdict: dict[str, Any] | None) -> 
 # --- orchestration ----------------------------------------------------------------------
 
 def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: str = "",
-            estimate_only: bool = False, allow_no_baseline: bool = False,
+            estimate_only: bool = False, allow_no_baseline: bool = False, no_cache: bool = False,
+            decisions_path: str | None = None,
             runner: Callable[..., dict[str, Any]] | None = None,
             faithfulness: Callable[..., Any] | None = None, store: Any = None) -> tuple[int, dict[str, Any]]:
     from rag.call_cache import CallCache, call_cache
@@ -297,6 +298,11 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
     gate = load_gate(gate_path)
     baseline = json.loads(Path(baseline_path).read_text()) if Path(baseline_path).exists() else None
+    if baseline is not None and not estimate_only:
+        problems = verify_baseline(baseline, decisions_path=decisions_path)
+        if problems:
+            # Not a quality failure: the reference itself cannot be trusted (P3-11).
+            raise CIError("baseline integrity: " + "; ".join(problems))
     if baseline is None and not allow_no_baseline and not estimate_only:
         raise CIError(f"no baseline at {baseline_path}; pass --allow-no-baseline to record one")
     dev_cfg, golden_cfg = load_config_file(gate["configs"]["dev_retrieval"]), load_config_file(gate["configs"]["golden"])
@@ -321,15 +327,20 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
         if sum(est.values()) > budget and not approve_cost.strip():
             return EXIT_NEEDS_APPROVAL, {"status": "NEEDS_APPROVAL", "estimate": est, "budget": budget}
         cache = CallCache()
+        mode = "drift (no caches)" if no_cache else "gate"
         try:
-            with call_cache(cache):
-                dev_row = runner(dev_cfg, store=store, reason="rag ci-eval (P3-08)")
-                golden_row = runner(golden_cfg, store=store, reason="rag ci-eval (P3-08)")
+            # P3-11 drift mode: every call fresh, so a provider changing a model under an
+            # unchanged pipeline shows up as a difference from the baseline.
+            from contextlib import nullcontext
+
+            with (nullcontext() if no_cache else call_cache(cache)):
+                dev_row = runner(dev_cfg, store=store, reason=f"rag ci-eval ({mode})")
+                golden_row = runner(golden_cfg, store=store, reason=f"rag ci-eval ({mode})")
             spent = (dev_row.get("cost_actual_usd") or 0) + (golden_row.get("cost_actual_usd") or 0)
             try:
                 faith = faithfulness(golden_row["run_id"], judge_config_path=gate["configs"]["judge"],
                                      approve_cost=approval, max_usd=None if approve_cost.strip() else budget - spent,
-                                     store=store)
+                                     no_cache=no_cache, store=store)
             except NeedsApproval as exc:
                 return EXIT_NEEDS_APPROVAL, {"status": "NEEDS_APPROVAL", "reason": str(exc), "budget": budget}
         finally:
@@ -343,6 +354,7 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
         cost["total"] = round(sum(cost.values()), 6)
         result = collect(dev_row=dev_row, golden_row=golden_row, faith_row=faith_row, store=store,
                          gate=gate, cost=cost, cache=stats)
+        result["mode"] = mode
     except (CostGateError,) as exc:
         return EXIT_NEEDS_APPROVAL, {"status": "NEEDS_APPROVAL", "reason": str(exc)}
     finally:
@@ -380,6 +392,85 @@ def update_baseline(*, source: str, reason: str, baseline_path: str, decisions_p
                 "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "config_hashes": {"dev": result["provenance"]["dev_config_hash"],
                                   "golden": result["provenance"]["golden_config_hash"]},
+                "result_sha256": result_digest(result),
                 "result": result}
     Path(baseline_path).write_text(json.dumps(baseline, indent=2, default=str) + "\n")
     return baseline
+
+
+def result_digest(result: dict[str, Any]) -> str:
+    """P3-11: a hash of the baseline's result, stamped by `rag ci-baseline update`. A hand
+    edit to any number or outcome no longer matches it."""
+    import hashlib
+
+    canonical = json.dumps(result, sort_keys=True, separators=(",", ":"), default=str)
+    return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def verify_baseline(baseline: dict[str, Any], *, decisions_path: str | None = None) -> list[str]:
+    """Why this baseline cannot be trusted — empty when it can (DEC-090).
+
+    - it was written by `rag ci-baseline update` (its `result_sha256` matches its content);
+    - its `reason` names a DEC entry that exists;
+    - it has the fields the comparison needs."""
+    import re
+
+    from rag.paths import DOCS_DIR
+
+    problems = []
+    for key in ("reason", "result", "result_sha256"):
+        if key not in baseline:
+            problems.append(f"missing `{key}` — write it with `rag ci-baseline update --reason <DEC-id>`")
+    if problems:
+        return problems
+    if result_digest(baseline["result"]) != baseline["result_sha256"]:
+        problems.append("result_sha256 does not match its content — edited outside `rag ci-baseline update`")
+    decisions = Path(decisions_path) if decisions_path else DOCS_DIR / "DECISIONS.md"
+    if not re.search(rf"^## {re.escape(str(baseline['reason']))}\b", decisions.read_text(), re.MULTILINE):
+        problems.append(f"its reason {baseline['reason']} is not an entry in {decisions}")
+    return problems
+
+
+# The paths whose change can move a gated metric (same list as ci/run_gate.sh).
+PIPELINE_PREFIXES = ("rag/", "configs/", "prompts/", "eval/golden/", "data/authored/")
+PIPELINE_FILES = ("ci/gate.yaml", "pyproject.toml", "uv.lock")
+BASELINE_FILE = "ci/baseline.json"
+
+
+def ratchet_check(changed: list[str], new_baseline: dict[str, Any] | None,
+                  base_baseline: dict[str, Any] | None, *, decisions_path: str | None = None) -> tuple[bool, str]:
+    """P3-11: the bar moves only on purpose. Returns (allowed, reason).
+
+    A PR may not change the pipeline AND lower or move the bar: if `ci/baseline.json`
+    changed and its RESULT differs from the base branch's, no other pipeline path may have
+    changed. A metadata-only baseline change (same result, e.g. the integrity stamp) moves
+    no bar and is allowed. Any changed baseline must also pass `verify_baseline`."""
+    if BASELINE_FILE not in changed:
+        return True, "baseline unchanged"
+    if new_baseline is None:
+        return False, "ci/baseline.json was deleted"
+    problems = verify_baseline(new_baseline, decisions_path=decisions_path)
+    if problems:
+        return False, "the new baseline cannot be trusted: " + "; ".join(problems)
+    same = base_baseline is not None and result_digest(base_baseline.get("result", {})) == new_baseline["result_sha256"]
+    if same:
+        return True, "baseline metadata changed, its results did not"
+    others = [f for f in changed if f != BASELINE_FILE and (f.startswith(PIPELINE_PREFIXES) or f in PIPELINE_FILES)]
+    if others:
+        return False, ("ratchet: this PR changes the baseline's results AND the pipeline "
+                       f"({', '.join(others[:5])}). Change the system and the bar in separate PRs.")
+    return True, f"baseline-only change, reason {new_baseline['reason']}"
+
+
+def ratchet_from_git(base_ref: str, *, repo: str = ".") -> tuple[bool, str]:
+    import subprocess
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
+
+    changed = git("diff", "--name-only", f"{base_ref}...HEAD").stdout.split()
+    new_path = Path(repo) / BASELINE_FILE
+    new = json.loads(new_path.read_text()) if new_path.exists() else None
+    shown = git("show", f"{base_ref}:{BASELINE_FILE}")
+    base = json.loads(shown.stdout) if shown.returncode == 0 else None
+    return ratchet_check(changed, new, base, decisions_path=str(Path(repo) / "docs" / "DECISIONS.md"))

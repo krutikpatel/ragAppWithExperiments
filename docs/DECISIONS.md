@@ -3455,3 +3455,42 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   exists, the gate cannot give a verdict on a pipeline change.
 - **Revisit if:** the secret is added (consider `enforce_admins: true`), or a second
   contributor joins (consider required reviews).
+
+## DEC-090 — P3-11: the baseline ratchet, its integrity stamp, and a weekly drift check
+- **Date:** 2026-09-28
+- **Decided by:** Joint. Krutik asked for P3-11 finished. Claude: the drift cadence and
+  budget (a story open question — weekly, $1.00 per run, flagged in chat for confirmation),
+  and the metadata-only rule below.
+- **Status:** Active.
+- **What `ci/baseline.json` holds** (P3-11's list): the run ids, the config hashes, the
+  metrics and every per-question outcome — plus, from now on, **`result_sha256`**, a hash of
+  its result stamped by `rag ci-baseline update`.
+- **It changes only through `rag ci-baseline update --reason <DEC-id>`**, which refuses a
+  reason that is not an existing DEC entry. `rag ci-eval` verifies the stamp and the reason
+  before comparing (`verify_baseline`); a hand-edited or unstamped baseline is an ERROR
+  (exit 2) — the reference itself cannot be trusted, which is not a quality result.
+  `rag ci-baseline verify` runs the same check on its own.
+- **The ratchet** (`rag ci-baseline ratchet --base <ref>`, run first in `ci/run_gate.sh`, and
+  needing no API key): a PR that changes the baseline's **results** and any other pipeline
+  path is **REJECTED** (exit 1). Changing the system and moving the bar happen in separate
+  PRs. Two refinements, both Claude's:
+  - a change to the baseline's **metadata only** — its result identical to the base branch's
+    — moves no bar and is allowed. Without this, adding the stamp itself would have been
+    un-mergeable: this PR re-stamps the unchanged DEC-087 baseline;
+  - any changed baseline must pass `verify_baseline`.
+- **Improvements never update the baseline automatically** — nothing in CI writes it.
+- **Drift check** (`.github/workflows/drift.yml`): `rag ci-eval --no-cache` on `main`, which
+  bypasses the call cache (embeddings, answers) and the judge cache, so every call is fresh.
+  **Weekly, Monday 06:00 UTC**, and on demand; **$1.00 per-run budget** (a fresh run measured
+  $0.30, EXP-0060) — about $1.30 a month. A quality FAIL opens a GitHub issue labelled
+  `drift`; an ERROR does not. It is a separate workflow and not a required check, so it never
+  blocks a PR.
+- **What the drift check cannot do cleanly:** a fresh run has fresh generator and judge
+  noise, and the MDDs came from four runs (P3-07, DEC-087). A fresh run with nothing changed
+  can land outside an MDD — the DEC-085 baseline itself did on false-answer rate. So a
+  drift issue is a prompt to look, not a proof of drift; the first thing to check is
+  whether the per-question changes follow a pattern or scatter like noise.
+- **Evidence:** no measured data for the cadence; judgment call. The ratchet and integrity
+  rules are pinned by tests.
+- **Revisit if:** drift issues open without a real change (noise), or a provider change is
+  found some other way first (the cadence is too slow).

@@ -286,10 +286,104 @@ def test_the_gate_script_skips_docs_only_changes_and_blocks_without_a_key(tmp_pa
     import os
     import subprocess
 
+    import sys
+    from pathlib import Path
+
     env = {k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"}
     env["GITHUB_STEP_SUMMARY"] = str(tmp_path / "summary.md")
+    env["PATH"] = f"{Path(sys.executable).parent}:{env.get('PATH', '')}"  # `rag`, as CI installs it
     skipped = subprocess.run(["ci/run_gate.sh", "HEAD"], env=env, capture_output=True, text=True)
     assert skipped.returncode == 0 and "eval skipped: no pipeline change" in skipped.stdout
     blocked = subprocess.run(["ci/run_gate.sh", "HEAD"], env={**env, "FORCE_EVAL": "1"}, capture_output=True, text=True)
     assert blocked.returncode == 1 and "NOT VERIFIED" in blocked.stdout
     assert "NOT VERIFIED" in (tmp_path / "summary.md").read_text()
+
+
+# --- P3-11: integrity, ratchet, drift (DEC-090) --------------------------------------
+
+def _stamped(result, reason="DEC-900"):
+    from rag.runner.ci_eval import result_digest
+
+    return {"reason": reason, "result": result, "result_sha256": result_digest(result)}
+
+
+def _decisions(tmp_path):
+    p = tmp_path / "DECISIONS.md"
+    p.write_text("## DEC-900 — a decision\n")
+    return str(p)
+
+
+def test_a_hand_edited_or_unstamped_baseline_is_rejected(tmp_path):
+    from rag.runner.ci_eval import verify_baseline
+
+    d = _decisions(tmp_path)
+    good = _stamped(_result())
+    assert verify_baseline(good, decisions_path=d) == []
+    edited = copy.deepcopy(good)
+    edited["result"]["metrics"]["judged"]["mean_faithfulness"] = 0.50  # lowering the bar by hand
+    assert any("edited outside" in p for p in verify_baseline(edited, decisions_path=d))
+    assert any("missing `result_sha256`" in p
+               for p in verify_baseline({"reason": "DEC-900", "result": {}}, decisions_path=d))
+    assert any("not an entry" in p for p in verify_baseline(_stamped(_result(), "DEC-901"), decisions_path=d))
+
+
+def test_the_committed_baseline_is_stamped_and_verifies():
+    from rag.runner.ci_eval import verify_baseline
+
+    assert verify_baseline(json.loads(open("ci/baseline.json").read())) == []
+
+
+def test_the_ratchet_rejects_new_results_together_with_a_pipeline_change(tmp_path):
+    from rag.runner.ci_eval import ratchet_check
+
+    d = _decisions(tmp_path)
+    base = _stamped(_result())
+    moved = _stamped(_result(judged={**_result()["metrics"]["judged"], "mean_faithfulness": 0.70}))
+    same_results = {**_stamped(_result()), "updated": "later"}
+
+    ok, why = ratchet_check(["rag/cli.py"], base, base, decisions_path=d)
+    assert ok and why == "baseline unchanged"
+    ok, why = ratchet_check(["ci/baseline.json", "prompts/baseline_answer.yaml"], moved, base, decisions_path=d)
+    assert not ok and "ratchet" in why and "prompts/baseline_answer.yaml" in why
+    ok, why = ratchet_check(["ci/baseline.json", "rag/cli.py"], same_results, base, decisions_path=d)
+    assert ok and "results did not" in why, "a metadata-only change moves no bar"
+    ok, why = ratchet_check(["ci/baseline.json", "docs/DECISIONS.md"], moved, base, decisions_path=d)
+    assert ok and "baseline-only" in why
+    ok, why = ratchet_check(["ci/baseline.json"], {**moved, "result_sha256": "sha256:0"}, base, decisions_path=d)
+    assert not ok and "cannot be trusted" in why
+    ok, _ = ratchet_check(["ci/baseline.json"], None, base, decisions_path=d)
+    assert not ok
+
+
+def test_drift_mode_bypasses_every_cache(tmp_path, monkeypatch):
+    """`--no-cache`: no call cache around the runs; the gate itself still uses it."""
+    import rag.call_cache as cc
+    import rag.runner.model_check as mc
+    from rag.runner.ci_eval import ci_eval
+
+    monkeypatch.setattr(mc, "verify_config_models", lambda config, **kw: [])
+    seen = []
+
+    def runner(config, store=None, estimate_only=False, reason=None):
+        if estimate_only:
+            return {"total_usd": 0.01}
+        seen.append(cc.active() is not None)
+        raise RuntimeError("stop after recording")
+
+    base = tmp_path / "b.json"
+    base.write_text(json.dumps(_stamped(_result())))
+    for no_cache in (True, False):
+        with pytest.raises(RuntimeError):
+            ci_eval(gate_path="ci/gate.yaml", baseline_path=str(base), out_dir=str(tmp_path / "o"),
+                    no_cache=no_cache, decisions_path=_decisions(tmp_path), runner=runner, store=object())
+    assert seen == [False, True]
+
+
+def test_a_broken_ratchet_check_is_an_error_not_a_rejection(tmp_path):
+    """If `rag` itself cannot run, the gate must not report a policy REJECTED."""
+    import os
+    import subprocess
+
+    env = {"PATH": "/usr/bin:/bin", "GITHUB_STEP_SUMMARY": str(tmp_path / "s.md"), "FORCE_EVAL": "1"}
+    r = subprocess.run(["ci/run_gate.sh", "HEAD"], env=env, capture_output=True, text=True)
+    assert r.returncode == 2 and "ERROR" in r.stdout and "REJECTED" not in r.stdout

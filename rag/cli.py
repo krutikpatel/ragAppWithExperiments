@@ -406,6 +406,7 @@ def ci_eval_cmd(
     approve_cost: str = typer.Option("", "--approve-cost", help="Approval reference; lifts the CI budget."),
     estimate_only: bool = typer.Option(False, "--estimate-only"),
     allow_no_baseline: bool = typer.Option(False, "--allow-no-baseline", help="Record metrics when no baseline exists."),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Drift mode (P3-11): every call fresh, no cache read or written."),
 ) -> None:
     """P3-08: the whole quality gate. Exit 0 pass, 1 gated failure, 2 error, 3 needs approval."""
     import traceback
@@ -414,7 +415,7 @@ def ci_eval_cmd(
 
     try:
         code, doc = ci_eval(gate_path=gate, baseline_path=baseline, out_dir=out, approve_cost=approve_cost,
-                            estimate_only=estimate_only, allow_no_baseline=allow_no_baseline)
+                            estimate_only=estimate_only, allow_no_baseline=allow_no_baseline, no_cache=no_cache)
     except CIError as exc:
         typer.echo(f"ci-eval ERROR (not a quality failure): {exc}", err=True)
         raise typer.Exit(EXIT_ERROR)
@@ -453,6 +454,31 @@ def ci_baseline_update(
     except CIError as exc:
         raise typer.BadParameter(str(exc)) from exc
     typer.echo(f"{baseline} <- {source} ({reason}); runs {b['result']['runs']}")
+
+
+@ci_baseline_app.command("verify")
+def ci_baseline_verify(baseline: str = typer.Option("ci/baseline.json", "--baseline")) -> None:
+    """P3-11: the baseline was written by `rag ci-baseline update` and names a real DEC.
+    Exit 1 when it cannot be trusted."""
+    from rag.runner.ci_eval import verify_baseline
+
+    problems = verify_baseline(json.loads(open(baseline).read()))
+    for p in problems:
+        typer.echo(f"baseline: {p}", err=True)
+    if problems:
+        raise typer.Exit(1)
+    typer.echo(f"{baseline}: ok")
+
+
+@ci_baseline_app.command("ratchet")
+def ci_baseline_ratchet(base: str = typer.Option("origin/main", "--base", help="The branch this PR merges into.")) -> None:
+    """P3-11: reject a PR that changes both the pipeline and the baseline's results.
+    Exit 1 when rejected. Needs no API key."""
+    from rag.runner.ci_eval import ratchet_from_git
+
+    allowed, reason = ratchet_from_git(base)
+    typer.echo(("ok: " if allowed else "REJECTED: ") + reason)
+    raise typer.Exit(0 if allowed else 1)
 
 
 judge_app = typer.Typer(help="P3-04 synthetic judge sanity check.", no_args_is_help=True)
