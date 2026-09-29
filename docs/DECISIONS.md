@@ -3433,3 +3433,25 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   pushes to `main`, so from then on every change goes through a PR.
 - **Revisit if:** the first GitHub run differs from the local one (runner OS, HF download,
   cache sizes), or a cold run's cost exceeds the budget.
+
+## DEC-089 — `main` requires `unit-tests` and `ci-eval`; the CI budget is confirmed at $1.00
+- **Date:** 2026-09-28
+- **Decided by:** Krutik (enable the required checks; confirm the $1.00 budget; add the secret
+  himself later). Claude: the two protection details below, flagged in chat.
+- **Status:** Active. Completes P3-10's "`ci-eval` is a required status check on `main`".
+- **Branch protection on `main`** (set through the GitHub API, 2026-09-28):
+  - required status checks `unit-tests` and `ci-eval`, both bound to the GitHub Actions app
+    (so no other integration can report them);
+  - `strict: false` — a PR need not be rebased onto the newest `main` before merging;
+  - **`enforce_admins: false`** — an admin can still bypass. Chosen so Krutik is not locked
+    out while the `OPENROUTER_API_KEY` secret is missing (every pipeline PR reports NOT
+    VERIFIED until then). The bypass exists for that; it is not the working path;
+  - no required reviews — a solo repository would block its own owner.
+- **Working rule from here:** every change goes through a PR and merges only on green checks.
+  This entry is the first change made that way.
+- **CI budget:** `ci_budget_usd: 1.00` is Krutik's confirmed figure (DEC-088 recorded it as
+  Claude's pending confirmation).
+- **Still open:** the `OPENROUTER_API_KEY` repository secret (Krutik, manually). Until it
+  exists, the gate cannot give a verdict on a pipeline change.
+- **Revisit if:** the secret is added (consider `enforce_admins: true`), or a second
+  contributor joins (consider required reviews).
