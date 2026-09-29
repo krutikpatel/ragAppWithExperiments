@@ -1,12 +1,11 @@
 # P3-11 (DEC-090): has a provider changed a model under an unchanged pipeline?
 # `rag ci-eval --no-cache` on main: every embedding, answer and judgment fresh, compared to
 # ci/baseline.json. A quality FAIL opens an issue labelled `drift`. Not a required check:
-# it never blocks a PR. Weekly, and on demand. Budget: ci_budget_usd in ci/gate.yaml.
+# it never blocks a PR. ON DEMAND ONLY (Actions → drift → Run workflow): Krutik declined a
+# weekly schedule (DEC-094). Budget: ci_budget_usd in ci/gate.yaml.
 name: drift
 
 on:
-  schedule:
-    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
   workflow_dispatch:
 
 permissions:
