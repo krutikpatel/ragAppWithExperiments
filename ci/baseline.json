@@ -1,25 +1,25 @@
 {
   "schema_version": 1,
-  "reason": "DEC-090",
-  "updated": "2026-09-29T01:41:04+00:00",
+  "reason": "DEC-093",
+  "updated": "2026-09-29T07:06:58+00:00",
   "config_hashes": {
     "dev": "7c99bc8e9a88e878",
     "golden": "bde0483f16643b79"
   },
-  "result_sha256": "sha256:ca95bc909ffbb9bc53f4774f064f38dcec729fdd2c44ea22c5f42af5c224b5c1",
+  "result_sha256": "sha256:487c25639324ccb3070d85432da5e210849f4113fab28ba3d5919e1acace8cba",
   "result": {
     "schema_version": 1,
-    "created": "2026-09-28T23:24:48+00:00",
-    "git_sha": "74f54480931771bfc43679fe2a3a366ced9aef81",
+    "created": "2026-09-29T07:05:10+00:00",
+    "git_sha": "17560d6988b348bd28e763c9c9e6774c3ecd064a",
     "git_dirty": 0,
     "gate": {
       "status": "declared",
-      "version": 1
+      "version": 3
     },
     "runs": {
-      "dev": "run_20260928_232442_8605",
-      "golden": "run_20260928_232446_2482",
-      "faithfulness": "run_20260928_232448_fd7a"
+      "dev": "run_20260929_060414_b3e6",
+      "golden": "run_20260929_062617_30aa",
+      "faithfulness": "run_20260929_070510_34f3"
     },
     "provenance": {
       "corpus_hash": "sha256:74694ad4a96b62433813cf65b4f6f2c7fdbfaad0dfd8a5689121f6851ab80ec0",
@@ -43,144 +43,144 @@
         }
       },
       "judged": {
-        "mean_faithfulness": 0.8596,
-        "unsupported_answer_rate": 0.5714,
-        "false_answer_rate": 0.4,
-        "refusal_rate": 0.1125,
-        "citation_integrity": 0.974,
-        "citation_validity": 0.9221,
+        "mean_faithfulness": 0.8739,
+        "unsupported_answer_rate": 0.6579,
+        "false_answer_rate": 0.2,
+        "refusal_rate": 0.0875,
+        "citation_integrity": 0.9211,
+        "citation_validity": 0.8947,
         "cites_unretrieved_article": 0,
-        "garbled_citation_answers": 2,
-        "malformed_citation_answers": 4,
+        "garbled_citation_answers": 6,
+        "malformed_citation_answers": 2,
         "judge_failures": 0,
-        "n_judged": 77
+        "n_judged": 76
       },
       "judged_by_stratum": {
         "all": {
           "n": 95,
-          "n_answered": 77,
-          "n_judged": 77,
+          "n_answered": 76,
+          "n_judged": 76,
           "judge_failures": 0,
-          "mean_faithfulness": 0.8596,
-          "unsupported_answer_rate": 0.5714,
-          "refusal_rate": 0.1125,
-          "false_answer_rate": 0.4,
-          "citation_integrity": 0.974,
-          "invented_citations": 2,
-          "citation_validity": 0.9221,
+          "mean_faithfulness": 0.8739,
+          "unsupported_answer_rate": 0.6579,
+          "refusal_rate": 0.0875,
+          "false_answer_rate": 0.2,
+          "citation_integrity": 0.9211,
+          "invented_citations": 6,
+          "citation_validity": 0.8947,
           "cites_unretrieved_article": 0,
-          "garbled_citation_answers": 2,
-          "malformed_citation_answers": 4,
-          "claims": 946,
-          "unsupported_claims": 123
+          "garbled_citation_answers": 6,
+          "malformed_citation_answers": 2,
+          "claims": 921,
+          "unsupported_claims": 108
         },
         "answerable": {
           "n": 80,
-          "n_answered": 71,
-          "n_judged": 71,
+          "n_answered": 73,
+          "n_judged": 73,
           "judge_failures": 0,
-          "mean_faithfulness": 0.8624,
-          "unsupported_answer_rate": 0.5493,
-          "refusal_rate": 0.1125,
+          "mean_faithfulness": 0.8721,
+          "unsupported_answer_rate": 0.6575,
+          "refusal_rate": 0.0875,
           "false_answer_rate": null,
-          "citation_integrity": 0.9718,
-          "invented_citations": 2,
-          "citation_validity": 0.9296,
+          "citation_integrity": 0.9178,
+          "invented_citations": 6,
+          "citation_validity": 0.8904,
           "cites_unretrieved_article": 0,
-          "garbled_citation_answers": 2,
-          "malformed_citation_answers": 3,
-          "claims": 873,
-          "unsupported_claims": 115
+          "garbled_citation_answers": 6,
+          "malformed_citation_answers": 2,
+          "claims": 875,
+          "unsupported_claims": 104
         },
         "gold_docs:multi": {
           "n": 36,
           "n_answered": 33,
           "n_judged": 33,
           "judge_failures": 0,
-          "mean_faithfulness": 0.8581,
-          "unsupported_answer_rate": 0.5758,
+          "mean_faithfulness": 0.8432,
+          "unsupported_answer_rate": 0.7273,
           "refusal_rate": 0.0833,
           "false_answer_rate": null,
-          "citation_integrity": 1.0,
-          "invented_citations": 0,
-          "citation_validity": 0.9091,
+          "citation_integrity": 0.9091,
+          "invented_citations": 3,
+          "citation_validity": 0.8788,
           "cites_unretrieved_article": 0,
-          "garbled_citation_answers": 0,
-          "malformed_citation_answers": 3,
-          "claims": 394,
-          "unsupported_claims": 56
+          "garbled_citation_answers": 3,
+          "malformed_citation_answers": 1,
+          "claims": 399,
+          "unsupported_claims": 54
         },
         "gold_docs:single": {
           "n": 44,
-          "n_answered": 38,
-          "n_judged": 38,
+          "n_answered": 40,
+          "n_judged": 40,
           "judge_failures": 0,
-          "mean_faithfulness": 0.8662,
-          "unsupported_answer_rate": 0.5263,
-          "refusal_rate": 0.1364,
+          "mean_faithfulness": 0.8959,
+          "unsupported_answer_rate": 0.6,
+          "refusal_rate": 0.0909,
           "false_answer_rate": null,
-          "citation_integrity": 0.9474,
-          "invented_citations": 2,
-          "citation_validity": 0.9474,
+          "citation_integrity": 0.925,
+          "invented_citations": 3,
+          "citation_validity": 0.9,
           "cites_unretrieved_article": 0,
-          "garbled_citation_answers": 2,
-          "malformed_citation_answers": 0,
-          "claims": 479,
-          "unsupported_claims": 59
+          "garbled_citation_answers": 3,
+          "malformed_citation_answers": 1,
+          "claims": 476,
+          "unsupported_claims": 50
         },
         "gold_in_context": {
           "n": 42,
           "n_answered": 40,
           "n_judged": 40,
           "judge_failures": 0,
-          "mean_faithfulness": 0.8685,
-          "unsupported_answer_rate": 0.525,
+          "mean_faithfulness": 0.8762,
+          "unsupported_answer_rate": 0.6,
           "refusal_rate": 0.0476,
           "false_answer_rate": null,
-          "citation_integrity": 0.975,
-          "invented_citations": 1,
-          "citation_validity": 0.95,
+          "citation_integrity": 0.925,
+          "invented_citations": 3,
+          "citation_validity": 0.925,
           "cites_unretrieved_article": 0,
-          "garbled_citation_answers": 1,
-          "malformed_citation_answers": 1,
-          "claims": 493,
-          "unsupported_claims": 64
+          "garbled_citation_answers": 3,
+          "malformed_citation_answers": 0,
+          "claims": 471,
+          "unsupported_claims": 58
         },
         "gold_not_in_context": {
           "n": 38,
-          "n_answered": 31,
-          "n_judged": 31,
+          "n_answered": 33,
+          "n_judged": 33,
           "judge_failures": 0,
-          "mean_faithfulness": 0.8545,
-          "unsupported_answer_rate": 0.5806,
-          "refusal_rate": 0.1842,
+          "mean_faithfulness": 0.8671,
+          "unsupported_answer_rate": 0.7273,
+          "refusal_rate": 0.1316,
           "false_answer_rate": null,
-          "citation_integrity": 0.9677,
-          "invented_citations": 1,
-          "citation_validity": 0.9032,
+          "citation_integrity": 0.9091,
+          "invented_citations": 3,
+          "citation_validity": 0.8485,
           "cites_unretrieved_article": 0,
-          "garbled_citation_answers": 1,
+          "garbled_citation_answers": 3,
           "malformed_citation_answers": 2,
-          "claims": 380,
-          "unsupported_claims": 51
+          "claims": 404,
+          "unsupported_claims": 46
         },
         "unanswerable": {
           "n": 15,
-          "n_answered": 6,
-          "n_judged": 6,
+          "n_answered": 3,
+          "n_judged": 3,
           "judge_failures": 0,
-          "mean_faithfulness": 0.8264,
-          "unsupported_answer_rate": 0.8333,
+          "mean_faithfulness": 0.9184,
+          "unsupported_answer_rate": 0.6667,
           "refusal_rate": null,
-          "false_answer_rate": 0.4,
+          "false_answer_rate": 0.2,
           "citation_integrity": 1.0,
           "invented_citations": 0,
-          "citation_validity": 0.8333,
+          "citation_validity": 1.0,
           "cites_unretrieved_article": 0,
           "garbled_citation_answers": 0,
-          "malformed_citation_answers": 1,
-          "claims": 73,
-          "unsupported_claims": 8
+          "malformed_citation_answers": 0,
+          "claims": 46,
+          "unsupported_claims": 4
         }
       }
     },
@@ -253,7 +253,7 @@
         "47337149535f21c6": 0.0,
         "47491dfa4bd5b1f0": 1.0,
         "47cfb81a0c5f06d7": 0.0,
-        "47ed1fdd553ce70f": 0.0,
+        "47ed1fdd553ce70f": 1.0,
         "48a6fa6bb503c190": 1.0,
         "4c404feac7e8e906": 1.0,
         "4db647720c0830f6": 0.0,
@@ -301,7 +301,7 @@
         "84c764357646c368": 1.0,
         "85fc1263cd88d2fb": 1.0,
         "861f3360f9ea8b7e": 1.0,
-        "884737ebb10460ec": 1.0,
+        "884737ebb10460ec": 0.0,
         "886b25a08d1272a3": 1.0,
         "8bda79e26b2a2b66": 1.0,
         "8bf10e18bc51d660": 1.0,
@@ -421,7 +421,7 @@
         "2fef822727f75504": 1.0,
         "34d83e33f8de1bb0": 0.0,
         "47337149535f21c6": 0.0,
-        "47ed1fdd553ce70f": 0.0,
+        "47ed1fdd553ce70f": 1.0,
         "525df6df0a462838": 1.0,
         "5f72fe6d97cc0f0a": 0.0,
         "683c8f78a7945d79": 1.0,
@@ -452,7 +452,7 @@
         "688357ae1268c0ca": 1.0,
         "6fd430edcaab5ebd": 1.0,
         "73eddb4b3943251e": 1.0,
-        "884737ebb10460ec": 1.0,
+        "884737ebb10460ec": 0.0,
         "886b25a08d1272a3": 1.0,
         "8bda79e26b2a2b66": 1.0,
         "946549e90d4d1d1f": 0.0,
@@ -486,7 +486,7 @@
       },
       "answers": {
         "00c9705d3b0ccd3e": {
-          "faithfulness": 0.5,
+          "faithfulness": 0.8823529411764706,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -494,18 +494,20 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "045103924613c165": {
-          "faithfulness": 0.6666666666666666,
-          "unsupported": true,
-          "refused": false,
+          "faithfulness": null,
+          "unsupported": null,
+          "refused": true,
           "unanswerable": true,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "05364e00b599848e": {
           "faithfulness": null,
@@ -516,10 +518,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "05cb6e042f7a6b7b": {
-          "faithfulness": 0.7857142857142857,
+          "faithfulness": 0.9285714285714286,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -527,10 +530,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "06ed28b1a9300bdf": {
-          "faithfulness": 0.375,
+          "faithfulness": 0.75,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -538,32 +542,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "09a397f477f7e87e": {
-          "faithfulness": 1.0,
-          "unsupported": false,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "0bedab3654771624": {
-          "faithfulness": 1.0,
-          "unsupported": false,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": false,
-          "unretrieved_real_citations": []
-        },
-        "10bc9823521d086a": {
-          "faithfulness": 0.9523809523809523,
+          "faithfulness": 0.9583333333333334,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -571,7 +554,32 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "0bedab3654771624": {
+          "faithfulness": 0.8571428571428571,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "10bc9823521d086a": {
+          "faithfulness": 1.0,
+          "unsupported": false,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "10c20ca3eafd0272": {
           "faithfulness": null,
@@ -582,21 +590,23 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "112b945005188ae1": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.9166666666666666,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "1bcee9c1f7a0dd0a": {
-          "faithfulness": 0.6153846153846154,
+          "faithfulness": 0.9375,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -604,7 +614,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": false,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "2209d695fd0693c9": {
           "faithfulness": 1.0,
@@ -615,18 +626,20 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "24cd87e4b4fe0b1a": {
-          "faithfulness": 0.875,
-          "unsupported": true,
-          "refused": false,
+          "faithfulness": null,
+          "unsupported": null,
+          "refused": true,
           "unanswerable": true,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "275255f79eebfa39": {
           "faithfulness": null,
@@ -637,18 +650,20 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "294aab11f1b4f49f": {
-          "faithfulness": 0.9090909090909091,
-          "unsupported": true,
+          "faithfulness": 1.0,
+          "unsupported": false,
           "refused": false,
           "unanswerable": false,
-          "citation_integrity": true,
+          "citation_integrity": false,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "citation_valid": false,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "2a8c233b484d803f": {
           "faithfulness": 1.0,
@@ -659,10 +674,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "2fef822727f75504": {
-          "faithfulness": 0.6153846153846154,
+          "faithfulness": 0.7777777777777778,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -670,7 +686,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "314098d1ab278963": {
           "faithfulness": null,
@@ -681,29 +698,32 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "34d83e33f8de1bb0": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.9523809523809523,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "384f8ec8d6d58c4a": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.7222222222222222,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "3d779add5e7e5c0b": {
           "faithfulness": 0.75,
@@ -714,9 +734,34 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "3da31b0ce64febf0": {
+          "faithfulness": 0.8888888888888888,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "3f42c8a9ba580aaf": {
+          "faithfulness": 0.625,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "3fa01307b997587e": {
           "faithfulness": 1.0,
           "unsupported": false,
           "refused": false,
@@ -725,29 +770,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "3f42c8a9ba580aaf": {
-          "faithfulness": null,
-          "unsupported": null,
-          "refused": true,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "3fa01307b997587e": {
-          "faithfulness": 0.8333333333333334,
-          "unsupported": true,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "431f4e58e221092a": {
           "faithfulness": 1.0,
@@ -758,10 +782,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "47337149535f21c6": {
-          "faithfulness": 0.8,
+          "faithfulness": 0.875,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -769,21 +794,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "47cfb81a0c5f06d7": {
-          "faithfulness": null,
-          "unsupported": null,
-          "refused": true,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "47ed1fdd553ce70f": {
-          "faithfulness": 0.8461538461538461,
+          "faithfulness": 0.8571428571428571,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -791,29 +806,44 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "47ed1fdd553ce70f": {
+          "faithfulness": 0.6,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "4c404feac7e8e906": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.8571428571428571,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "4db647720c0830f6": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.8571428571428571,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "50787f7b6b59e71a": {
           "faithfulness": 1.0,
@@ -824,10 +854,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "50cb3cf65bd64d2d": {
-          "faithfulness": 0.6666666666666666,
+          "faithfulness": 0.75,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -835,10 +866,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "525df6df0a462838": {
-          "faithfulness": 0.6842105263157895,
+          "faithfulness": 0.75,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -846,7 +878,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "5a1112b26081d44e": {
           "faithfulness": 1.0,
@@ -857,7 +890,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "5ba308301fc0a3f5": {
           "faithfulness": null,
@@ -868,53 +902,22 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "5c3ab38e1c27752b": {
-          "faithfulness": null,
-          "unsupported": null,
-          "refused": true,
+          "faithfulness": 0.7,
+          "unsupported": true,
+          "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "5d295af819420a00": {
-          "faithfulness": 0.8928571428571429,
-          "unsupported": true,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "5f72fe6d97cc0f0a": {
-          "faithfulness": 0.8823529411764706,
-          "unsupported": true,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "6064b76078c48c2d": {
-          "faithfulness": 0.9,
-          "unsupported": true,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "624105536bda89ac": {
           "faithfulness": 0.9285714285714286,
           "unsupported": true,
           "refused": false,
@@ -923,10 +926,47 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "5f72fe6d97cc0f0a": {
+          "faithfulness": 1.0,
+          "unsupported": false,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "6064b76078c48c2d": {
+          "faithfulness": 0.8571428571428571,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "624105536bda89ac": {
+          "faithfulness": 0.875,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "6589fae0440bd1f7": {
-          "faithfulness": 0.9,
+          "faithfulness": 0.8461538461538461,
           "unsupported": true,
           "refused": false,
           "unanswerable": true,
@@ -934,7 +974,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "683c8f78a7945d79": {
           "faithfulness": 1.0,
@@ -944,19 +985,21 @@
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": false,
-          "unretrieved_real_citations": []
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "688357ae1268c0ca": {
-          "faithfulness": 0.2857142857142857,
+          "faithfulness": 0.9166666666666666,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
-          "citation_integrity": false,
+          "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": false,
-          "unretrieved_real_citations": []
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "6f1d32ecf84f2b41": {
           "faithfulness": null,
@@ -967,20 +1010,10 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "6fd430edcaab5ebd": {
-          "faithfulness": 0.9090909090909091,
-          "unsupported": true,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "714d7e088006a8f9": {
           "faithfulness": 1.0,
           "unsupported": false,
           "refused": false,
@@ -989,10 +1022,23 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "714d7e088006a8f9": {
+          "faithfulness": 0.7333333333333333,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "72b50568839d2d7e": {
-          "faithfulness": 0.8666666666666667,
+          "faithfulness": 0.9705882352941176,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1000,10 +1046,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "73eddb4b3943251e": {
-          "faithfulness": 0.896551724137931,
+          "faithfulness": 0.7,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1011,32 +1058,35 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "752c7e476d23583c": {
-          "faithfulness": 0.6666666666666666,
+          "faithfulness": 0.3333333333333333,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
-          "citation_integrity": true,
+          "citation_integrity": false,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "citation_valid": false,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "78caa14444b21a63": {
-          "faithfulness": 0.7142857142857143,
+          "faithfulness": 0.9090909090909091,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "citation_valid": false,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "7f4bffff21db09ec": {
-          "faithfulness": 0.8,
+          "faithfulness": 0.8571428571428571,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1044,18 +1094,20 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "80b8ecab4822e4de": {
-          "faithfulness": 0.6666666666666666,
+          "faithfulness": 0.8181818181818182,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "citation_valid": false,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "884737ebb10460ec": {
           "faithfulness": 1.0,
@@ -1066,7 +1118,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "886b25a08d1272a3": {
           "faithfulness": 1.0,
@@ -1077,29 +1130,32 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "8bda79e26b2a2b66": {
-          "faithfulness": null,
-          "unsupported": null,
-          "refused": true,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "907436d8d28a294f": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.9166666666666666,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "907436d8d28a294f": {
+          "faithfulness": 0.7,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "924a7b082af11be7": {
           "faithfulness": null,
@@ -1110,10 +1166,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "926d5b0fec04531f": {
-          "faithfulness": 0.7692307692307693,
+          "faithfulness": 0.7777777777777778,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1121,9 +1178,22 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "92bdb8afe6bf06e2": {
+          "faithfulness": 0.7857142857142857,
+          "unsupported": true,
+          "refused": false,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "946549e90d4d1d1f": {
           "faithfulness": 0.85,
           "unsupported": true,
           "refused": false,
@@ -1132,32 +1202,23 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "946549e90d4d1d1f": {
-          "faithfulness": null,
-          "unsupported": null,
-          "refused": true,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "951eb9bb46af85c8": {
-          "faithfulness": 0.85,
-          "unsupported": true,
+          "faithfulness": 1.0,
+          "unsupported": false,
           "refused": false,
           "unanswerable": true,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "999d82a507eacf42": {
-          "faithfulness": 0.8333333333333334,
+          "faithfulness": 0.8571428571428571,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1165,10 +1226,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "9a57583e839f6076": {
-          "faithfulness": 0.6875,
+          "faithfulness": 0.8,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1176,7 +1238,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "9e730d7fa060217e": {
           "faithfulness": null,
@@ -1187,10 +1250,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "a7fecaf9f7855d20": {
-          "faithfulness": 0.5384615384615384,
+          "faithfulness": 0.5,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1198,18 +1262,20 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "a951bb422976e2a3": {
-          "faithfulness": 0.7222222222222222,
-          "unsupported": true,
+          "faithfulness": 1.0,
+          "unsupported": false,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": false,
-          "unretrieved_real_citations": []
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "a9dc62d249797fc7": {
           "faithfulness": 1.0,
@@ -1220,29 +1286,32 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "aa44a25594cba7b0": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.75,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "acd87003486fbd56": {
-          "faithfulness": 1.0,
-          "unsupported": false,
-          "refused": false,
+          "faithfulness": null,
+          "unsupported": null,
+          "refused": true,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "ad48579290626391": {
           "faithfulness": null,
@@ -1253,10 +1322,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "af054e67f658fa53": {
-          "faithfulness": 0.7,
+          "faithfulness": 0.8421052631578947,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1264,7 +1334,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "b1b4efbe188c6d50": {
           "faithfulness": null,
@@ -1275,40 +1346,44 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "b1cad140105b5708": {
-          "faithfulness": 1.0,
-          "unsupported": false,
-          "refused": false,
+          "faithfulness": null,
+          "unsupported": null,
+          "refused": true,
           "unanswerable": true,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": false,
-          "unretrieved_real_citations": []
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "b4f467c8e6d3002d": {
-          "faithfulness": 0.9629629629629629,
-          "unsupported": true,
+          "faithfulness": 1.0,
+          "unsupported": false,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "b98e0021ea9b41b0": {
-          "faithfulness": 0.7142857142857143,
-          "unsupported": true,
-          "refused": false,
+          "faithfulness": null,
+          "unsupported": null,
+          "refused": true,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "b9caa14633674c9c": {
           "faithfulness": 1.0,
@@ -1319,7 +1394,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "ba65c93e2a2e424c": {
           "faithfulness": 1.0,
@@ -1330,10 +1406,23 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "bf0a6632c541b870": {
-          "faithfulness": 0.5,
+          "faithfulness": null,
+          "unsupported": null,
+          "refused": true,
+          "unanswerable": false,
+          "citation_integrity": true,
+          "empty": false,
+          "judge_failed": false,
+          "citation_valid": true,
+          "unretrieved_real_citations": [],
+          "judge_error": null
+        },
+        "c3339563e23bf63c": {
+          "faithfulness": 0.8666666666666667,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1341,18 +1430,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
-        },
-        "c3339563e23bf63c": {
-          "faithfulness": 1.0,
-          "unsupported": false,
-          "refused": false,
-          "unanswerable": false,
-          "citation_integrity": true,
-          "empty": false,
-          "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "c7ebfa6604bad6ca": {
           "faithfulness": 1.0,
@@ -1363,7 +1442,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "cb6c1bfe15416d01": {
           "faithfulness": null,
@@ -1374,10 +1454,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "d17bd7fdd9ff5c1e": {
-          "faithfulness": 0.6666666666666666,
+          "faithfulness": 0.9090909090909091,
           "unsupported": true,
           "refused": false,
           "unanswerable": true,
@@ -1385,10 +1466,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "d2eddb0526e557ea": {
-          "faithfulness": 0.9285714285714286,
+          "faithfulness": 0.9333333333333333,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1396,18 +1478,20 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "d3cef26becd74b54": {
           "faithfulness": 1.0,
           "unsupported": false,
           "refused": false,
           "unanswerable": false,
-          "citation_integrity": true,
+          "citation_integrity": false,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "citation_valid": false,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "d5a420e6b0c54968": {
           "faithfulness": null,
@@ -1418,7 +1502,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "da0b7b831fd2ce89": {
           "faithfulness": 1.0,
@@ -1429,10 +1514,11 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "e3f15847b68c11e6": {
-          "faithfulness": 0.6428571428571429,
+          "faithfulness": 0.8181818181818182,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
@@ -1440,7 +1526,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "ea2091e49679ee31": {
           "faithfulness": 1.0,
@@ -1451,7 +1538,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "ecb61c75e23d6aa1": {
           "faithfulness": 1.0,
@@ -1462,7 +1550,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "ed33b0cf54ac77b1": {
           "faithfulness": 1.0,
@@ -1473,29 +1562,32 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "f1ad86648674ac95": {
-          "faithfulness": 0.8888888888888888,
+          "faithfulness": 0.8571428571428571,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
-          "citation_integrity": true,
+          "citation_integrity": false,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "citation_valid": false,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "f5ba9bc3a5c5735e": {
-          "faithfulness": 0.75,
+          "faithfulness": 0.4,
           "unsupported": true,
           "refused": false,
           "unanswerable": false,
-          "citation_integrity": true,
+          "citation_integrity": false,
           "empty": false,
           "judge_failed": false,
-          "citation_valid": true,
-          "unretrieved_real_citations": []
+          "citation_valid": false,
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "fa9d019f57d2ef64": {
           "faithfulness": 1.0,
@@ -1506,7 +1598,8 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "fc16d4e1da892cde": {
           "faithfulness": null,
@@ -1517,35 +1610,38 @@
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         },
         "ff43e0b12ed7c498": {
-          "faithfulness": 1.0,
-          "unsupported": false,
+          "faithfulness": 0.9130434782608695,
+          "unsupported": true,
           "refused": false,
           "unanswerable": false,
           "citation_integrity": true,
           "empty": false,
           "judge_failed": false,
           "citation_valid": true,
-          "unretrieved_real_citations": []
+          "unretrieved_real_citations": [],
+          "judge_error": null
         }
       }
     },
     "cost_usd": {
-      "dev": 0,
-      "golden": 0,
-      "judge": 0.0,
-      "total": 0.0
+      "dev": 0.03133,
+      "golden": 0.02431,
+      "judge": 0.265935,
+      "total": 0.321575
     },
     "call_cache": {
-      "embedding_hits": 295,
-      "embedding_misses": 0,
-      "completion_hits": 95,
-      "completion_misses": 0,
-      "embedding_hit_rate": 1.0,
-      "completion_hit_rate": 1.0,
-      "judge_hit_rate": 1.0
-    }
+      "embedding_hits": 80,
+      "embedding_misses": 215,
+      "completion_hits": 0,
+      "completion_misses": 95,
+      "embedding_hit_rate": 0.2712,
+      "completion_hit_rate": 0.0,
+      "judge_hit_rate": 0.0
+    },
+    "mode": "gate"
   }
 }

@@ -3551,3 +3551,23 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** EXP-0061, EXP-0062, MIS-047/048/049.
 - **Revisit if:** the bypass is ever needed again — that would mean the gate has a flaw to fix,
   not a check to skip.
+
+## DEC-093 — The CI baseline is CI's own `main` run (GitHub run 36529043366)
+- **Date:** 2026-09-29
+- **Decided by:** Krutik (DEC-091 item 3, approved 2026-09-29); executed by Claude.
+- **Status:** Active — supersedes DEC-090's re-stamp of the DEC-087 (locally produced) baseline.
+- **What:** `ci/baseline.json` is written with `rag ci-baseline update --reason DEC-093` from the
+  artifact of the first `ci-eval` on `main` after PR #2 — GitHub run `36529043366`, git
+  `17560d6`, runs dev `run_20260929_060414_b3e6`, golden `run_20260929_062617_30aa`,
+  faithfulness `run_20260929_070510_34f3` (EXP-0063). Its answers, judgments, query embeddings
+  and index are in `main`'s CI caches, which every PR restores; so a PR that changes nothing
+  replays them and compares exactly equal (MIS-048 fixed).
+- **Its numbers:** strict recall@5 0.72 on `dev`, 0.525 golden; mean faithfulness 0.8739,
+  unsupported-answer rate 0.6579, false-answer rate 0.2000 (3 of 15), refusal rate 0.0875,
+  citation validity 0.8947, citations to a real unretrieved article 0; 76 answers judged,
+  0 judge failures. It passed gate v3 against the old baseline.
+- **This PR changes only the baseline and docs** — the ratchet allows a baseline-only change
+  with a DEC reason.
+- **Evidence:** EXP-0063 and its artifact (`ci/out/gh_36529043366/`).
+- **Revisit if:** `main`'s caches are evicted (GitHub drops a cache unused for 7 days) — the next
+  `main` run would then be fresh against this baseline, which the pairwise thresholds are for.
