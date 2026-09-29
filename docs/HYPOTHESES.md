@@ -1177,3 +1177,23 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      judged noise; regenerating answers adds little on top. The reason I gave for doubting
      it — a reasoning model is not deterministic at temperature 0 (MIS-034) — is the reason
      it was wrong.
+
+## H-041 — P3-12 regression drills against gate v5
+- **Date written:** 2026-09-29, before any drill PR was opened.
+- **Source:** the story's required outcomes, quoted; Claude's expectations beside them.
+- **Setup:** each drill is a throwaway PR from `main` (never merged); unit tests pin configs and
+  prompts, so drills 1–4 also fail `unit-tests` — that is expected and is not the drill's
+  target. The target is the `ci-eval` verdict.
+
+| # | Planted change | Story: must… | Claude's expectation |
+|---|---|---|---|
+| 1 | `top_k` 5→1 in both gate configs | fail on recall@5 | recall@5 **cannot** move (DEC-095); **gold-in-context** fails (5 → 1 articles in context drops it well below 0.72) |
+| 2 | prompt loses "use ONLY the articles" and the citation rule | fail on faithfulness or citation integrity | faithfulness drops beyond 0.032 → FAIL; citation validity may *rise* (no citations, none bad) |
+| 3 | prompt loses the refusal rule | fail on false-answer rate | false-answer rate rises by ≥ 3 of 15 → FAIL |
+| 4 | `top_k` 5→4 | recorded either way | gold-in-context drops a few questions; the paired test may or may not reach p < 0.05 — the drill that tests the detection floor |
+| 5 | comment-only change in `rag/` | pass, all cache hits | PASS at $0, every cache 1.0 |
+| 6 | pipeline change + baseline edit in one PR | be rejected (P3-11) | REJECTED by the ratchet before any model call, $0 |
+
+- **The part I trust least:** drill 2. Without "use only the articles", the model may still
+  mostly paraphrase the context it was given, and the judge scores support, not instruction
+  following — faithfulness could stay inside its threshold.
