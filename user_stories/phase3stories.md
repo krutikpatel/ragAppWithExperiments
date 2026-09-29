@@ -387,13 +387,13 @@ Acceptance criteria:
 
 ### P3-11 — Baseline ratchet and drift check
 
-> **Status: IN PROGRESS** — DEC-090, DEC-091, DEC-092; PR #2
+> **Status: DONE** (2026-09-29) — DEC-090, DEC-091, DEC-092, DEC-093, DEC-094; PRs #2, #4
 > - [x] `ci/baseline.json` holds run ids, config hashes, metrics, per-question outcomes (+ integrity stamp)
 > - [x] changes only through `rag ci-baseline update --reason <DEC-id>`
 > - [x] CI rejects a PR changing both the pipeline and the baseline's results (the ratchet)
-> - [x] weekly drift job (`drift.yml`, `--no-cache`); a failure opens an issue and never blocks PRs
+> - [x] drift job (`drift.yml`, `--no-cache`); a failure opens an issue and never blocks PRs
+> - [x] cadence declared: **on demand only** — Krutik declined a weekly schedule (DEC-094)
 > - [x] baseline moved into CI: `main` run 36529043366 (EXP-0063), via a baseline-only PR (DEC-093)
-> - [ ] drift cadence and budget confirmed by Krutik (weekly, $1.00 per run — proposed)
 
 **As the maintainer, I need the bar to move only on purpose, and I need to know when an upstream
 model changes under me.**

@@ -3571,3 +3571,18 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** EXP-0063 and its artifact (`ci/out/gh_36529043366/`).
 - **Revisit if:** `main`'s caches are evicted (GitHub drops a cache unused for 7 days) — the next
   `main` run would then be fresh against this baseline, which the pairwise thresholds are for.
+
+## DEC-094 — The drift check runs on demand only; no schedule
+- **Date:** 2026-09-29
+- **Decided by:** Krutik ("I don't want weekly check").
+- **Status:** Active — supersedes DEC-090's weekly cadence.
+- **Decision:** `.github/workflows/drift.yml` keeps its `workflow_dispatch` trigger and loses its
+  `schedule`. Someone presses "Run workflow" in Actions when they want to know whether a
+  provider has changed a model; nothing runs, and nothing is spent, otherwise.
+- **What this gives up:** P3-11 asks for a scheduled job. Provider-side drift is now caught only
+  when someone runs the check, or when a PR happens to regenerate answers and a gating metric
+  moves beyond its threshold (which then reads as the PR's fault). The model-slug startup
+  check (P3-02) still catches a retired or unserved slug on every run.
+- **Evidence:** No measured data; Krutik's call on cost and noise.
+- **Revisit if:** a provider change is found late, or a PR is blamed for a quality drop that a
+  drift run would have attributed to the provider.
