@@ -1197,3 +1197,13 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
 - **The part I trust least:** drill 2. Without "use only the articles", the model may still
   mostly paraphrase the context it was given, and the judge scores support, not instruction
   following — faithfulness could stay inside its threshold.
+- **Resolution (2026-09-29, EXP-0064):** all six expectations **confirmed**.
+  1. gold-in-context fails, recall@5 cannot → confirmed (0.720 → 0.305; recall@5 −0.005).
+  2. faithfulness fails; citation validity may rise → confirmed (0.874 → 0.743; validity → 1.000).
+     The part I trusted least held: removing "use only the articles" did move faithfulness,
+     by four thresholds.
+  3. false-answer rises by ≥ 3 of 15 → confirmed (3 → 12).
+  4. gold-in-context drops a few; the test may or may not fire → **it fired** (17 questions,
+     p ≈ 0). I under-called it: a change that only ever loses questions reaches significance
+     at 6 losses (DETECTION_FLOOR).
+  5. PASS at $0 → confirmed. 6. REJECTED at $0 → confirmed.
