@@ -1,4 +1,5 @@
 """`rag` command line. CLI only — Phase 0 ships no UI."""
+# P3-12 drill 5: a comment-only change. It must not move any gated metric.
 
 from __future__ import annotations
 
