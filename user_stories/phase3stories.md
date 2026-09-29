@@ -392,7 +392,7 @@ Acceptance criteria:
 > - [x] changes only through `rag ci-baseline update --reason <DEC-id>`
 > - [x] CI rejects a PR changing both the pipeline and the baseline's results (the ratchet)
 > - [x] weekly drift job (`drift.yml`, `--no-cache`); a failure opens an issue and never blocks PRs
-> - [ ] **baseline moved into CI**: the first `main` run's result, via a baseline-only PR (DEC-091 item 3, MIS-048)
+> - [x] baseline moved into CI: `main` run 36529043366 (EXP-0063), via a baseline-only PR (DEC-093)
 > - [ ] drift cadence and budget confirmed by Krutik (weekly, $1.00 per run — proposed)
 
 **As the maintainer, I need the bar to move only on purpose, and I need to know when an upstream
