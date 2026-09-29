@@ -95,6 +95,13 @@ dropping it is a scope decision recorded in `DECISIONS.md`, not a failure.
 
 ### P3-01 — Run provenance audit
 
+> **Status: DONE** (2026-09-27) — DEC-070, `rag audit provenance`
+> - [x] run ids, splits, question-id sets, cache hits/misses for retrieval, generation and judge reported
+> - [x] no `test` output served from a `dev`-created cache entry (answer path uncached; 0 rows)
+> - [x] questions in both splits listed: none (0 of 200 ids, 0 identical texts)
+> - [x] per-question agreement reported: 0 shared ids — identical aggregates came from different questions
+> - [x] outcome in DECISIONS.md (DEC-070); no leak, so no MIS entry needed
+
 **As the maintainer, I need proof that the Phase 2 closing numbers came from independent runs
 before I baseline anything on them.**
 
@@ -113,6 +120,12 @@ Acceptance criteria:
 
 ### P3-02 — Freeze the Phase 3 baseline
 
+> **Status: DONE** (2026-09-28) — DEC-071, DEC-072, DEC-080
+> - [x] Phase 2 carry-overs resolved: k=10 run (EXP-0051); reranker headroom run as OQ-038 (EXP-0052/0053)
+> - [x] repo tagged `phase3-baseline` (v1), then `phase3-baseline-v2` after the judge change (DEC-080)
+> - [x] recorded with the tag: promoted.yaml hash, prompt version, model slugs and verification dates (`ci/phase3_baseline.yaml`)
+> - [x] startup check fails fast on an unresolvable slug or pinned provider (`rag models verify`, runner)
+
 **As the maintainer, I need one fixed reference point that every later CI run is compared to.**
 
 Acceptance criteria:
@@ -128,6 +141,13 @@ Acceptance criteria:
 ### Part B — Golden set
 
 ### P3-03 — Select the golden CI slice from WixQA
+
+> **Status: DONE** (2026-09-28) — DEC-074
+> - [x] `golden_v1`: 80 answerable (27 answered-without-gold, 20 multi-doc, 33 single-doc) + 15 unanswerable, from `dev` only
+> - [x] scripted and seeded (`rag data golden --check`); zero manual labelling
+> - [x] `eval/golden/golden_v1.jsonl` + `DATASHEET.md` (over-sampling stated)
+> - [x] baseline strict recall per stratum in EXPERIMENTS.md (0.5250 overall)
+> - [x] README known-limitations: incomplete document-level gold
 
 **As an evaluator, I need a fixed, expert-labelled question set for CI, taken from WixQA's
 existing verified pairs, with zero manual labelling.**
@@ -163,6 +183,14 @@ Reporting:
 
 ### P3-04 — Synthetic judge sanity check
 
+> **Status: DONE** (2026-09-28) — DEC-075/076/078/079, EXP-0054..0057
+> - [x] separation bar declared before running (DEC-076)
+> - [x] production judge run on all pairs; confusion matrix, accuracy, precision/recall of the flag; hard negatives separate
+> - [x] v1 pairs failed every judge (the labels, not the judges — OQ-047); rebuilt pairs (v2) passed: recall 1.00, supported pass 0.90
+> - [x] one judge-side change allowed and recorded; judged metrics marked `gating` (DEC-079)
+> - [x] limitation stated in NARRATIVE and README (literal support only; no human agreement)
+> - [x] cost estimated before each run
+
 **As an evaluator, I can't gate a build on a judge I haven't checked, and I have no time budget
 for human labelling, so the check is built from WixQA's own labels.**
 
@@ -197,6 +225,14 @@ Acceptance criteria:
 
 ### P3-05 — Faithfulness eval script
 
+> **Status: DONE** (2026-09-28) — DEC-081, DEC-087
+> - [x] `rag faithfulness <run_id>`: per-claim verdicts with a chunk pointer (heuristic, labelled)
+> - [x] declared metrics: mean faithfulness, unsupported-answer, refusal, false-answer, citation integrity (+ citation validity, DEC-087)
+> - [x] broken down by stratum
+> - [x] JSON in the runs store + markdown report of the 10 lowest answers
+> - [x] judge cache keyed as specified; an unchanged answer is never re-judged
+> - [x] cost estimate before any call; $2 gate
+
 **As an evaluator, I need to know, per answer, which claims are supported by the retrieved chunks
 and which aren't.**
 
@@ -222,6 +258,12 @@ and which aren't.**
 
 ### P3-06 — Resolve the answered-without-gold question
 
+> **Status: DONE** (2026-09-28) — EXP-0058
+> - [x] P3-05 run on the Phase 2 promoted dev run
+> - [x] answered-without-gold: fully 6 / partially 21 / unsupported 0 (vs gold-in-context 25 / 40 / 0)
+> - [x] numbers in EXPERIMENTS.md; interpretation in NARRATIVE.md
+> - [x] FAILURES.md updated (F18–F23)
+
 **As the project owner, I need to know whether the ~quarter of answers produced without the gold
 document are grounded or hallucinated.**
 
@@ -240,6 +282,12 @@ Acceptance criteria:
 
 ### P3-07 — Measure the gate's detection floor
 
+> **Status: DONE** (2026-09-28), corrected 2026-09-29 — EXP-0059, DEC-083, DEC-091
+> - [x] judge variance re-measured on the golden slice (3 fresh runs + 2 re-judges)
+> - [x] retrieval floor at α = 0.05 on `dev`
+> - [x] `ci/DETECTION_FLOOR.md` published
+> - [x] corrected after the first GitHub run: the gate compares two runs, so its thresholds are pairwise (MIS-047)
+
 **As the maintainer, I need to know the smallest regression the gate can catch before I set gate
 rules.**
 
@@ -256,6 +304,12 @@ Acceptance criteria:
 ---
 
 ### P3-08 — CI eval command
+
+> **Status: DONE** (2026-09-28) — DEC-084, EXP-0060
+> - [x] `rag ci-eval --baseline ci/baseline.json`: Tier 1 dev + golden recall, Tier 2 golden generation + P3-05 metrics
+> - [x] paired test for retrieval, measured thresholds for judged metrics
+> - [x] pass/fail per metric, PR-comment markdown, JSON artifact, changed-question lists
+> - [x] non-zero exit on a gated failure (0 pass / 1 fail / 2 error / 3 needs approval)
 
 **As a developer, I need one command that runs the full gate, identically on my machine and in
 CI.**
@@ -274,6 +328,14 @@ CI.**
 
 ### P3-09 — Gate rules
 
+> **Status: DONE** (2026-09-28), revised 2026-09-29 — DEC-087, DEC-088, DEC-091; `ci/gate.yaml` v3
+> - [x] rules declared before the first gated PR
+> - [x] retrieval: paired test at α = 0.05; newly failed ids always listed
+> - [x] judged metrics fail beyond their threshold, else "within noise"
+> - [x] hard fails: citing a real unretrieved article; schema-invalid output (zero tolerance on garbled ids replaced by a measured rate — flagged to Krutik)
+> - [x] each judged metric marked gating/report-only
+> - [x] improvements never update the baseline automatically
+
 **As the maintainer, I need the pass/fail rules written down before the first gated PR, so I can't
 tune them after seeing results.**
 
@@ -290,6 +352,16 @@ Declared in `ci/gate.yaml` and a `DECISIONS.md` entry:
 ---
 
 ### P3-10 — CI workflow
+
+> **Status: DONE** (2026-09-28) — DEC-088, DEC-089
+> - [x] unit tests on every PR
+> - [x] ci-eval only on pipeline paths; docs-only PRs show "eval skipped: no pipeline change"
+> - [x] model-call caches restored between runs; hit rate in the summary
+> - [x] cost estimate before any model call; over budget ⇒ NEEDS APPROVAL; `eval-approved` label re-runs
+> - [x] key from CI secrets (added by Krutik); forks get NOT VERIFIED
+> - [x] PR comment + job summary + artifact
+> - [x] `unit-tests` and `ci-eval` required on `main`
+> - [x] infra failure (ERROR) distinct from quality failure (FAIL); bounded retries
 
 **As a developer, every PR that could change answer quality runs the gate, and nothing merges to
 `main` without passing it.**
@@ -315,6 +387,14 @@ Acceptance criteria:
 
 ### P3-11 — Baseline ratchet and drift check
 
+> **Status: IN PROGRESS** — DEC-090, DEC-091, DEC-092; PR #2
+> - [x] `ci/baseline.json` holds run ids, config hashes, metrics, per-question outcomes (+ integrity stamp)
+> - [x] changes only through `rag ci-baseline update --reason <DEC-id>`
+> - [x] CI rejects a PR changing both the pipeline and the baseline's results (the ratchet)
+> - [x] weekly drift job (`drift.yml`, `--no-cache`); a failure opens an issue and never blocks PRs
+> - [ ] **baseline moved into CI**: the first `main` run's result, via a baseline-only PR (DEC-091 item 3, MIS-048)
+> - [ ] drift cadence and budget confirmed by Krutik (weekly, $1.00 per run — proposed)
+
 **As the maintainer, I need the bar to move only on purpose, and I need to know when an upstream
 model changes under me.**
 
@@ -333,6 +413,8 @@ Acceptance criteria:
 ### Part E — Prove the gate works
 
 ### P3-12 — Regression drill
+
+> **Status: NOT STARTED**
 
 **As the project owner, I need evidence the gate catches real regressions and doesn't fire on
 harmless changes.**
@@ -360,6 +442,8 @@ Acceptance criteria:
 
 ### P3-13 — Answer API and demo page
 
+> **Status: NOT STARTED** — Part F, first to drop
+
 **As a reviewer, I want to ask a question and see the answer next to the exact source paragraph.**
 
 Acceptance criteria:
@@ -376,6 +460,8 @@ Acceptance criteria:
 
 ### P3-14 — Request logging and resilience
 
+> **Status: NOT STARTED** — Part F, first to drop
+
 **As an operator, I need per-request cost and latency, and requests that fail cleanly.**
 
 Acceptance criteria:
@@ -391,6 +477,8 @@ Acceptance criteria:
 ### Part G — Close-out
 
 ### P3-15 — Phase 3 report and narrative
+
+> **Status: NOT STARTED**
 
 **As the project owner, I need the whole lifecycle story written from recorded numbers.**
 
