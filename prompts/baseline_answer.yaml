@@ -30,11 +30,6 @@ versions:
       - Do not write any URL, link, or web address. Do not tell the user to visit a
         page by its address. Links are added to your answer afterwards from the
         cited articles.
-      - If the articles do not cover the question, reply with exactly:
-        "The provided articles do not cover this." Then, in one sentence, say what
-        is missing. Do not guess, and do not cite anything.
-      - If the question is too vague to answer from the articles, say in one
-        sentence what you would need to know.
 
       ARTICLES:
       {context}
