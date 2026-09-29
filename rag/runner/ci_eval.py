@@ -44,14 +44,14 @@ def load_gate(path: str | Path) -> dict[str, Any]:
 
 # --- collecting a run's outcomes -----------------------------------------------------
 
-def _per_question_recall(store: Any, run_id: str) -> dict[str, float | None]:
-    return {q: json.loads(r["metrics_json"]).get("strict_recall@5") for q, r in store.get_questions(run_id).items()}
+def _per_question_recall(store: Any, run_id: str, metric: str = "strict_recall@5") -> dict[str, float | None]:
+    return {q: json.loads(r["metrics_json"]).get(metric) for q, r in store.get_questions(run_id).items()}
 
 
 def collect(*, dev_row: dict[str, Any], golden_row: dict[str, Any], faith_row: dict[str, Any],
             store: Any, gate: dict[str, Any], cost: dict[str, Any], cache: dict[str, Any]) -> dict[str, Any]:
     """Everything the comparison needs, from the results store, in a store-free document."""
-    from rag.eval.noise_floor import family_for_run
+    from rag.eval.noise_floor import family_for_judge
 
     answers = {}
     for qid, r in store.get_questions(faith_row["run_id"]).items():
@@ -67,7 +67,7 @@ def collect(*, dev_row: dict[str, Any], golden_row: dict[str, Any], faith_row: d
             "judge_error": m.get("error") if (not m["refused"]) and m["faithfulness"] is None else None,
         }
     faith_metrics = json.loads(faith_row["metrics_json"])["by_stratum"]
-    family, _ = family_for_run(faith_row)
+    family = family_for_judge(faith_row)  # judge side only (DEC-095)
     faith_config = json.loads(faith_row["config_json"])
     return {
         "schema_version": SCHEMA_VERSION,
@@ -97,6 +97,9 @@ def collect(*, dev_row: dict[str, Any], golden_row: dict[str, Any], faith_row: d
         "per_question": {
             "dev": _per_question_recall(store, dev_row["run_id"]),
             "golden": _per_question_recall(store, golden_row["run_id"]),
+            # DEC-095: did every gold article reach the generator? `top_k` cannot move recall@5
+            # (it is read off the ranking), but it moves this.
+            "dev:gold_in_context": _per_question_recall(store, dev_row["run_id"], "gold_in_context"),
             "answers": answers,
         },
         "cost_usd": cost, "call_cache": cache,
@@ -140,7 +143,14 @@ def _retrieval_rule(rule: dict[str, Any], new: dict[str, Any], base: dict[str, A
     from rag.runner.compare import mcnemar_exact_p
 
     run = rule["run"]
-    a_map, b_map = base["per_question"][run], new["per_question"][run]
+    key = run if rule["metric"] == "strict_recall@5" else f"{run}:{rule['metric']}"
+    if key not in base["per_question"] or key not in new["per_question"]:
+        missing = "the baseline" if key not in base["per_question"] else "this run"
+        return {"metric": rule["metric"], "run": run, "gating": rule["gating"], "n": 0, "baseline": None,
+                "value": None, "delta": 0.0, "mcnemar_exact_p": 1.0, "alpha": alpha, "lost": [], "gained": [],
+                "verdict": "FAIL" if rule["gating"] else "report",
+                "note": f"{missing} lacks per-question {rule['metric']} — re-baseline with a DEC entry"}
+    a_map, b_map = base["per_question"][key], new["per_question"][key]
     ids = sorted(q for q in a_map if a_map[q] is not None and b_map.get(q) is not None)
     a = np.array([a_map[q] for q in ids]); b = np.array([b_map[q] for q in ids])
     lost = [q for q in ids if a_map[q] == 1 and b_map[q] == 0]
@@ -263,7 +273,7 @@ def summary_markdown(result: dict[str, Any], verdict: dict[str, Any] | None) -> 
         for r in verdict["retrieval"]:
             lines.append(f"| {r['metric']} ({r['run']}) | {'yes' if r['gating'] else 'report'} | {r['baseline']} | "
                          f"{r['value']} | {r['delta']:+.4f} | paired p={r['mcnemar_exact_p']} (α {r['alpha']}) | "
-                         f"**{r['verdict']}** |")
+                         f"**{r['verdict']}** {r.get('note', '')} |")
         for r in verdict["judged"]:
             delta = "—" if r["delta"] is None else f"{r['delta']:+.4f}"
             lines.append(f"| {r['metric']} | {'yes' if r['gating'] else 'report'} | {r['baseline']} | {r['value']} | "

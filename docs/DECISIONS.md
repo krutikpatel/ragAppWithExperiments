@@ -3586,3 +3586,28 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** No measured data; Krutik's call on cost and noise.
 - **Revisit if:** a provider change is found late, or a PR is blamed for a quality drop that a
   drift run would have attributed to the provider.
+
+## DEC-095 — Gate v4: the fixes P3-12's drills need before they can mean anything
+- **Date:** 2026-09-29
+- **Decided by:** Krutik (approved all three, with ~$1.25 for the drills); proposed by Claude
+  after walking the six drills through the gate before spending.
+- **Status:** Active. `ci/gate.yaml` version 4 (this PR), then version 5 (gold-in-context gating).
+- **1. Drill 1 could not fail as written.** "Top-k 5→1 must fail on recall@5" — but recall@5 is
+  read off the ranking, and `top_k` only chooses how many ranked articles reach the generator
+  (DEC-040; a test asserts `top_k` cannot move a retrieval metric). **Fix:** gate
+  **gold-in-context on `dev`** — did every gold article reach the generator — with the same
+  exact paired test at α = 0.05. It is already recorded per question on every retrieval run.
+  Reported in v4; gating in v5, once the baseline carries it (the ratchet forbids adding it to
+  the baseline and the rules in one PR).
+- **2. A prompt change failed closed, whatever its quality.** The noise-floor family matched on
+  the generator and its prompt, so drills 2 and 3 — and any real prompt PR — would read "no MDD
+  measured" and fail. **Fix:** the gate matches its family on the **judge side only** (judge
+  model, host, Ragas version, judge prompt fingerprints: `family_for_judge`). The judge is ~90%
+  of the measured noise (P3-07); the generator and prompt are what the gate exists to test.
+  `rag compare` keeps the full match for experiments.
+- **3. A drill would never reach the gate.** Unit tests pin configs and prompts, and `ci-eval`
+  ran only after `unit-tests` passed. **Fix:** the two jobs run side by side; both stay required.
+  A planted change then shows both signals.
+- **Evidence:** No measured data for the decisions; the drill walk-through. Tests pin each fix.
+- **Revisit if:** a generator or prompt change is shown to move the noise itself (a wider spread
+  than the judge-side family's thresholds), which would argue for re-keying on the generator.

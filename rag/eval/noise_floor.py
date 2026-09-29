@@ -292,6 +292,24 @@ def _loads(value: Any) -> Any:
     return value
 
 
+# DEC-095: the CI gate matches a family on the JUDGE side only. The generator and its prompt
+# are exactly what a gated PR changes; keying on them made every prompt PR fail closed as
+# "no MDD measured" whatever its quality. The judge is ~90% of the measured noise (P3-07).
+JUDGE_SIDE_MATCH_KEYS = ("judge_model", "judge_provider_order", "judge_embedding_model",
+                         "ragas_version", "metric_prompt_versions")
+
+
+def family_for_judge(meta: dict[str, Any] | None) -> str | None:
+    """The newest floor family whose JUDGE provenance this run row shares (the CI gate's rule)."""
+    if not meta or not meta.get("judge_model"):
+        return None
+    ordered = sorted(FLOOR_FAMILIES.items(), key=lambda item: item[1]["effective_date"], reverse=True)
+    for name, family in ordered:
+        if all(_loads(meta.get(key)) == family["match"][key] for key in JUDGE_SIDE_MATCH_KEYS):
+            return name
+    return None
+
+
 def family_for_run(meta: dict[str, Any] | None) -> tuple[str | None, list[str]]:
     """The floor family whose judge/generator/prompt provenance this run row shares.
 
