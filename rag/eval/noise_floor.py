@@ -240,6 +240,19 @@ FLOOR_FAMILIES: dict[str, dict] = {
             # outside by 0.025, so three underestimate a count this small.
             "citation_validity": 0.041,
         },
+        # DEC-091 / MIS-047: what the GATE uses. `floors` measure how far ONE run strays;
+        # the gate compares TWO runs (baseline vs fresh), whose difference spreads √2 times
+        # as far. Pairwise threshold = 2·√2·stdev over the five fresh golden runs on record
+        # (P3-07 ×3, ci-eval run 1 `run_20260928_221629_42ad`, GitHub run 36523052541 /
+        # `run_20260929_052617_b7c2`), rounded up to 0.001.
+        "pairwise_floors": {
+            "mean_faithfulness": 0.032,
+            "unsupported_answer_rate": 0.109,
+            "false_answer_rate": 0.158,
+            "citation_validity": 0.051,
+            "refusal_rate": 0.078,
+            "citation_integrity": 0.032,
+        },
         "judge_only_floors": {
             "mean_faithfulness": 0.023,
             "unsupported_answer_rate": 0.057,

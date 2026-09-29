@@ -1,13 +1,14 @@
 # ci/gate.yaml — the rules `rag ci-eval` applies.
 #
-# STATUS: DECLARED (P3-09, DEC-087), version 2 (DEC-088: judge failures are errors, and
-# the CI budget is set), before the first gated PR. Changing any
+# STATUS: DECLARED (P3-09, DEC-087), version 3 (DEC-091: thresholds sized for comparing TWO
+# runs, after the first GitHub run false-alarmed — MIS-047; v2, DEC-088: judge failures are
+# errors and the CI budget is set). Changing any
 # rule or threshold is a new version with its own DECISIONS.md entry. Every threshold
 # comes from a measurement, not a guess: α from DEC-082, MDDs from rag/eval/noise_floor.py
 # (DEC-083, DEC-087). Published detection floors: ci/DETECTION_FLOOR.md.
 status: declared
-version: 2
-decision: DEC-088
+version: 3
+decision: DEC-091
 
 # What runs.
 configs:
@@ -25,6 +26,9 @@ ci_budget_usd: 1.00
 
 alpha: 0.05
 noise_floor_family: golden-v1-deepseek
+# The gate compares a fresh run to a baseline run: two draws. `pairwise_floors` = 2·√2·stdev
+# over five fresh golden runs (DEC-091). `floors` (one run's spread) under-sized it (MIS-047).
+threshold_kind: pairwise_floors
 
 # The baseline changes only through `rag ci-baseline update --reason <DEC-id>`. An
 # improvement NEVER updates it automatically.
@@ -36,16 +40,16 @@ retrieval:
   - {metric: strict_recall@5, run: dev, gating: true}
   - {metric: strict_recall@5, run: golden, gating: false}
 
-# Judged and generated: fail when the change in the bad direction exceeds the metric's MDD
-# in the matched noise-floor family; smaller changes pass "within noise". No matching family
+# Judged and generated: fail when the change in the bad direction exceeds the metric's
+# pairwise threshold in the matched noise-floor family; smaller changes pass "within noise". No matching family
 # means the metric cannot be gated and the verdict is FAIL (fail closed). All three judged
 # metrics are gating because the production judge passed P3-04 (DEC-079).
 judged:
-  - {metric: mean_faithfulness, better: higher, gating: true}        # MDD 0.026
-  - {metric: unsupported_answer_rate, better: lower, gating: true}   # MDD 0.064
-  - {metric: false_answer_rate, better: lower, gating: true}         # MDD 0.077 (2 of 15)
-  - {metric: citation_validity, better: higher, gating: true}        # MDD 0.041 (DEC-087)
-  - {metric: refusal_rate, better: lower, gating: false}             # MDD 0.073
+  - {metric: mean_faithfulness, better: higher, gating: true}        # threshold 0.032
+  - {metric: unsupported_answer_rate, better: lower, gating: true}   # threshold 0.109
+  - {metric: false_answer_rate, better: lower, gating: true}         # threshold 0.158 (3 of 15)
+  - {metric: citation_validity, better: higher, gating: true}        # threshold 0.051
+  - {metric: refusal_rate, better: lower, gating: false}             # threshold 0.078
   - {metric: citation_integrity, better: higher, gating: false}      # superseded by citation_validity
 
 # Deterministic hard fails, zero tolerance.

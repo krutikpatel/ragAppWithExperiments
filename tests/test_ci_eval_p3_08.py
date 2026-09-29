@@ -29,7 +29,8 @@ def _result(dev_hits=None, golden_hits=None, judged=None, answers=None, family=F
     answers = answers if answers is not None else {
         f"g{i:02d}": {"faithfulness": 0.85, "unsupported": i % 3 == 0, "refused": i >= 90, "unanswerable": i >= 80,
                       "citation_integrity": True, "empty": False, "judge_failed": False,
-                      "citation_valid": True, "unretrieved_real_citations": []} for i in range(95)}
+                      "citation_valid": True, "unretrieved_real_citations": [], "judge_error": None}
+        for i in range(95)}
     judged = judged or {"mean_faithfulness": 0.85, "unsupported_answer_rate": 0.62, "false_answer_rate": 0.33,
                         "refusal_rate": 0.08, "citation_integrity": 0.98, "citation_validity": 0.95,
                         "cites_unretrieved_article": 0, "judge_failures": 0, "n_judged": 85}
@@ -75,11 +76,13 @@ def test_a_retrieval_drop_inside_the_floor_passes_but_still_lists_ids():
     assert "Newly failed" in summary_markdown(_result(dev_hits=hits), v)
 
 
-@pytest.mark.parametrize("value, verdict", [(0.83, "pass"), (0.82, "FAIL"), (0.90, "pass")])
-def test_judged_metrics_fail_only_beyond_the_measured_mdd(value, verdict):
+@pytest.mark.parametrize("value, verdict", [(0.82, "pass"), (0.81, "FAIL"), (0.90, "pass")])
+def test_judged_metrics_fail_only_beyond_the_pairwise_threshold(value, verdict):
+    """DEC-091: the gate compares two runs, so it uses the pairwise threshold (0.032), not one
+    run's MDD (0.026) — which false-alarmed on an unchanged pipeline (MIS-047)."""
     judged = {**BASELINE["result"]["metrics"]["judged"], "mean_faithfulness": value}
     r = _rule(compare(_result(judged=judged), BASELINE, GATE), "judged", "mean_faithfulness")
-    assert r["mdd"] == 0.026 and r["verdict"] == verdict
+    assert r["mdd"] == 0.032 and r["verdict"] == verdict
 
 
 def test_a_changed_judge_cannot_be_gated_and_fails_closed():
@@ -222,8 +225,9 @@ def test_answers_replay_inside_ci_eval_and_a_changed_prompt_misses(tmp_path):
 
 # --- P3-09: the declared rules (DEC-087) -----------------------------------------------
 
-def test_the_declared_gate_is_version_1_with_every_story_rule():
-    assert GATE["status"] == "declared" and GATE["version"] == 2 and GATE["baseline_updates"] == "manual"
+def test_the_declared_gate_has_every_story_rule():
+    assert GATE["status"] == "declared" and GATE["version"] == 3 and GATE["baseline_updates"] == "manual"
+    assert GATE["threshold_kind"] == "pairwise_floors"
     gating = {r["metric"] for r in GATE["judged"] if r["gating"]}
     assert gating == {"mean_faithfulness", "unsupported_answer_rate", "false_answer_rate", "citation_validity"}
     assert {"cites_unretrieved_article", "schema_invalid"} <= set(GATE["hard_fails"])
@@ -238,11 +242,50 @@ def test_citing_a_real_article_that_was_not_retrieved_is_a_hard_fail():
     assert v["status"] == "FAIL" and hard["cites_unretrieved_article"]["question_ids"] == {"g05": ["a" * 64]}
 
 
-@pytest.mark.parametrize("value, verdict", [(0.92, "pass"), (0.90, "FAIL")])
-def test_citation_validity_is_gated_against_its_four_run_mdd(value, verdict):
+@pytest.mark.parametrize("value, verdict", [(0.90, "pass"), (0.89, "FAIL")])
+def test_citation_validity_is_gated_against_its_pairwise_threshold(value, verdict):
     judged = {**BASELINE["result"]["metrics"]["judged"], "citation_validity": value}
     r = _rule(compare(_result(judged=judged), BASELINE, GATE), "judged", "citation_validity")
-    assert r["mdd"] == 0.041 and r["verdict"] == verdict
+    assert r["mdd"] == 0.051 and r["verdict"] == verdict
+
+
+def test_the_first_github_false_alarm_passes_under_v3():
+    """EXP-0061: 0.5714 -> 0.6400 on an unchanged pipeline failed v2 (0.064) and passes v3 (0.109)."""
+    base = copy.deepcopy(BASELINE)
+    base["result"]["metrics"]["judged"]["unsupported_answer_rate"] = 0.5714
+    judged = {**BASELINE["result"]["metrics"]["judged"], "unsupported_answer_rate": 0.64}
+    r = _rule(compare(_result(judged=judged), base, GATE), "judged", "unsupported_answer_rate")
+    assert r["verdict"] == "pass" and r["mdd"] == 0.109
+
+
+def test_a_judge_failure_carries_its_reason_into_the_verdict():
+    answers = copy.deepcopy(BASELINE["result"]["per_question"]["answers"])
+    answers["g03"].update(judge_failed=True, faithfulness=None, judge_error="APITimeoutError: Request timed out.")
+    v = compare(_result(answers=answers), BASELINE, GATE)
+    assert v["errors"][0]["reasons"] == {"g03": "APITimeoutError: Request timed out."}
+
+
+def test_a_failed_judgment_is_retried_once_and_counted():
+    from rag.eval.judge import ClaimJudgment, FaithfulnessClaims
+
+    calls = []
+
+    class J:
+        _metrics = {"faithfulness": object()}
+        config = type("C", (), {"criteria": ("faithfulness",), "concurrency": 2})()
+
+    fc = FaithfulnessClaims(J())
+
+    async def batch(metric, items):
+        calls.append([i["q"] for i in items])
+        return [ClaimJudgment(score=None, error="APITimeoutError") if i["q"] == "b" and len(calls) == 1
+                else (ClaimJudgment(score=None, error="no statements extracted") if i["q"] == "c"
+                      else ClaimJudgment(score=1.0)) for i in items]
+
+    fc._batch = batch
+    out = fc.score_batch([{"q": "a"}, {"q": "b"}, {"q": "c"}])
+    assert calls == [["a", "b", "c"], ["b"]], "only the failed call is retried; 'no statements' is not a failure to retry"
+    assert [o.score for o in out] == [1.0, 1.0, None] and fc.retried == 1
 
 
 def test_a_mistyped_or_out_of_range_result_is_schema_invalid():

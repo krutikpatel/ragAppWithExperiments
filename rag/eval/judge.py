@@ -119,7 +119,10 @@ class JudgeConfig:
     # Judging one question never depends on another, so this is bounded only by
     # provider rate limits.
     concurrency: int = 20
-    timeout_s: float = 120.0
+    # 300, not 120 (DEC-091): on GitHub runners judging ran ~5x slower than locally and two
+    # answers failed (EXP-0061). A timeout is not part of the judge's identity — model,
+    # host, prompt and temperature are — so this moves no score.
+    timeout_s: float = 300.0
 
     @property
     def family(self) -> str:
@@ -446,11 +449,25 @@ class FaithfulnessClaims:
             raise ValueError("the judge is not configured to score faithfulness")
         self.judge = judge
 
+    # DEC-091: one retry for an answer whose judgment failed (timeout, malformed structured
+    # output). Bounded, and counted: `retried` on the instance.
+    RETRIES = 1
+
     def score_batch(self, items: list[dict[str, Any]]) -> list[ClaimJudgment]:
         if self.judge._metrics is None:
             self.judge._metrics = self.judge._build_metrics()
         metric = self.judge._metrics["faithfulness"]
-        return asyncio.run(self._batch(metric, items))
+        results = asyncio.run(self._batch(metric, items))
+        self.retried = 0
+        for _ in range(self.RETRIES):
+            failed = [i for i, r in enumerate(results) if r.score is None and r.error != "no statements extracted"]
+            if not failed:
+                break
+            again = asyncio.run(self._batch(metric, [items[i] for i in failed]))
+            self.retried += len(failed)
+            for i, r in zip(failed, again, strict=True):
+                results[i] = r
+        return results
 
     async def _batch(self, metric: Any, items: list[dict[str, Any]]) -> list[ClaimJudgment]:
         semaphore = asyncio.Semaphore(self.judge.config.concurrency)

@@ -1,5 +1,10 @@
 # Detection floor of the Phase 3 quality gate (P3-07)
 
+> **CORRECTED by DEC-091 on 2026-09-29** — the judged-metric floors below measure how far
+> ONE run strays. The gate compares TWO runs, and on its first GitHub run it false-alarmed
+> on an unchanged pipeline (EXP-0061, MIS-047). **What the gate actually uses is in the
+> "Correction" section at the end.** The retrieval table is unaffected.
+
 What the gate can and cannot see. **A drop smaller than the floor passes — not because it
 is harmless, but because the gate cannot tell it from run-to-run noise.** Measured
 2026-09-28 (DEC-083, EXP-0059). Every number traces to a run id in the results store.
@@ -68,3 +73,26 @@ churn the Phase 2 rerankers produced."** Smaller drops pass.
 ## What this does not measure
 Paraphrase handling by the judge (P3-04 validated literal support only); human agreement;
 the golden slice's representativeness — it over-samples the risk group on purpose.
+
+## Correction (DEC-091, 2026-09-29) — what the gate can catch when it compares two runs
+
+A PR run and the baseline run are two independent draws, so the noise the gate must stand
+above is the noise of their **difference**: about √2 times one run's spread. Measured over
+the five fresh golden runs on record (P3-07 ×3, ci-eval run 1, GitHub run 36523052541),
+threshold = 2·√2·stdev, rounded up:
+
+| Metric | **This gate catches a change of at least** | Smaller changes pass | Largest gap seen between two unchanged runs |
+|---|---|---|---|
+| mean faithfulness | **0.032** (drop) | < 0.032 | 0.027 |
+| unsupported-answer rate | **0.109** (rise) | < 0.109 | 0.100 |
+| false-answer rate (15 unanswerable) | **0.158** (rise) — **3 questions** | 1–2 questions | 0.133 |
+| citation validity | **0.051** (drop) — about 4 answers | < 0.051 | 0.040 |
+| refusal rate (report only) | 0.078 | | 0.063 |
+
+In plain words: **"This gate catches a drop of ≥ 0.032 in mean faithfulness. Smaller drops
+pass."** The earlier table claimed 0.026; that was one run's noise, and a gate built on it
+fails unchanged pipelines by chance.
+
+**When nothing changes, none of this applies**: an unchanged PR replays the baseline's own
+answers from CI's cache and compares exactly equal (DEC-084, DEC-091). The thresholds matter
+only when answers are regenerated — which is exactly when a pipeline change can hurt.

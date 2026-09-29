@@ -63,6 +63,8 @@ def collect(*, dev_row: dict[str, Any], golden_row: dict[str, Any], faith_row: d
             "judge_failed": (not m["refused"]) and m["faithfulness"] is None,
             "citation_valid": m.get("citation_valid"),
             "unretrieved_real_citations": m.get("unretrieved_real_citations"),
+            # DEC-091: the artifact says WHY the judge failed, not only that it did.
+            "judge_error": m.get("error") if (not m["refused"]) and m["faithfulness"] is None else None,
         }
     faith_metrics = json.loads(faith_row["metrics_json"])["by_stratum"]
     family, _ = family_for_run(faith_row)
@@ -214,7 +216,8 @@ def compare(new: dict[str, Any], baseline: dict[str, Any], gate: dict[str, Any])
     if "judge_failure" in gate.get("errors", []):
         failed = [q for q, a in new["per_question"]["answers"].items() if a["judge_failed"]]
         if failed:
-            errors.append({"rule": "judge_failure", "question_ids": failed})
+            errors.append({"rule": "judge_failure", "question_ids": failed,
+                           "reasons": {q: new["per_question"]["answers"][q].get("judge_error") for q in failed}})
     if "question_set_changed" in gate["hard_fails"]:
         for part in ("dev", "golden", "answers"):
             if set(new["per_question"][part]) != set(base["per_question"][part]):
@@ -227,7 +230,9 @@ def compare(new: dict[str, Any], baseline: dict[str, Any], gate: dict[str, Any])
             hard.append({"rule": "provenance_changed", "fields": diff})
 
     family = gate["noise_floor_family"]
-    floors = FLOOR_FAMILIES[family]["floors"] if new["provenance"]["noise_floor_family"] == family else None
+    # DEC-091: the gate compares two runs, so it reads the family's pairwise thresholds.
+    kind = gate.get("threshold_kind", "floors")
+    floors = FLOOR_FAMILIES[family][kind] if new["provenance"]["noise_floor_family"] == family else None
     retrieval = [_retrieval_rule(r, new, base, gate["alpha"]) for r in gate["retrieval"]]
     judged = [_judged_rule(r, new, base, floors) for r in gate["judged"]]
     failed = bool(hard) or any(r["verdict"] == "FAIL" for r in retrieval + judged)
