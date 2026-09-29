@@ -1,0 +1,77 @@
+# P3-11 (DEC-090): has a provider changed a model under an unchanged pipeline?
+# `rag ci-eval --no-cache` on main: every embedding, answer and judgment fresh, compared to
+# ci/baseline.json. A quality FAIL opens an issue labelled `drift`. Not a required check:
+# it never blocks a PR. Weekly, and on demand. Budget: ci_budget_usd in ci/gate.yaml.
+name: drift
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - uses: astral-sh/setup-uv@v5
+      - run: uv pip install --system -e ".[dev]"
+      - name: restore frozen data
+        uses: actions/cache/restore@v4
+        with:
+          path: data/frozen
+          key: frozen-${{ hashFiles('rag/corpus/**', 'rag/dataset/**', 'data/authored/**') }}
+      - name: restore dense index
+        uses: actions/cache/restore@v4
+        with:
+          path: indexes
+          key: indexes-${{ hashFiles('rag/chunking/**', 'rag/embedding/**', 'configs/promoted.yaml') }}
+      - name: build frozen data if missing
+        run: |
+          [ -f data/frozen/corpus.parquet ] || rag corpus freeze
+          [ -f data/frozen/dev.parquet ] || rag data splits
+
+      - name: drift check (no caches)
+        id: drift
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "## drift — NOT VERIFIED: the OPENROUTER_API_KEY secret is not set" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          set +e
+          rag ci-eval --no-cache --out ci/out
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ -f ci/out/ci_eval.md ] && cat ci/out/ci_eval.md >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+
+      - name: open an issue on a quality failure
+        if: failure() && steps.drift.outputs.code == '1'
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          gh label create drift --color B60205 --description "Provider-side model drift (P3-11)" 2>/dev/null || true
+          { echo "The weekly drift check (\`rag ci-eval --no-cache\`, run ${{ github.run_id }}) failed the gate on an unchanged \`main\`."
+            echo
+            echo "A fresh run carries fresh generator and judge noise, so this is a prompt to look, not proof of drift (DEC-090)."
+            echo "Check whether the per-question changes follow a pattern or scatter like noise."
+            echo
+            cat ci/out/ci_eval.md; } > ci/out/issue.md
+          gh issue create --title "Drift check failed on main ($(date -u +%Y-%m-%d))" --label drift --body-file ci/out/issue.md
+
+      - name: upload drift artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: {name: drift, path: ci/out, if-no-files-found: ignore}

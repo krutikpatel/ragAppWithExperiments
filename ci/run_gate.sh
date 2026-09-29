@@ -29,6 +29,20 @@ report() {  # status, message
 }
 
 changed=$(git diff --name-only "$BASE"...HEAD 2>/dev/null | grep -E "$PIPELINE_RE" || true)
+
+# P3-11 ratchet (DEC-090), before anything that needs the key: the pipeline and the
+# baseline's results may not change in the same PR, and a changed baseline must carry its
+# integrity stamp and a real DEC entry.
+ratchet=$(rag ci-baseline ratchet --base "$BASE" 2>&1)
+rc=$?
+if [[ $rc == 1 ]]; then
+  report "REJECTED" "$ratchet"
+  exit 1
+elif [[ $rc != 0 ]]; then   # the check itself broke: an error, never a policy rejection
+  report "ERROR" "the ratchet check could not run (exit $rc): $ratchet"
+  exit 2
+fi
+echo "$ratchet"
 if [[ -z "$changed" && "${FORCE_EVAL:-}" != "1" ]]; then
   report "SKIPPED" "eval skipped: no pipeline change (docs-only or non-pipeline paths vs \`$BASE\`)."
   exit 0

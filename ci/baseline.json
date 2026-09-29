@@ -1,11 +1,12 @@
 {
   "schema_version": 1,
-  "reason": "DEC-087",
-  "updated": "2026-09-28T23:25:38+00:00",
+  "reason": "DEC-090",
+  "updated": "2026-09-29T01:41:04+00:00",
   "config_hashes": {
     "dev": "7c99bc8e9a88e878",
     "golden": "bde0483f16643b79"
   },
+  "result_sha256": "sha256:ca95bc909ffbb9bc53f4774f064f38dcec729fdd2c44ea22c5f42af5c224b5c1",
   "result": {
     "schema_version": 1,
     "created": "2026-09-28T23:24:48+00:00",

@@ -3230,6 +3230,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Decided by:** Claude (reading the measurement); the thresholds themselves are P3-09's
   to declare and Krutik's to approve.
 - **Status:** Active
+  > **CORRECTED by DEC-091 on 2026-09-29** — these MDDs measure one run's spread; the gate
+  > compares two runs and now uses pairwise thresholds (MIS-047). The MDDs themselves stand.
 - **Result:** EXP-0059. Corpus-level MDDs on `golden_v1` (three fresh full runs): mean
   faithfulness **0.026**, unsupported-answer rate **0.064**, false-answer rate **0.077**,
   refusal rate **0.073**, citation integrity **0.016**. Registered as noise-floor family
@@ -3356,6 +3358,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
     in the bad direction exceeds the metric's MDD (0.026 / 0.064 / 0.077, DEC-083);
     smaller changes pass "within noise". No matching noise-floor family ⇒ fail closed.
   - **Citation validity — gating against its MDD, 0.041** (new, below).
+    > **CORRECTED by DEC-091 on 2026-09-29** — every judged threshold here is now the pairwise
+    > one (0.032 / 0.109 / 0.158 / 0.051); the single-run MDDs false-alarmed (MIS-047).
   - **Report-only:** refusal rate; the old citation integrity (superseded by validity).
   - **Hard fails, zero tolerance:** `cites_unretrieved_article`, `schema_invalid`,
     `empty_answer`, `judge_failure`, `question_set_changed`, `provenance_changed`.
@@ -3455,3 +3459,95 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   exists, the gate cannot give a verdict on a pipeline change.
 - **Revisit if:** the secret is added (consider `enforce_admins: true`), or a second
   contributor joins (consider required reviews).
+
+## DEC-090 — P3-11: the baseline ratchet, its integrity stamp, and a weekly drift check
+- **Date:** 2026-09-28
+- **Decided by:** Joint. Krutik asked for P3-11 finished. Claude: the drift cadence and
+  budget (a story open question — weekly, $1.00 per run, flagged in chat for confirmation),
+  and the metadata-only rule below.
+- **Status:** Active.
+- **What `ci/baseline.json` holds** (P3-11's list): the run ids, the config hashes, the
+  metrics and every per-question outcome — plus, from now on, **`result_sha256`**, a hash of
+  its result stamped by `rag ci-baseline update`.
+- **It changes only through `rag ci-baseline update --reason <DEC-id>`**, which refuses a
+  reason that is not an existing DEC entry. `rag ci-eval` verifies the stamp and the reason
+  before comparing (`verify_baseline`); a hand-edited or unstamped baseline is an ERROR
+  (exit 2) — the reference itself cannot be trusted, which is not a quality result.
+  `rag ci-baseline verify` runs the same check on its own.
+- **The ratchet** (`rag ci-baseline ratchet --base <ref>`, run first in `ci/run_gate.sh`, and
+  needing no API key): a PR that changes the baseline's **results** and any other pipeline
+  path is **REJECTED** (exit 1). Changing the system and moving the bar happen in separate
+  PRs. Two refinements, both Claude's:
+  - a change to the baseline's **metadata only** — its result identical to the base branch's
+    — moves no bar and is allowed. Without this, adding the stamp itself would have been
+    un-mergeable: this PR re-stamps the unchanged DEC-087 baseline;
+  - any changed baseline must pass `verify_baseline`.
+- **Improvements never update the baseline automatically** — nothing in CI writes it.
+- **Drift check** (`.github/workflows/drift.yml`): `rag ci-eval --no-cache` on `main`, which
+  bypasses the call cache (embeddings, answers) and the judge cache, so every call is fresh.
+  **Weekly, Monday 06:00 UTC**, and on demand; **$1.00 per-run budget** (a fresh run measured
+  $0.30, EXP-0060) — about $1.30 a month. A quality FAIL opens a GitHub issue labelled
+  `drift`; an ERROR does not. It is a separate workflow and not a required check, so it never
+  blocks a PR.
+- **What the drift check cannot do cleanly:** a fresh run has fresh generator and judge
+  noise, and the MDDs came from four runs (P3-07, DEC-087). A fresh run with nothing changed
+  can land outside an MDD — the DEC-085 baseline itself did on false-answer rate. So a
+  drift issue is a prompt to look, not a proof of drift; the first thing to check is
+  whether the per-question changes follow a pattern or scatter like noise.
+- **Evidence:** no measured data for the cadence; judgment call. The ratchet and integrity
+  rules are pinned by tests.
+- **Revisit if:** drift issues open without a real change (noise), or a provider change is
+  found some other way first (the cadence is too slow).
+
+## DEC-091 — Gate v3: thresholds for comparing two runs; judge timeout and retry; the baseline moves into CI
+- **Date:** 2026-09-29
+- **Decided by:** Krutik (approved all three, 2026-09-29); proposed by Claude after EXP-0061.
+- **Status:** Active. `ci/gate.yaml` becomes **version 3**. Corrects DEC-083 and DEC-087's use
+  of single-run MDDs as gate thresholds (MIS-047).
+- **1. Thresholds sized for the comparison the gate makes.** The gate compares a fresh run
+  to a baseline run — two draws — and the P3-07 MDDs measured one run's spread. Gate v3
+  reads `pairwise_floors` = 2·√2·stdev over the five fresh golden runs on record (P3-07 ×3,
+  ci-eval run 1, GitHub run 36523052541), rounded up to 0.001:
+
+  | Metric | v2 (single-run MDD) | **v3 (pairwise)** | Largest gap seen between two fresh runs |
+  |---|---|---|---|
+  | mean faithfulness | 0.026 | **0.032** | 0.027 |
+  | unsupported-answer rate | 0.064 | **0.109** | 0.100 |
+  | false-answer rate | 0.077 | **0.158** (3 of 15) | 0.133 |
+  | citation validity | 0.041 | **0.051** | 0.040 |
+  | refusal rate (report) | 0.073 | 0.078 | 0.063 |
+  | citation integrity (report) | 0.016 | 0.032 | 0.027 |
+
+  **The gate now catches less**, and says so: `ci/DETECTION_FLOOR.md` gets a correction. These
+  are the honest limits; v2's overstated them. Five runs is still few — the thresholds are
+  re-estimated when more fresh runs exist (every drift run adds one).
+- **2. Judge robustness.** The judge's timeout goes from 120 s to 300 s (GitHub judged ~5x
+  slower and 2 of 77 answers failed, EXP-0061); a failed judgment is retried once, counted;
+  and the reason for any judge failure is carried into `ci_eval.json` and the PR comment.
+  Model, host, prompt and temperature are unchanged, so no score moves.
+- **3. The baseline comes from CI.** A local baseline cannot be replayed by CI's cache
+  (MIS-048). After PR #2 merges, the first `rag ci-eval` on `main` in CI becomes the baseline,
+  through a baseline-only PR (the ratchet allows it). From then on an unchanged PR replays
+  main's cache and compares equal to its own baseline.
+- **Evidence:** the five fresh runs above; EXP-0061's false alarm and judge failures.
+- **Revisit if:** more fresh runs move any pairwise threshold by more than 20%, or judge
+  failures recur on GitHub after the retry.
+
+## DEC-092 — PR #2 (P3-11) merges with the admin bypass, once
+- **Date:** 2026-09-29
+- **Decided by:** Krutik ("go with option 1"), proposed by Claude.
+- **Status:** Active — a one-off exception, not a working path (DEC-089).
+- **Why:** PR #2's `ci-eval` cannot turn green on its merits. Its only failing gate is
+  unsupported-answer rate compared against a baseline produced on Claude's machine (MIS-048),
+  and the fix — a baseline written from CI's own `main` run (DEC-091 item 3) — needs PR #2
+  merged first; putting it inside PR #2 would break the ratchet PR #2 introduces. Every other
+  gating metric passed (EXP-0062), unit tests pass, and the judge had 0 failures after the
+  DEC-091 retry.
+- **What the bypass skips:** one `ci-eval` verdict on this PR. The last pushed commit's
+  `ci-eval` run is cancelled before merging so no money is spent on a verdict being set aside.
+- **What follows:** the first `ci-eval` on `main` (cold, ~$0.36) — whatever its verdict against
+  the old baseline — becomes the new baseline through a baseline-only PR (DEC-093), which
+  must pass normally. No bypass after that.
+- **Evidence:** EXP-0061, EXP-0062, MIS-047/048/049.
+- **Revisit if:** the bypass is ever needed again — that would mean the gate has a flaw to fix,
+  not a check to skip.

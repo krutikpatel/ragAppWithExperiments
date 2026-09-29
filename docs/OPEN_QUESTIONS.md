@@ -783,3 +783,15 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   open until the rule's own count is done, but the direction is clear: the strict
   unsupported-answer rate (0.663 on this run) measures mostly style. Any v2 definition
   needs its own DEC and does not change P3-05's declared one mid-phase.
+
+## OQ-049 — Is unsupported-answer rate too noisy to gate?
+- **Status:** open. Surfaced 2026-09-29 by EXP-0061/0062.
+- **What was measured:** across five clean fresh golden runs it spans 0.5714–0.6711; the judge
+  alone moves it 0.057 (EXP-0059); a run with a rebuilt index reached 0.7051 (EXP-0062). It is
+  a yes/no per answer (one unsupported claim flips it), and OQ-048 found most unsupported
+  claims are style, not errors. Its pairwise threshold (0.109) is the loosest of the gating
+  metrics relative to its range.
+- **Decided by:** once the baseline comes from CI (DEC-091) and drift runs accumulate, compute
+  its pairwise threshold over ≥ 8 fresh runs. If it exceeds 0.15, or P3-12's planted
+  regressions are caught by faithfulness alone, propose making it report-only — a gate v4
+  decision for Krutik, never a quiet edit.
