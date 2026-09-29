@@ -39,7 +39,8 @@ def _result(dev_hits=None, golden_hits=None, judged=None, answers=None, family=F
                            "judge_prompt_version": "v", "noise_floor_family": family,
                            "dev_config_hash": "hd", "golden_config_hash": "hg"},
             "metrics": {"judged": judged, "retrieval": {}},
-            "per_question": {"dev": dev_hits, "golden": golden_hits, "answers": answers},
+            "per_question": {"dev": dev_hits, "golden": golden_hits, "answers": answers,
+                             "dev:gold_in_context": dict(dev_hits)},
             "cost_usd": {"total": 0.0}, "call_cache": {}}
 
 
@@ -226,7 +227,7 @@ def test_answers_replay_inside_ci_eval_and_a_changed_prompt_misses(tmp_path):
 # --- P3-09: the declared rules (DEC-087) -----------------------------------------------
 
 def test_the_declared_gate_has_every_story_rule():
-    assert GATE["status"] == "declared" and GATE["version"] == 4 and GATE["baseline_updates"] == "manual"
+    assert GATE["status"] == "declared" and GATE["version"] == 5 and GATE["baseline_updates"] == "manual"
     assert GATE["threshold_kind"] == "pairwise_floors"
     gating = {r["metric"] for r in GATE["judged"] if r["gating"]}
     assert gating == {"mean_faithfulness", "unsupported_answer_rate", "false_answer_rate", "citation_validity"}
@@ -469,12 +470,16 @@ def test_a_top_k_regression_is_caught_by_gold_in_context_once_it_gates():
     assert _rule(v, "retrieval", "strict_recall@5", "dev")["verdict"] == "pass"
 
 
-def test_gold_in_context_missing_from_the_baseline_is_report_only_now_and_fails_closed_when_gating():
+def test_gold_in_context_gates_in_v5_and_fails_closed_without_a_baseline_map():
+    assert any(r["metric"] == "gold_in_context" and r["gating"] for r in GATE["retrieval"])
     new = _with_gic(_result(), {f"d{i:03d}": 1.0 for i in range(200)})
-    r = _rule(compare(new, BASELINE, GATE), "retrieval", "gold_in_context", "dev")
-    assert r["verdict"] == "report" and "re-baseline" in r["note"]
+    no_map = copy.deepcopy(BASELINE)
+    del no_map["result"]["per_question"]["dev:gold_in_context"]
+    r = _rule(compare(new, no_map, GATE), "retrieval", "gold_in_context", "dev")
+    assert r["verdict"] == "FAIL" and "re-baseline" in r["note"]
+    BASELINE_NO_MAP = no_map
     gate = copy.deepcopy(GATE)
     for rule in gate["retrieval"]:
         if rule["metric"] == "gold_in_context":
             rule["gating"] = True
-    assert _rule(compare(new, BASELINE, gate), "retrieval", "gold_in_context", "dev")["verdict"] == "FAIL"
+    assert _rule(compare(new, BASELINE_NO_MAP, gate), "retrieval", "gold_in_context", "dev")["verdict"] == "FAIL"
