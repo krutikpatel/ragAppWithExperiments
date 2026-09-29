@@ -232,6 +232,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 58. **Replay only proves equality when the reference and the replay share a store.** A local
     baseline cannot be replayed by CI's cache. (MIS-048)
 
+59. **Save a non-reproducible CI cache with `if: always()`.** The combined cache action skips
+    saving when the job fails, and a rebuilt index is not the same index. (MIS-049)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1607,3 +1610,21 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** a comparison that relies on replay needs the reference and the
   replay to come from the same store; check where each lives before relying on it.
 - **Added to preflight:** yes — item 58.
+
+## MIS-049 — CI saved its index cache only when the job succeeded, so a failed run forced a rebuild that changed answers
+- **Date:** 2026-09-29
+- **Severity:** Medium — it turned a cached re-run into a partly fresh one (EXP-0062).
+- **What happened:** `actions/cache@v4` restores at the start and saves in a post step that
+  runs **only on success**. PR #2's first gate run ended in ERROR (EXP-0061), so the dense
+  index it built was never saved. The re-run rebuilt it; hosted embeddings are not
+  byte-identical between builds (OQ-023), so 11 golden questions retrieved different context,
+  got new answers (answer cache hit rate 0.8842) and new judgments — and the metric moved.
+- **How it was caught:** a re-run that should have replayed everything reported answers at
+  0.88 and cost $0.0797; the log showed "Cache not found" for the index key.
+- **Root cause:** a cache written for the happy path. The model-call caches had an explicit
+  `if: always()` save; the data and index caches used the combined action.
+- **Fix applied:** frozen data and the index use `actions/cache/restore` + `actions/cache/save`
+  with `if: always()`, like the model-call caches.
+- **Prevention rule:** in CI, save every cache whose rebuild is not byte-identical with
+  `if: always()` — a failing job is exactly when the next run needs to reproduce it.
+- **Added to preflight:** yes — item 59.

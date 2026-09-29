@@ -51,14 +51,19 @@ jobs:
       - run: uv pip install --system -e ".[dev]"
 
       # Frozen corpus and splits are gitignored and rebuilt from a pinned HF revision.
+      # restore/save are split so a FAILED or ERROR job still saves them (MIS-049): the
+      # combined action saves only on success, and a rebuilt index is not byte-identical
+      # (hosted embeddings, OQ-023) — it changes contexts and so regenerates answers.
       - name: restore frozen data
-        uses: actions/cache@v4
+        id: frozen
+        uses: actions/cache/restore@v4
         with:
           path: data/frozen
           key: frozen-${{ hashFiles('rag/corpus/**', 'rag/dataset/**', 'data/authored/**') }}
       # The dense index: rebuilt only when chunking, embedding or the promoted config changes.
       - name: restore dense index
-        uses: actions/cache@v4
+        id: index
+        uses: actions/cache/restore@v4
         with:
           path: indexes
           key: indexes-${{ hashFiles('rag/chunking/**', 'rag/embedding/**', 'configs/promoted.yaml') }}
@@ -81,6 +86,19 @@ jobs:
       - name: quality gate
         id: gate
         run: ci/run_gate.sh "$BASE_REF" "$APPROVED"
+
+      - name: save frozen data
+        if: always() && steps.frozen.outputs.cache-hit != 'true' && hashFiles('data/frozen/corpus.parquet') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/frozen
+          key: ${{ steps.frozen.outputs.cache-primary-key }}
+      - name: save dense index
+        if: always() && steps.index.outputs.cache-hit != 'true' && hashFiles('indexes/**/vectors.npy') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: indexes
+          key: ${{ steps.index.outputs.cache-primary-key }}
 
       - name: save model-call caches
         if: always() && hashFiles('results/ci_call_cache.sqlite') != ''
