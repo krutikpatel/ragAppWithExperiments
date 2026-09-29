@@ -226,6 +226,12 @@ Derived from the prevention rules below. Run through it and say in chat that you
 56. **Lint a workflow with `actionlint` before pushing it.** `yaml.safe_load` parses a line
     that YAML has silently truncated at ` #`. (MIS-046)
 
+57. **A threshold is for the comparison it gates.** Two fresh runs differ by about √2 times the
+    spread of one; measure the noise of the actual comparison before declaring a gate. (MIS-047)
+
+58. **Replay only proves equality when the reference and the replay share a store.** A local
+    baseline cannot be replayed by CI's cache. (MIS-048)
+
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
 - **Severity:** Low — caught before any run; no results affected.
@@ -1560,3 +1566,44 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** run `uvx --from actionlint-py actionlint` on any workflow change before
   pushing it. A YAML parser succeeding says nothing about the expressions inside it.
 - **Added to preflight:** yes — item 56.
+
+## MIS-047 — The gate compared two fresh runs against a threshold built for one
+- **Date:** 2026-09-29
+- **Severity:** High — the declared gate (DEC-087/088) false-alarms on an unchanged pipeline.
+- **What happened:** PR #2 (P3-11) changes no answer-producing code. Its GitHub ci-eval
+  regenerated every answer (no cache yet) and failed unsupported-answer rate: 0.5714 →
+  0.6400, Δ +0.0686 against an MDD of 0.064 (EXP-0061).
+- **How it was caught:** the first real GitHub run, on a PR that could not have moved quality.
+- **Root cause:** the MDDs (P3-07, P1-11's rule: max(range, 2 × stdev) of three runs) measure
+  how far **one** run strays. The gate compares **two** runs — a baseline draw and a fresh
+  draw — whose difference has √2 times the spread. Across the five fresh golden runs now on
+  record, the largest gap between two of them is 0.027 (faithfulness, MDD 0.026), 0.100
+  (unsupported-answer, MDD 0.064), 0.133 (false-answer, MDD 0.077), 0.040 (citation
+  validity, MDD 0.041). The P3-07 detection floors therefore overstate what the gate can
+  catch without false alarms. DEC-090 had named the risk for the drift job; it applies to
+  every uncached PR run.
+- **Impact:** PR #2 cannot merge on its verdict. `ci/DETECTION_FLOOR.md` needs correcting.
+- **Fix applied:** none yet — the thresholds are declared gate rules; the fix is put to
+  Krutik (gate v3).
+- **Prevention rule:** a threshold is for the comparison it gates. Before declaring one,
+  write down what is being compared (one run to its mean, or two runs to each other) and
+  measure the noise of *that*.
+- **Added to preflight:** yes — item 57.
+
+## MIS-048 — The CI baseline was produced outside the cache CI replays
+- **Date:** 2026-09-29
+- **Severity:** High — with it, every PR after the first would have failed.
+- **What happened:** `ci/baseline.json` came from ci-eval runs on Claude's machine, whose
+  answers and judgments live only in the local `results/` caches. GitHub restores its own
+  caches. After PR #2's run, GitHub's cache holds GitHub's fresh answers (unsupported-answer
+  rate 0.64), so every later PR that changes nothing would replay those and compare them to
+  the local baseline's 0.5714 — failing identically, forever.
+- **How it was caught:** reading why an unchanged PR could fail, before merging anything.
+- **Root cause:** "an unchanged pipeline replays and compares equal" (DEC-084) holds only
+  when the baseline and the replayed cache are the same draw. That was verified locally
+  (EXP-0060) and assumed for CI.
+- **Fix applied:** none yet — the baseline must be written from a ci-eval run on `main` in
+  CI, whose cache every PR restores. Put to Krutik with MIS-047.
+- **Prevention rule:** a comparison that relies on replay needs the reference and the
+  replay to come from the same store; check where each lives before relying on it.
+- **Added to preflight:** yes — item 58.
