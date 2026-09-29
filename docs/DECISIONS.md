@@ -3532,3 +3532,22 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** the five fresh runs above; EXP-0061's false alarm and judge failures.
 - **Revisit if:** more fresh runs move any pairwise threshold by more than 20%, or judge
   failures recur on GitHub after the retry.
+
+## DEC-092 — PR #2 (P3-11) merges with the admin bypass, once
+- **Date:** 2026-09-29
+- **Decided by:** Krutik ("go with option 1"), proposed by Claude.
+- **Status:** Active — a one-off exception, not a working path (DEC-089).
+- **Why:** PR #2's `ci-eval` cannot turn green on its merits. Its only failing gate is
+  unsupported-answer rate compared against a baseline produced on Claude's machine (MIS-048),
+  and the fix — a baseline written from CI's own `main` run (DEC-091 item 3) — needs PR #2
+  merged first; putting it inside PR #2 would break the ratchet PR #2 introduces. Every other
+  gating metric passed (EXP-0062), unit tests pass, and the judge had 0 failures after the
+  DEC-091 retry.
+- **What the bypass skips:** one `ci-eval` verdict on this PR. The last pushed commit's
+  `ci-eval` run is cancelled before merging so no money is spent on a verdict being set aside.
+- **What follows:** the first `ci-eval` on `main` (cold, ~$0.36) — whatever its verdict against
+  the old baseline — becomes the new baseline through a baseline-only PR (DEC-093), which
+  must pass normally. No bypass after that.
+- **Evidence:** EXP-0061, EXP-0062, MIS-047/048/049.
+- **Revisit if:** the bypass is ever needed again — that would mean the gate has a flaw to fix,
+  not a check to skip.
