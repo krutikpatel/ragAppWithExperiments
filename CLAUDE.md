@@ -508,7 +508,8 @@ rag/
                     DEC-090: `result_sha256` stamp + `verify_baseline` (a hand-edited or
                     unstamped baseline is an ERROR), `rag ci-baseline verify|ratchet`
                     (pipeline and baseline RESULTS may not change in one PR), `--no-cache`
-                    drift mode)
+                    drift mode. P3-12, DEC-095: thresholds matched on the JUDGE side only
+                    (`family_for_judge`); per-question gold-in-context on dev as a retrieval rule)
   embedding/        base.py — Embedder interface with explicit input_type (query |
                     passage) and a per-family prefix table that REFUSES unknown
                     models; backends: sentence_transformers (local, pinned revision)

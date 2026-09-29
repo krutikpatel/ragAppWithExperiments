@@ -226,7 +226,7 @@ def test_answers_replay_inside_ci_eval_and_a_changed_prompt_misses(tmp_path):
 # --- P3-09: the declared rules (DEC-087) -----------------------------------------------
 
 def test_the_declared_gate_has_every_story_rule():
-    assert GATE["status"] == "declared" and GATE["version"] == 3 and GATE["baseline_updates"] == "manual"
+    assert GATE["status"] == "declared" and GATE["version"] == 4 and GATE["baseline_updates"] == "manual"
     assert GATE["threshold_kind"] == "pairwise_floors"
     gating = {r["metric"] for r in GATE["judged"] if r["gating"]}
     assert gating == {"mean_faithfulness", "unsupported_answer_rate", "false_answer_rate", "citation_validity"}
@@ -430,3 +430,51 @@ def test_a_broken_ratchet_check_is_an_error_not_a_rejection(tmp_path):
     env = {"PATH": "/usr/bin:/bin", "GITHUB_STEP_SUMMARY": str(tmp_path / "s.md"), "FORCE_EVAL": "1"}
     r = subprocess.run(["ci/run_gate.sh", "HEAD"], env=env, capture_output=True, text=True)
     assert r.returncode == 2 and "ERROR" in r.stdout and "REJECTED" not in r.stdout
+
+
+# --- P3-12 / DEC-095 -----------------------------------------------------------------
+
+def test_the_gate_matches_its_noise_family_on_the_judge_side_only():
+    """A prompt or generator change keeps its thresholds; a judge change loses them."""
+    from rag.eval.noise_floor import family_for_judge
+
+    row = {"judge_model": "deepseek/deepseek-v4.1-flash", "judge_provider_order": '["DeepInfra"]',
+           "judge_embedding_model": None, "ragas_version": "0.4.3",
+           "metric_prompt_versions": '{"faithfulness": "sha256:475517e1d53e61ad"}',
+           "generator_model": "openai/gpt-5-nano", "prompt_versions": '{"answer": "baseline_answer@v1"}'}
+    assert family_for_judge(row) == "golden-v1-deepseek"
+    assert family_for_judge({**row, "prompt_versions": '{"answer": "baseline_answer@v9"}',
+                             "generator_model": "some/other-generator"}) == "golden-v1-deepseek"
+    assert family_for_judge({**row, "judge_provider_order": '["Groq"]'}) is None
+
+
+def _with_gic(result, hits):
+    r = copy.deepcopy(result)
+    r["per_question"]["dev:gold_in_context"] = hits
+    return r
+
+
+def test_a_top_k_regression_is_caught_by_gold_in_context_once_it_gates():
+    """`top_k` 5 -> 1 cannot move recall@5 (read off the ranking) but empties the context."""
+    gate = copy.deepcopy(GATE)
+    for r in gate["retrieval"]:
+        if r["metric"] == "gold_in_context":
+            r["gating"] = True
+    base_hits = {f"d{i:03d}": 1.0 if i < 140 else 0.0 for i in range(200)}
+    fewer = {q: (0.0 if i < 60 else v) for i, (q, v) in enumerate(base_hits.items())}
+    base = {"result": _with_gic(_result(), base_hits)}
+    v = compare(_with_gic(_result(), fewer), base, gate)
+    r = _rule(v, "retrieval", "gold_in_context", "dev")
+    assert r["verdict"] == "FAIL" and len(r["lost"]) == 60
+    assert _rule(v, "retrieval", "strict_recall@5", "dev")["verdict"] == "pass"
+
+
+def test_gold_in_context_missing_from_the_baseline_is_report_only_now_and_fails_closed_when_gating():
+    new = _with_gic(_result(), {f"d{i:03d}": 1.0 for i in range(200)})
+    r = _rule(compare(new, BASELINE, GATE), "retrieval", "gold_in_context", "dev")
+    assert r["verdict"] == "report" and "re-baseline" in r["note"]
+    gate = copy.deepcopy(GATE)
+    for rule in gate["retrieval"]:
+        if rule["metric"] == "gold_in_context":
+            rule["gating"] = True
+    assert _rule(compare(new, BASELINE, gate), "retrieval", "gold_in_context", "dev")["verdict"] == "FAIL"

@@ -33,7 +33,8 @@ jobs:
 
   ci-eval:
     if: github.event.action != 'labeled' || github.event.label.name == 'eval-approved'
-    needs: unit-tests
+    # Not `needs: unit-tests` (DEC-095): unit tests pin configs and prompts, so a planted or real
+    # change that trips them would otherwise never reach the gate. Both run; both are required.
     runs-on: ubuntu-latest
     # A cold first run builds the dense index (~20 min, ~$0.03) and judges ~80 answers.
     timeout-minutes: 90

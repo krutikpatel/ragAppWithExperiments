@@ -1,14 +1,15 @@
 # ci/gate.yaml — the rules `rag ci-eval` applies.
 #
-# STATUS: DECLARED (P3-09, DEC-087), version 3 (DEC-091: thresholds sized for comparing TWO
+# STATUS: DECLARED (P3-09, DEC-087), version 4 (DEC-095: thresholds matched on the judge side
+# only; gold-in-context on dev reported, to become gating once the baseline carries it), version 3 (DEC-091: thresholds sized for comparing TWO
 # runs, after the first GitHub run false-alarmed — MIS-047; v2, DEC-088: judge failures are
 # errors and the CI budget is set). Changing any
 # rule or threshold is a new version with its own DECISIONS.md entry. Every threshold
 # comes from a measurement, not a guess: α from DEC-082, MDDs from rag/eval/noise_floor.py
 # (DEC-083, DEC-087). Published detection floors: ci/DETECTION_FLOOR.md.
 status: declared
-version: 3
-decision: DEC-091
+version: 4
+decision: DEC-095
 
 # What runs.
 configs:
@@ -39,6 +40,9 @@ baseline_updates: manual
 retrieval:
   - {metric: strict_recall@5, run: dev, gating: true}
   - {metric: strict_recall@5, run: golden, gating: false}
+  # Did every gold article reach the generator? The metric a `top_k` regression moves
+  # (recall@5 is read off the ranking and cannot). Report-only until the baseline has it.
+  - {metric: gold_in_context, run: dev, gating: false}
 
 # Judged and generated: fail when the change in the bad direction exceeds the metric's
 # pairwise threshold in the matched noise-floor family; smaller changes pass "within noise". No matching family
