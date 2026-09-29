@@ -3611,3 +3611,18 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** No measured data for the decisions; the drill walk-through. Tests pin each fix.
 - **Revisit if:** a generator or prompt change is shown to move the noise itself (a wider spread
   than the judge-side family's thresholds), which would argue for re-keying on the generator.
+
+## DEC-096 — The baseline gains per-question gold-in-context (same answers, one more field)
+- **Date:** 2026-09-29
+- **Decided by:** Krutik (DEC-095's approved sequence); executed by Claude.
+- **Status:** Active — supersedes DEC-093's baseline file, not its run.
+- **What:** `ci/baseline.json` is rewritten with `--reason DEC-096` from `main` run `36603537156`
+  (git `d680594`), a fully cached replay of the DEC-093 baseline — every query embedding,
+  answer and judgment hit (1.0 / 1.0 / 1.0), cost $0.00 — collected by the v4 code, which adds
+  per-question `dev:gold_in_context`. Dev gold-in-context is 0.72 (200 questions), equal to
+  strict recall@5 at `top_k` 5, as P3-01 found.
+- **Baseline-only PR**: the ratchet allows it; gold-in-context becomes gating in the next PR
+  (gate v5), which cannot also change the baseline.
+- **Evidence:** run `36603537156`'s artifact (`ci/out/gh_36603537156/`).
+- **Revisit if:** the replay was not exact — it was (all caches 1.0), so every other number is
+  the DEC-093 baseline's.

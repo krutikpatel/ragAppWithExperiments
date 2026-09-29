@@ -415,8 +415,8 @@ Acceptance criteria:
 ### P3-12 — Regression drill
 
 > **Status: IN PROGRESS** — DEC-095 (gate v4, prerequisites the drills exposed)
-> - [ ] gate v4 step 1: judge-side threshold matching; jobs in parallel; gold-in-context reported
-> - [ ] step 2: baseline carries per-question gold-in-context (baseline-only PR)
+> - [x] gate v4 step 1: judge-side threshold matching; jobs in parallel; gold-in-context reported (PR #6)
+> - [x] step 2: baseline carries per-question gold-in-context (baseline-only PR, DEC-096)
 > - [ ] step 3: gold-in-context gating
 > - [ ] drills 1–6 run as throwaway PRs; results table in EXPERIMENTS.md
 > - [ ] MISTAKES entry + fix for any drill not behaving as specified (drill 4 exempt)
