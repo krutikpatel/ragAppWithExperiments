@@ -149,3 +149,14 @@ def test_contract_the_api_returns_the_gates_own_answers_for_five_golden_question
             d = client.post("/ask", json={"question": g["question"]}).json()
             assert d["answer"] == gate_answers[g["question_id"]], f"{g['question_id']} differs from {run_id}"
             assert d["meta"]["replayed"] is True and d["meta"]["cost_usd"] == 0.0
+
+
+def test_the_image_contains_every_file_the_api_reads_at_startup():
+    """MIS-051: P3-14 made the API read ci/gate.yaml and the image did not copy it; the
+    container failed at startup while every unit test passed."""
+    import re
+
+    copied = re.findall(r"^COPY (?!--from)(\S+)", Path("Dockerfile").read_text(), re.M)
+    needed = [api.GATED, api.PROMOTED, api.DEFAULT_CONFIG, "prompts", "eval"]
+    for path in needed:
+        assert any(path == c or path.startswith(c.rstrip("/") + "/") for c in copied), f"{path} is not in the image"

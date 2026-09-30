@@ -238,6 +238,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
     key CI's dense-index cache.** Any edit there rebuilds the index on the PR and again on main,
     and a rebuilt index changes some answers. Put new code outside them when you can; if not,
     say so in the PR (MIS-050).
+61. **After changing what the API reads at startup, rebuild the image and start it.** Unit
+    tests run from the repo root and see every file; the image sees only what the Dockerfile
+    copies. A test now checks the Dockerfile copies what the API reads (MIS-051).
 
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
@@ -1653,3 +1656,24 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** before editing a path that feeds a CI cache key, check the key; put
   code that does not change what is cached somewhere else.
 - **Added to preflight:** yes — item 60.
+
+## MIS-051 — P3-14 made the API read ci/gate.yaml; the Docker image did not contain it
+- **Date:** 2026-09-30
+- **Severity:** Medium. `docker compose up`, the way P3-13 says to run the API, failed at
+  startup on `main` from PR #18 until this fix. No experiment or gate result was affected.
+- **What happened:** P3-14 (DEC-098) added a startup check: the API refuses answer settings
+  the gate did not score, and finds the gate's golden config by reading `ci/gate.yaml`. The
+  Dockerfile copies `rag`, `configs`, `prompts`, `eval` and `data/authored`, but not `ci/`.
+  The container died with `FileNotFoundError: 'ci/gate.yaml'`.
+- **How it was caught:** Krutik asked to run the page in Docker; the container exited, and
+  the log showed the traceback.
+- **Root cause:** I verified P3-14 with unit tests and a local `uvicorn` run from the repo
+  root, where every file exists. I did not rebuild the image, which P3-13 had verified only
+  for P3-13's code.
+- **Impact:** the Docker path was broken for about half a day; no one else used it.
+- **Fix applied:** the Dockerfile copies `ci/gate.yaml`. A test checks that the Dockerfile
+  copies every file the API reads at startup. The image was rebuilt, started, and `/health`
+  reported ready.
+- **Prevention rule:** a change to what a deployable reads at startup is verified by building
+  and starting that deployable, not by running the code from the repo.
+- **Added to preflight:** yes, item 61.
