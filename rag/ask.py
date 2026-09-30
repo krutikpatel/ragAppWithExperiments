@@ -11,18 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rag.assembly import ConcatAssembler
-from rag.citations import RenderedCitation, format_report, render_citations
-from rag.corpus.loader import load_corpus
+from rag.citations import RenderedCitation, format_report
+from rag.generation.base import GeneratedAnswer
+from rag.runner.config import RunConfig
 from rag.eval.generation_metrics import deterministic_metrics, find_urls
-from rag.generation.base import GeneratedAnswer, GeneratorConfig, OpenRouterGenerator
-from rag.runner.config import RunConfig, load_config_file
-from rag.runner.model_check import configured_models, verify_models
-from rag.runner.registry import build_retriever
-from rag.runner.run import build_index
 
-# `ask` never judges; these fields are cleared before the config is validated.
-NO_JUDGE = {"judge_model": "", "judge_embedding_model": "", "skip_judge": True}
 
 
 @dataclass(frozen=True)
@@ -45,11 +38,8 @@ def answer_question(
     question_id: str | None = None,
     split: str = "dev",
 ) -> AskResult:
-    # `ask` never judges, so the judge is not part of what it loads (DEC-073 made the
-    # Tier 2 control's placeholder judge a refused pairing until P3-04 picks one).
-    config = load_config_file(config_path, overrides=NO_JUDGE)
-    if not config.generator_model:
-        raise ValueError(f"{config_path} has no generator_model; `rag ask` needs a Tier 2 config")
+    """One question through the shared `Pipeline` (P3-13) — the same code the API serves."""
+    from rag.pipeline import Pipeline
 
     gold: list[str] | None = None
     reference: str | None = None
@@ -66,40 +56,9 @@ def answer_question(
         reference = str(row["answer"])
     assert question is not None
 
-    # P3-02: fail fast on a retired slug.
-    verify_models(configured_models(config))
-    corpus = load_corpus()
-    index, chunk_text = build_index(config)
-    retriever = build_retriever(
-        config.retriever,
-        chunk_to_doc=index.chunk_to_doc,
-        chunk_text=chunk_text,
-        doc_pooling=config.doc_pooling,
-        index=index,
-        **config.retriever_params,
-    )
-    result = retriever.retrieve(
-        "ask", question, top_k=config.retrieval_depth, k_docs=config.top_k, candidate_pool=config.candidate_pool
-    )
-    context_chunks = result.context_chunks
-    # The generator sees each chunk's context, which the P2-07 "retrieve small,
-    # expand" chunkers make larger than the indexed text.
-    context_text = index.context_text
-    context = ConcatAssembler(
-        max_tokens=config.context_max_tokens, order=config.context_order
-    ).assemble(context_chunks, context_text)
-
-    generator = OpenRouterGenerator(
-        GeneratorConfig(
-            model=config.generator_model,
-            prompt_id=config.generator_prompt_id,
-            prompt_version=config.generator_prompt_version,
-            max_tokens=config.generator_max_tokens,
-            reasoning_effort=config.generator_reasoning_effort,
-        )
-    )
-    answer = generator.generate(question, context.text)
-
+    pipeline = Pipeline.from_config_file(config_path)
+    result = pipeline.answer(question, question_id=question_id or "ask")
+    answer = result.answer
     metrics = None
     if gold is not None and reference is not None:
         metrics = deterministic_metrics(
@@ -108,17 +67,16 @@ def answer_question(
             cited_doc_ids=answer.cited_doc_ids,
             gold_doc_ids=gold,
         )
-
     return AskResult(
         question=question,
         answer=answer,
-        citations=render_citations(answer.cited_doc_ids, context_chunks, context_text, corpus),
-        context_doc_ids=[c.doc_id for c in context_chunks],
-        collapse_ratio=result.context.collapse_ratio if result.context else None,
+        citations=result.citations,
+        context_doc_ids=result.context_doc_ids,
+        collapse_ratio=result.collapse_ratio,
         gold_doc_ids=gold,
         reference_answer=reference,
         metrics=metrics,
-        config=config,
+        config=pipeline.config,
     )
 
 

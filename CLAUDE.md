@@ -402,6 +402,11 @@ rag/
                     chunk; invented ids are shown and flagged, never hidden
   ask.py            `rag ask` — one question through the configured pipeline, rendered;
                     writes nothing to the results store
+  pipeline.py       P3-13 `Pipeline`: the one-question pipeline, built once, shared by `rag ask`
+                    and the API; REFUSES features only the runner implements (DEC-097)
+  api.py            P3-13 FastAPI app: `POST /ask`, `/health`, the page (api_page.html); refuses a
+                    served config whose retrieval differs from promoted.yaml; `RAG_API_REPLAY=1`
+                    answers from the ci-eval call cache (DEC-097)
   corpus/           freeze.py (pinned HF revision -> parquet), normalize.py
                     (norm-vN), loader.py (the ONLY runtime read path),
                     profile.py (`rag corpus profile` — lengths, one-chunk fit,
@@ -645,6 +650,7 @@ Two notes on where things live:
 | LLM access | `httpx` / `openai` client -> OpenRouter | key in `.env`. Chat at `/chat/completions`, embeddings at `/embeddings` (models listed at `/embeddings/models`, NOT `/models`) |
 | Judged metrics | `ragas==0.4.3` (exact pin) | metric library ONLY. Not its dataset or experiment layer |
 | Config objects | frozen dataclasses today; `pydantic` declared for P0-10 | must hash to a stable `config_hash` |
+| Answer API | `fastapi` + `uvicorn` — optional extra `api` | P3-13, DEC-097; `docker compose up` runs it locally (Dockerfile, docker-compose.yml) |
 
 Rules that outlive any particular library:
 

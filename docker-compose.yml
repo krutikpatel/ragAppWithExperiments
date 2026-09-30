@@ -1,0 +1,16 @@
+# P3-13 (DEC-097): `docker compose up`, then open http://localhost:8000
+# Needs, on the host: data/frozen (`rag corpus freeze && rag data splits`), indexes/ (built by
+# the first dense run) and .env with OPENROUTER_API_KEY. `RAG_API_REPLAY=1 docker compose up`
+# answers golden questions from the gate's call cache at $0.
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      RAG_API_REPLAY: "${RAG_API_REPLAY:-0}"
+    volumes:
+      - ./data/frozen:/app/data/frozen:ro
+      - ./indexes:/app/indexes:ro
+      - ./results:/app/results
