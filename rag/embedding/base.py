@@ -150,6 +150,9 @@ class Embedder(ABC):
             )
         self.config = config
         self.prefix = resolve_prefix_convention(config.model, config.prefix_convention)
+        # Wall time spent embedding QUERIES (cache lookups included), summed: the "embed"
+        # stage of the API's per-request log (P3-14). Passages are an index build, not a request.
+        self.query_ms = 0.0
 
     @abstractmethod
     def _embed(self, texts: list[str]) -> list[list[float]]:
@@ -162,6 +165,7 @@ class Embedder(ABC):
         on (DEC-084); passages never do — they live in the dense index."""
         from rag.call_cache import CallCache, active
 
+        started = time.perf_counter()
         prefixed = [self.prefix.apply(t, input_type) for t in texts]
         cache = active() if input_type == "query" else None
         if cache is None:
@@ -181,6 +185,8 @@ class Embedder(ABC):
             vectors = found
         if len(vectors) != len(texts):
             raise RuntimeError(f"embedder returned {len(vectors)} vectors for {len(texts)} inputs")
+        if input_type == "query":
+            self.query_ms += (time.perf_counter() - started) * 1000
         return vectors
 
     def embed_text(self, text: str, *, input_type: InputType) -> list[float]:

@@ -42,6 +42,7 @@ class FakePipeline:
 def client(monkeypatch):
     monkeypatch.setattr(api.state, "pipeline", FakePipeline())
     monkeypatch.setattr(api.state, "replay", False)
+    monkeypatch.setenv("RAG_API_LOG", "")  # P3-14's request log: stdout only in tests
     with TestClient(api.app) as c:
         yield c
 
@@ -142,6 +143,7 @@ def test_contract_the_api_returns_the_gates_own_answers_for_five_golden_question
     monkeypatch.setattr(Embedder, "_embed", blocked, raising=False)
     monkeypatch.setattr(api.state, "pipeline", None)
     monkeypatch.setenv("RAG_API_REPLAY", "1")
+    monkeypatch.setenv("RAG_API_LOG", "")
     with TestClient(api.app) as client:
         for g in golden:
             d = client.post("/ask", json={"question": g["question"]}).json()

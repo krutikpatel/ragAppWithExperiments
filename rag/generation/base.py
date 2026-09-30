@@ -43,6 +43,10 @@ class Completion:
     reasoning_tokens: int
     finish_reason: str
     attempts: int = 1
+    # The model OpenRouter says answered (its response's `model`). Differs from the
+    # configured one only when a fallback served the request (P3-14). "" on replays
+    # cached before P3-14.
+    served_model: str = ""
 
 
 class EmptyGenerationError(RuntimeError):
@@ -99,6 +103,11 @@ class GeneratorConfig:
     rate_limit_attempts: int = 8
     rate_limit_backoff_s: float = 15.0
     rate_limit_max_wait_s: float = 300.0
+    # P3-14 (DEC-098): OpenRouter model fallbacks — tried in order when `model` errors
+    # (downtime, rate limit, context length). EMPTY BY DEFAULT: a fallback answers with a
+    # model the gate never scored, so enabling one is its own config and `rag ci-eval`
+    # gates every model in the chain (`rag.runner.ci_eval.fallback_variants`).
+    fallback_models: tuple[str, ...] = ()
 
 
 class Generator(ABC):
@@ -134,6 +143,8 @@ class Generator(ABC):
         else:
             identity = {"model": self.config.model, "prompt": prompt.ref, "temperature": self.config.temperature,
                         "max_tokens": self.config.max_tokens, "reasoning_effort": self.config.reasoning_effort}
+            if self.config.fallback_models:  # absent when off, so no existing cache key moves
+                identity["fallback_models"] = list(self.config.fallback_models)
             key = CallCache.completion_key(identity, rendered)
             hit = cache.get_completion(key)
             if hit is not None:
@@ -154,7 +165,8 @@ class Generator(ABC):
             tokens_out=completion.tokens_out,
             reasoning_tokens=completion.reasoning_tokens,
             latency_ms=elapsed_ms,
-            meta={"finish_reason": completion.finish_reason, "attempts": completion.attempts, "cached": cached},
+            meta={"finish_reason": completion.finish_reason, "attempts": completion.attempts, "cached": cached,
+                  "served_model": completion.served_model or self.config.model},
         )
 
 
@@ -256,6 +268,10 @@ class OpenRouterGenerator(Generator):
         }
         if self.config.reasoning_effort:
             body["reasoning"] = {"effort": self.config.reasoning_effort}
+        if self.config.fallback_models:
+            # OpenRouter's fallback form: an ordered `models` list in place of `model`; the
+            # response's `model` names the one that answered, and that one is billed.
+            body["models"] = [body.pop("model"), *self.config.fallback_models]
 
         response = httpx.post(
             OPENROUTER_URL,
@@ -290,4 +306,5 @@ class OpenRouterGenerator(Generator):
             tokens_out=int(usage.get("completion_tokens", 0)),
             reasoning_tokens=reasoning_tokens,
             finish_reason=finish_reason,
+            served_model=str(payload.get("model") or ""),
         )

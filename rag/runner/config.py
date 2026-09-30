@@ -120,6 +120,11 @@ class RunConfig:
     generator_prompt: str = "baseline_answer@v1"
     generator_max_tokens: int = 2000
     generator_reasoning_effort: str = "minimal"
+    # P3-14 (DEC-098): OpenRouter fallback models, tried in order when the generator
+    # errors. OFF by default and an absent dimension when empty (no existing hash moves).
+    # A config that sets it is a different config, and `rag ci-eval` gates each model in
+    # the chain as its own config — an unevaluated fallback would bypass the gate.
+    generator_fallback_models: tuple[str, ...] = ()
     judge_model: str = ""
     judge_temperature: float = 0.0
     judge_max_tokens: int = 16384
@@ -174,6 +179,12 @@ class RunConfig:
     harness_smoke_test: bool = False
 
     def __post_init__(self) -> None:
+        # YAML gives a list; the off value `()` must compare equal whatever the source.
+        object.__setattr__(self, "generator_fallback_models", tuple(self.generator_fallback_models))
+        chain = (self.generator_model, *self.generator_fallback_models)
+        if self.generator_fallback_models and (not self.generator_model or len(set(chain)) != len(chain)):
+            raise ValueError(f"generator_fallback_models {list(self.generator_fallback_models)} needs a "
+                             "generator_model and no model twice in the chain")
         if self.doc_pooling not in POOLING_RULES:
             raise ValueError(f"unknown doc_pooling {self.doc_pooling!r}; known: {POOLING_RULES}")
         if self.top_k < 1:
@@ -309,6 +320,7 @@ class RunConfig:
         ("judge_allow_fallbacks", True, ("judge_allow_fallbacks",)),
         ("query_transform", "", ("query_transform", "query_transform_params")),
         ("grounding_check", "", ("grounding_check", "grounding_check_params")),
+        ("generator_fallback_models", (), ("generator_fallback_models",)),
     )
 
     @classmethod
@@ -387,8 +399,9 @@ def config_from_json(text: str) -> RunConfig:
     document = {k: v for k, v in json.loads(text).items() if k in RunConfig.__dataclass_fields__}
     if "eval_tier" in document:
         document["eval_tier"] = EvalTier(document["eval_tier"])
-    if "judge_provider_order" in document:
-        document["judge_provider_order"] = tuple(document["judge_provider_order"])
+    for key in ("judge_provider_order", "generator_fallback_models"):
+        if key in document:
+            document[key] = tuple(document[key])
     # A run row is history: rebuild it as it ran (DEC-073).
     with historical_configs():
         return RunConfig(**document)

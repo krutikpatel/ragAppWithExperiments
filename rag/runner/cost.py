@@ -112,9 +112,9 @@ def fetch_model_prices(model_ids: list[str]) -> dict[str, dict[str, float]]:
     for anything with a provider order.
     """
     try:
-        import httpx
+        from rag.http_retry import get_json
 
-        payload = httpx.get(OPENROUTER_MODELS_URL, timeout=15.0).json()["data"]
+        payload = get_json(OPENROUTER_MODELS_URL, timeout=15.0)["data"]
     except Exception:
         return {}
     prices: dict[str, dict[str, float]] = {}
@@ -134,11 +134,9 @@ def fetch_provider_price(model_id: str, provider_order: tuple[str, ...]) -> dict
     providers serve the model, which the caller must treat as "unknown", not "free".
     """
     try:
-        import httpx
+        from rag.http_retry import get_json
 
-        endpoints = httpx.get(
-            OPENROUTER_ENDPOINTS_URL.format(model=model_id), timeout=15.0
-        ).json()["data"]["endpoints"]
+        endpoints = get_json(OPENROUTER_ENDPOINTS_URL.format(model=model_id), timeout=15.0)["data"]["endpoints"]
     except Exception:
         return {"provider": None, "reason": "endpoints API unreachable"}
 
@@ -288,13 +286,13 @@ def refresh_pricing(path: Path = PRICING_PATH) -> PricingTable:
 
 def _fetch_all_prices(model: str) -> dict[str, dict[str, float]]:
     """`_model` plus every provider serving `model`, from the two endpoints."""
-    import httpx
+    from rag.http_retry import get_json
 
     out: dict[str, dict[str, float]] = {}
     model_level = fetch_model_prices([model]).get(model)
     if model_level:
         out["_model"] = model_level
-    endpoints = httpx.get(OPENROUTER_ENDPOINTS_URL.format(model=model), timeout=20.0).json()["data"]["endpoints"]
+    endpoints = get_json(OPENROUTER_ENDPOINTS_URL.format(model=model), timeout=20.0)["data"]["endpoints"]
     for endpoint in endpoints:
         name = endpoint.get("provider_name")
         price = _parse_pricing(endpoint.get("pricing", {}))

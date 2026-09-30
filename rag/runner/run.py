@@ -926,6 +926,13 @@ def _execute(
     retried = sum(1 for g in generated.values() if isinstance(g, dict) and g.get("attempts", 1) > 1)
     if config.eval_tier is EvalTier.TIER_2:
         aggregate["generation_retries_questions"] = retried
+        if config.generator_fallback_models:
+            # P3-14: which model in the chain actually answered, per question count.
+            served: dict[str, int] = {}
+            for g in generated.values():
+                if isinstance(g, dict) and "served_model" in g:
+                    served[g["served_model"]] = served.get(g["served_model"], 0) + 1
+            aggregate["generator_served_models"] = served
     aggregate["p50_latency_ms"] = latencies[len(latencies) // 2] if latencies else None
     # Tier 1 makes no LLM calls, but a hosted embedder charges for query vectors;
     # that is exact (provider-reported) and the one-time index build is recorded
@@ -1078,6 +1085,7 @@ def _tier2(
             prompt_version=config.generator_prompt_version,
             max_tokens=config.generator_max_tokens,
             reasoning_effort=config.generator_reasoning_effort,
+            fallback_models=config.generator_fallback_models,
         )
     )
     judge = None if config.skip_judge else RagasJudge(_judge_config(config))
@@ -1184,6 +1192,7 @@ def _tier2(
             "tokens_out": answer.tokens_out,
             # DEC-084: replayed from the ci-eval call cache — recorded, never billed.
             "cached": bool(answer.meta.get("cached")),
+            "served_model": answer.meta.get("served_model") or config.generator_model,
         }
     if grounding is not None:
         generated["__grounding__"] = grounding.provenance()
