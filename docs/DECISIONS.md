@@ -3846,3 +3846,20 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** the billed amount differs from the computed cost by more than 10%;
   TypeSafe changes `jev-1.13.0`'s behaviour or retires it; or the response's `model` field
   names something other than the pin.
+- **Probe, 2026-09-30 (approved by Krutik; 5 `dev` questions, not a store run; artifacts in
+  `results/probes/jev_20260930/`, raw responses committed as
+  `tests/fixtures/jev_1_13_0_responses.jsonl`):**
+  - 270 calls (50–60 chunks per question), 0 retries, 0 rate limits. p50 latency 171 ms per
+    call, max 383 ms; about 1.3 s per question with 8 workers.
+  - The response is `{"model", "answers": {"relevant": {"type", "noul"}}, "usage":
+    {"input_tokens", "output_tokens"}}`. `model` was `jev-1.13.0` on every call, so the pin
+    assertion holds.
+  - 220,328 input tokens = **$0.009254** computed. Mean 816.0 tokens per call at 339.4
+    passage words; the estimator's per-call overhead moves from the 200 guess to 385, and the
+    EXP-0065 estimate from $0.3150 to **$0.4058**.
+  - **Scores are rounded to two decimals**: 79 distinct values across 270 calls, so ties
+    are common and break on `chunk_id` (MIS-003).
+  - **Scores are not repeatable.** Three identical requests, each sent four times, returned
+    0.26/0.24/0.23/0.28, 0.11/0.13/0.13/0.15 and 0.29/0.36/0.28/0.29. The request exposes no
+    seed or temperature. Tracked as OQ-055.
+  - Still open: the billed amount on TypeSafe's dashboard against the computed $0.009254.

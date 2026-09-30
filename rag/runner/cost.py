@@ -102,11 +102,13 @@ RERANK_CHUNKS_PER_CANDIDATE_DOC = 58.4 / 50
 RERANK_CANDIDATE_LENGTH_FACTOR = 348 / 309
 RERANK_TOKENS_PER_PAIR_OVERHEAD = 76
 # TypeSafe Jev (DEC-101): one request per candidate CHUNK, each carrying the query, the
-# `noul` question's instructions and criteria (rerank_jev@v1, ~110 words) and the JSON
-# state keys. NOT CALIBRATED — a word count of the prompt x 1.27 plus padding, to be
-# replaced by the reported input_tokens of the pre-run probe.
-JEV_TOKENS_PER_CALL_OVERHEAD = 200
-JEV_CALIBRATION_RUN_ID = ""
+# `noul` question's instructions and criteria (rerank_jev@v1) and the JSON state keys.
+# Calibrated on the approved 5-question probe (not a store run; artifacts under
+# results/probes/jev_20260930/, raw responses in tests/fixtures/): 270 calls reported a
+# mean 816.0 input tokens at 339.4 passage words, so 816.0 - 339.4 x 1.27 = 385. The
+# first guess, 200, was 21% low per call. NOT yet validated out of sample (DEC-035).
+JEV_TOKENS_PER_CALL_OVERHEAD = 385
+JEV_CALIBRATION_RUN_ID = "probe jev_20260930 (5 dev questions, 270 calls)"
 GENERATED_TOKENS_OUT_PER_QUESTION = 350  # measured 118-183 on smoke runs; padded
 
 
@@ -575,8 +577,8 @@ def _estimate_per_chunk_tokens(
         candidate_words * RERANK_CANDIDATE_LENGTH_FACTOR * WORDS_TO_TOKENS + JEV_TOKENS_PER_CALL_OVERHEAD
     )
     tokens = int(calls * tokens_per_call)
-    calibrated = (f"overhead calibrated on {JEV_CALIBRATION_RUN_ID}" if JEV_CALIBRATION_RUN_ID
-                  else "per-call overhead NOT calibrated")
+    calibrated = (f"overhead calibrated on {JEV_CALIBRATION_RUN_ID}, not validated out of sample"
+                  if JEV_CALIBRATION_RUN_ID else "per-call overhead NOT calibrated")
     estimate["rerank_usd"] = round(tokens / 1e6 * float(rule["usd_per_mtok"]), 4)
     estimate["tokens"] = tokens
     estimate["calls"] = round(calls)

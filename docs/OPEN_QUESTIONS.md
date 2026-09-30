@@ -853,3 +853,14 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   P2-14 did for abstention), then run the chosen threshold at Tier 2 on `dev`: faithfulness
   and the refusal rate on the unanswerable slice against the same config without the
   cut-off. Its own DEC first.
+
+## OQ-055 — How much does Jev's run-to-run score noise move EXP-0065's result?
+- **Status:** open. Surfaced 2026-09-30 by the DEC-101 probe.
+- **What is known:** identical Jev requests returned scores differing by up to 0.08 across
+  four sends, rounded to two decimals, with no seed to fix. Chunks whose scores sit close
+  together can swap places between runs, so one EXP-0065 run may not reproduce its own
+  top 5. Same situation as the query embeddings (OQ-023), at a size not yet measured.
+- **Decided by:** running the EXP-0065 config twice on `dev` and comparing the two by
+  `rag compare`: the share of questions whose top-5 documents differ, and the strict
+  recall@5 gap between the runs. That gap is the noise floor any Jev delta must clear
+  before it counts as a finding.

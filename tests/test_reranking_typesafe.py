@@ -179,7 +179,29 @@ def test_estimate_is_one_call_per_candidate_chunk_at_the_published_rate():
     )
     assert estimate["calls"] == round(200 * 58.4)
     assert estimate["rerank_usd"] == pytest.approx(estimate["tokens"] / 1e6 * 0.042, abs=1e-4)
-    assert "NOT calibrated" in estimate["source"]
+    assert "calibrated on probe jev_20260930" in estimate["source"]
+
+
+def test_the_estimate_reproduces_the_probes_measured_tokens_per_call():
+    """The probe billed a mean 816.0 input tokens per call at 339.4 passage words."""
+    from rag.runner.cost import JEV_TOKENS_PER_CALL_OVERHEAD, WORDS_TO_TOKENS
+
+    assert 339.4 * WORDS_TO_TOKENS + JEV_TOKENS_PER_CALL_OVERHEAD == pytest.approx(816.0, abs=1)
+
+
+# --- stored Jev output (CLAUDE.md: test every parser of model output on stored output) --
+
+def test_the_parser_accepts_every_stored_jev_response():
+    import json
+    from pathlib import Path
+
+    rows = [json.loads(line) for line in Path("tests/fixtures/jev_1_13_0_responses.jsonl").read_text().splitlines()]
+    assert len(rows) == 270
+    jev = _jev()
+    scores = [jev._parse(row["response"]) for row in rows]
+    assert all(0.0 <= s <= 1.0 for s in scores)
+    assert jev.usage.tokens == 220_328
+    assert jev.query_cost_usd() == pytest.approx(220_328 / 1e6 * 0.042)
 
 
 def test_an_unpriced_jev_model_is_unknown_not_free():
