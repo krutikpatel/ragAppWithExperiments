@@ -521,6 +521,9 @@ rag/
                     (pipeline and baseline RESULTS may not change in one PR), `--no-cache`
                     drift mode. P3-12, DEC-095: thresholds matched on the JUDGE side only
                     (`family_for_judge`); per-question gold-in-context on dev as a retrieval rule.
+                    ci_history.py — `rag ci-history` (DEC-100): one line per GitHub `ci-eval`
+                    job into ci/history.jsonl, the durable copy of artifacts GitHub deletes
+                    after 90 days; recorded rows are never overwritten.
                     P3-14, DEC-098: `fallback_variants` — a config with `generator_fallback_models`
                     has each fallback gated as its own config; the status is the worst)
   embedding/        base.py — Embedder interface with explicit input_type (query |
@@ -594,6 +597,8 @@ ci/                 Phase 3 CI gate files. phase3_baseline.yaml records what the
                     `result_sha256` (DEC-090). run_gate.sh — what the CI job runs:
                     ratchet, skip on no pipeline change, NOT VERIFIED without the key,
                     estimate, ci-eval, exit → PASS/FAIL/ERROR/NEEDS APPROVAL (DEC-088).
+                    history.jsonl — every GitHub ci-eval job: wall time, verdict, cost, cache
+                    hit rates, headline metrics (DEC-100; the source of the CI cost table).
                     out/ is GITIGNORED (the ci-eval artifacts)
 .github/workflows/  ci.yml — unit-tests and ci-eval in parallel on every PR/push (both required
                     on main, DEC-089/095). Its dense-index cache is keyed on rag/chunking/**,

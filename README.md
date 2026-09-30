@@ -118,6 +118,7 @@ rag faithfulness <run_id> --judge-config configs/baseline_dense_tier2_v2.yaml
 rag ci-eval --estimate-only
 rag ci-eval                                               # exit 0 pass, 1 fail, 2 error, 3 needs approval
 rag ci-baseline verify                                    # the baseline's integrity stamp
+rag ci-history                                            # record new gate runs in ci/history.jsonl (needs gh)
 
 # The answer API and demo page (local only)
 RAG_API_REPLAY=1 docker compose up                        # http://localhost:8000; replay = $0 on golden questions
@@ -126,7 +127,7 @@ RAG_API_REPLAY=1 docker compose up                        # http://localhost:800
 A run that would cost more than $2 stops before it starts and needs `--approve-cost`. The gate
 has its own $1.00 budget per run (`ci/gate.yaml`).
 
-**What a gate run costs** (36 GitHub runs, `docs/EXPERIMENTS.md`): **$0 and about 1.5 minutes**
+**What a gate run costs** (36 GitHub runs, `ci/history.jsonl` and `docs/EXPERIMENTS.md`): **$0 and about 1.5 minutes**
 when the answers are unchanged, because the gate replays cached calls. **$0.21–$0.36 and
 33–62 minutes** when every answer is regenerated. $2.03 in total so far.
 
