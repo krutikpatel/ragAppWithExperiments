@@ -42,6 +42,23 @@ def load_gate(path: str | Path) -> dict[str, Any]:
     return gate
 
 
+def fallback_variants(golden_cfg: Any) -> list[Any]:
+    """P3-14 (DEC-098): every fallback model as its own config — the golden config with that
+    model as the generator and no fallbacks. A fallback answers only when the primary
+    errors, so a run of the chain almost never exercises it; gating the chain alone would
+    let an unevaluated model answer users. Each variant runs the full golden generation and
+    faithfulness and is compared to the same baseline under the same rules."""
+    return [golden_cfg.with_(generator_model=m, generator_fallback_models=())
+            for m in golden_cfg.generator_fallback_models]
+
+
+def worst_status(statuses: list[str]) -> str:
+    for status in ("ERROR", "FAIL"):
+        if status in statuses:
+            return status
+    return "PASS"
+
+
 # --- collecting a run's outcomes -----------------------------------------------------
 
 def _per_question_recall(store: Any, run_id: str, metric: str = "strict_recall@5") -> dict[str, float | None]:
@@ -324,8 +341,9 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
     budget = float(gate["ci_budget_usd"])
     approval = approve_cost.strip() or f"ci-eval: within ci_budget_usd {budget}"
 
+    variants = fallback_variants(golden_cfg)
     try:
-        for cfg in (dev_cfg, golden_cfg, load_config_file(gate["configs"]["judge"])):
+        for cfg in (dev_cfg, golden_cfg, *variants, load_config_file(gate["configs"]["judge"])):
             verify_config_models(cfg)
     except (ModelResolutionError, ModelCheckUnavailable) as exc:
         raise CIError(f"model check: {exc}") from exc
@@ -333,7 +351,9 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
     owns = store is None
     store = store if store is not None else ResultsStore()
     try:
-        est = {k: runner(c, store=store, estimate_only=True)["total_usd"] for k, c in (("dev", dev_cfg), ("golden", golden_cfg))}
+        est = {k: runner(c, store=store, estimate_only=True)["total_usd"] for k, c in (
+            ("dev", dev_cfg), ("golden", golden_cfg),
+            *((f"fallback:{v.generator_model}", v) for v in variants))}
         if estimate_only:
             doc = {"estimate_only": True, "runs_usd": est,
                    "judge_usd_upper_bound": "set after generation, from the faithfulness estimator"}
@@ -351,25 +371,35 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
             with (nullcontext() if no_cache else call_cache(cache)):
                 dev_row = runner(dev_cfg, store=store, reason=f"rag ci-eval ({mode})")
                 golden_row = runner(golden_cfg, store=store, reason=f"rag ci-eval ({mode})")
-            spent = (dev_row.get("cost_actual_usd") or 0) + (golden_row.get("cost_actual_usd") or 0)
+                variant_rows = [runner(v, store=store, reason=f"rag ci-eval ({mode}, fallback as its own config)")
+                                for v in variants]
+            spent = sum(r.get("cost_actual_usd") or 0 for r in (dev_row, golden_row, *variant_rows))
             try:
-                faith = faithfulness(golden_row["run_id"], judge_config_path=gate["configs"]["judge"],
-                                     approve_cost=approval, max_usd=None if approve_cost.strip() else budget - spent,
-                                     no_cache=no_cache, store=store)
+                faiths = []
+                for row in (golden_row, *variant_rows):
+                    faiths.append(faithfulness(
+                        row["run_id"], judge_config_path=gate["configs"]["judge"], approve_cost=approval,
+                        max_usd=None if approve_cost.strip() else budget - spent, no_cache=no_cache, store=store))
+                    spent += faiths[-1].usage.get("cost_usd", 0)
             except NeedsApproval as exc:
                 return EXIT_NEEDS_APPROVAL, {"status": "NEEDS_APPROVAL", "reason": str(exc), "budget": budget}
         finally:
             cache.close()
-        faith_row = store.get_run(faith.run_id)
-        judge_total = faith.cache_stats.get("hits", 0) + faith.cache_stats.get("misses", 0)
-        stats = {**cache.snapshot(), "judge_hit_rate": round(faith.cache_stats.get("hits", 0) / judge_total, 4)
-                 if judge_total else None}
-        cost = {"dev": dev_row.get("cost_actual_usd") or 0, "golden": golden_row.get("cost_actual_usd") or 0,
-                "judge": faith.usage.get("cost_usd", 0)}
-        cost["total"] = round(sum(cost.values()), 6)
-        result = collect(dev_row=dev_row, golden_row=golden_row, faith_row=faith_row, store=store,
-                         gate=gate, cost=cost, cache=stats)
-        result["mode"] = mode
+
+        def assemble(row: dict[str, Any], faith: Any, with_dev: bool) -> dict[str, Any]:
+            judge_total = faith.cache_stats.get("hits", 0) + faith.cache_stats.get("misses", 0)
+            stats = {**cache.snapshot(), "judge_hit_rate": round(faith.cache_stats.get("hits", 0) / judge_total, 4)
+                     if judge_total else None}
+            cost = {"dev": (dev_row.get("cost_actual_usd") or 0) if with_dev else 0,
+                    "golden": row.get("cost_actual_usd") or 0, "judge": faith.usage.get("cost_usd", 0)}
+            cost["total"] = round(sum(cost.values()), 6)
+            doc = collect(dev_row=dev_row, golden_row=row, faith_row=store.get_run(faith.run_id), store=store,
+                          gate=gate, cost=cost, cache=stats)
+            doc["mode"] = mode
+            return doc
+
+        result = assemble(golden_row, faiths[0], True)
+        fallback_results = [assemble(r, f, False) for r, f in zip(variant_rows, faiths[1:])]
     except (CostGateError,) as exc:
         return EXIT_NEEDS_APPROVAL, {"status": "NEEDS_APPROVAL", "reason": str(exc)}
     finally:
@@ -378,11 +408,24 @@ def ci_eval(*, gate_path: str, baseline_path: str, out_dir: str, approve_cost: s
 
     verdict = compare(result, baseline, gate) if baseline else None
     doc = {"result": result, "verdict": verdict}
+    markdown = summary_markdown(result, verdict)
+    if fallback_results:
+        # P3-14: each fallback is its own config under the same rules; the gate's status is the worst.
+        doc["fallbacks"] = []
+        for fb, cfg in zip(fallback_results, variants):
+            fb_verdict = compare(fb, baseline, gate) if baseline else None
+            doc["fallbacks"].append({"model": cfg.generator_model, "result": fb, "verdict": fb_verdict})
+            markdown += f"\n\n### Fallback `{cfg.generator_model}`, gated as its own config\n\n"
+            markdown += summary_markdown(fb, fb_verdict)
+        if verdict is not None:
+            statuses = [verdict["status"], *(f["verdict"]["status"] for f in doc["fallbacks"])]
+            verdict["status_with_fallbacks"] = worst_status(statuses)
     (out / "ci_eval.json").write_text(json.dumps(doc, indent=2, default=str))
-    (out / "ci_eval.md").write_text(summary_markdown(result, verdict))
+    (out / "ci_eval.md").write_text(markdown)
     if verdict is None:
         return EXIT_PASS, doc
-    return {"PASS": EXIT_PASS, "FAIL": EXIT_FAIL, "ERROR": EXIT_ERROR}[verdict["status"]], doc
+    status = verdict.get("status_with_fallbacks", verdict["status"])
+    return {"PASS": EXIT_PASS, "FAIL": EXIT_FAIL, "ERROR": EXIT_ERROR}[status], doc
 
 
 # --- the baseline file -----------------------------------------------------------------

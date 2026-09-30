@@ -471,7 +471,10 @@ Acceptance criteria:
 
 ### P3-14 — Request logging and resilience
 
-> **Status: NOT STARTED** — Part F, first to drop
+> **Status: DONE** — DEC-098
+> - [x] structured JSON log per request: per-stage latency (embed, retrieve, assemble, generate), tokens, cost, config hash, refused flag; failures log the stage (`rag/api.py`, `results/api_requests.jsonl` + stdout). Tracing tool not adopted — OQ-051
+> - [x] timeouts and bounded retries with backoff on every OpenRouter call; a test inventories every call site (`tests/test_resilience_p3_14.py`)
+> - [x] fallback models off by default (`generator_fallback_models: []`); an enabled one is its own config hash, `rag ci-eval` gates each fallback model as its own config, and the API refuses generation the gate did not score
 
 **As an operator, I need per-request cost and latency, and requests that fail cleanly.**
 

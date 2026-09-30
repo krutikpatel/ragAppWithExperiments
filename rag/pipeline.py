@@ -31,6 +31,15 @@ NO_JUDGE = {"judge_model": "", "judge_embedding_model": "", "skip_judge": True}
 UNSUPPORTED = ("query_transform", "reranker", "context_compressor", "grounding_check")
 
 
+class StageError(RuntimeError):
+    """A request failed in a named stage (P3-14): the log says WHERE, not only that it did."""
+
+    def __init__(self, stage: str, cause: Exception) -> None:
+        super().__init__(f"{stage}: {type(cause).__name__}: {cause}")
+        self.stage = stage
+        self.cause = cause
+
+
 @dataclass(frozen=True)
 class PipelineAnswer:
     question: str
@@ -41,6 +50,8 @@ class PipelineAnswer:
     refused: bool
     timings_ms: dict[str, int] = field(default_factory=dict)
     cost_usd: float = 0.0
+    # P3-14's per-request log: generator tokens, query-embedding tokens, served model.
+    usage: dict[str, Any] = field(default_factory=dict)
 
 
 class Pipeline:
@@ -69,47 +80,95 @@ class Pipeline:
             model=config.generator_model, prompt_id=config.generator_prompt_id,
             prompt_version=config.generator_prompt_version, max_tokens=config.generator_max_tokens,
             reasoning_effort=config.generator_reasoning_effort,
+            fallback_models=config.generator_fallback_models,
         ))
+        self._time_query_embedding()
+
+    def _time_query_embedding(self) -> None:
+        """The `embed` stage of the request log (P3-14): wall time of QUERY embedding, cache
+        lookups included. Measured here, around the embedder instance, and not inside
+        rag/embedding/ — CI keys its dense-index cache on that directory, and an edit there
+        rebuilds the index (MIS-050)."""
+        self.query_embed_ms = 0.0
+        embedder = getattr(self.retriever, "embedder", None)
+        if embedder is None:
+            return
+        inner = embedder.embed_texts
+
+        def timed(texts: list[str], *, input_type: str) -> list[list[float]]:
+            started = time.perf_counter()
+            try:
+                return inner(texts, input_type=input_type)
+            finally:
+                if input_type == "query":
+                    self.query_embed_ms += (time.perf_counter() - started) * 1000
+
+        embedder.embed_texts = timed  # `embed_text` calls it, so single queries are timed too
 
     @classmethod
     def from_config_file(cls, path: str) -> Pipeline:
         return cls(load_config_file(path, overrides=NO_JUDGE))
 
-    def _embedding_cost(self) -> float:
+    def _embedding_usage(self) -> tuple[float, int, float]:
+        """(cost so far, prompt tokens so far, query-embedding ms so far) — read before and
+        after a request, so the difference is that request's."""
         embedder = getattr(self.retriever, "embedder", None)
-        usage = (embedder.provenance().get("usage") or {}) if embedder is not None else {}
-        return float(usage.get("cost_usd") or 0.0)
+        if embedder is None:
+            return 0.0, 0, 0.0
+        usage = embedder.provenance().get("usage") or {}
+        return (float(usage.get("cost_usd") or 0.0), int(usage.get("prompt_tokens") or 0),
+                float(getattr(self, "query_embed_ms", 0.0)))
 
     def answer(self, question: str, *, question_id: str = "ask") -> PipelineAnswer:
         from rag.runner.cost import PricingTable
 
-        spent_before = self._embedding_cost()
+        cost0, tokens0, embed0 = self._embedding_usage()
         t0 = time.perf_counter()
-        result = self.retriever.retrieve(
-            question_id, question, top_k=self.config.retrieval_depth, k_docs=self.config.top_k,
-            candidate_pool=self.config.candidate_pool,
-        )
+        try:
+            result = self.retriever.retrieve(
+                question_id, question, top_k=self.config.retrieval_depth, k_docs=self.config.top_k,
+                candidate_pool=self.config.candidate_pool,
+            )
+        except Exception as exc:
+            raise StageError("retrieve", exc) from exc
         t1 = time.perf_counter()
         context_text = self.index.context_text
-        context = self.assembler.assemble(result.context_chunks, context_text)
+        try:
+            context = self.assembler.assemble(result.context_chunks, context_text)
+        except Exception as exc:
+            raise StageError("assemble", exc) from exc
         t2 = time.perf_counter()
-        answer = self.generator.generate(question, context.text)
+        try:
+            answer = self.generator.generate(question, context.text)
+        except Exception as exc:
+            raise StageError("generate", exc) from exc
         t3 = time.perf_counter()
 
-        cost = self._embedding_cost() - spent_before
+        cost1, tokens1, embed1 = self._embedding_usage()
+        cost = cost1 - cost0
+        served = answer.meta.get("served_model") or self.config.generator_model
         if not answer.meta.get("cached"):  # a replayed answer was not bought on this request
-            price = PricingTable.load().price("chat", self.config.generator_model) or {}
+            # Priced as the model that answered: a fallback is billed at its own rate.
+            price = PricingTable.load().price("chat", served) or {}
             if price:
                 cost += answer.tokens_in / 1e6 * price["in"] + answer.tokens_out / 1e6 * price["out"]
+        embed_ms = embed1 - embed0
         return PipelineAnswer(
             question=question, answer=answer,
             citations=render_citations(answer.cited_doc_ids, result.context_chunks, context_text, self.corpus),
             context_doc_ids=[c.doc_id for c in result.context_chunks],
             collapse_ratio=result.context.collapse_ratio if result.context else None,
             refused=is_refusal(answer.text),
-            timings_ms={"retrieve": int((t1 - t0) * 1000), "assemble": int((t2 - t1) * 1000),
-                        "generate": int((t3 - t2) * 1000), "total": int((t3 - t0) * 1000)},
+            # `embed` is the query embedding inside retrieval; `retrieve` is the rest of it
+            # (cosine search, pooling, the document walk).
+            timings_ms={"embed": int(embed_ms), "retrieve": int((t1 - t0) * 1000 - embed_ms),
+                        "assemble": int((t2 - t1) * 1000), "generate": int((t3 - t2) * 1000),
+                        "total": int((t3 - t0) * 1000)},
             cost_usd=round(cost, 8),
+            usage={"tokens_in": answer.tokens_in, "tokens_out": answer.tokens_out,
+                   "reasoning_tokens": answer.reasoning_tokens, "embedding_tokens": tokens1 - tokens0,
+                   "served_model": served, "attempts": answer.meta.get("attempts", 1),
+                   "replayed": bool(answer.meta.get("cached"))},
         )
 
 

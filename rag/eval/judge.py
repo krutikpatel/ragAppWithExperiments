@@ -31,6 +31,8 @@ from pathlib import Path
 from typing import Any
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# P3-14: retries per judge HTTP call — the openai client's default, made explicit.
+JUDGE_HTTP_RETRIES = 2
 
 CRITERIA = ("faithfulness", "answer_correctness", "answer_relevance")
 
@@ -273,6 +275,9 @@ class RagasJudge(Judge):
 
         return AsyncOpenAI(
             api_key=api_key, base_url=OPENROUTER_BASE_URL, timeout=self.config.timeout_s,
+            # The openai client's own bounded retry with exponential backoff (its default, 2,
+            # written out so the P3-14 inventory can see it); FaithfulnessClaims adds one more.
+            max_retries=JUDGE_HTTP_RETRIES,
             http_client=httpx.AsyncClient(timeout=self.config.timeout_s, event_hooks={"response": [record]}),
         )
 

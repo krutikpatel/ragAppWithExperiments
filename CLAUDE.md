@@ -405,8 +405,14 @@ rag/
   pipeline.py       P3-13 `Pipeline`: the one-question pipeline, built once, shared by `rag ask`
                     and the API; REFUSES features only the runner implements (DEC-097)
   api.py            P3-13 FastAPI app: `POST /ask`, `/health`, the page (api_page.html); refuses a
-                    served config whose retrieval differs from promoted.yaml; `RAG_API_REPLAY=1`
-                    answers from the ci-eval call cache (DEC-097)
+                    served config whose retrieval differs from promoted.yaml or whose generation
+                    differs from the gate's golden config; `RAG_API_REPLAY=1` answers from the
+                    ci-eval call cache (DEC-097). P3-14: one JSON log line per request (stage
+                    latencies, tokens, cost, config hash, refused; the question as a hash, never
+                    text) to stdout and `results/api_requests.jsonl` (DEC-098)
+  http_retry.py     P3-14 `get_json`: bounded, backed-off retries for the small OpenRouter GETs
+                    (cost estimator, pricing refresh). tests/test_resilience_p3_14.py fails on any
+                    OpenRouter call site without a timeout and a retry policy (DEC-098)
   corpus/           freeze.py (pinned HF revision -> parquet), normalize.py
                     (norm-vN), loader.py (the ONLY runtime read path),
                     profile.py (`rag corpus profile` — lengths, one-chunk fit,
@@ -514,7 +520,9 @@ rag/
                     unstamped baseline is an ERROR), `rag ci-baseline verify|ratchet`
                     (pipeline and baseline RESULTS may not change in one PR), `--no-cache`
                     drift mode. P3-12, DEC-095: thresholds matched on the JUDGE side only
-                    (`family_for_judge`); per-question gold-in-context on dev as a retrieval rule)
+                    (`family_for_judge`); per-question gold-in-context on dev as a retrieval rule.
+                    P3-14, DEC-098: `fallback_variants` — a config with `generator_fallback_models`
+                    has each fallback gated as its own config; the status is the worst)
   embedding/        base.py — Embedder interface with explicit input_type (query |
                     passage) and a per-family prefix table that REFUSES unknown
                     models; backends: sentence_transformers (local, pinned revision)
@@ -597,6 +605,7 @@ indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     cache of consecutive-sentence distances per article text (P2-07)
 results/            runs.sqlite — the results store; generation_cache.sqlite — the
                     in-pipeline LLM cache (P2-03); judge_cache.sqlite — P3-05's judge cache;
+                    api_requests.jsonl — the API's per-request log (P3-14);
                     reports/ — faithfulness reports. All GITIGNORED.
   corpus_profile/   <key>.json written by `rag corpus profile`; the EXPERIMENTS.md
                     profile block mirrors it

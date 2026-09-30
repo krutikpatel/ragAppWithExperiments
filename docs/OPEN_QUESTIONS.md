@@ -806,3 +806,14 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
 - **Decided by:** add a per-answer "cited nothing" flag (already a Tier 2 metric, `cited_nothing`)
   and the answer text to `ci_eval.json`; measure its pairwise threshold over the fresh golden
   runs; then propose gating it — a gate v6 decision for Krutik.
+
+## OQ-051 — Does the answer API need a tracing tool (Langfuse or OpenTelemetry)?
+- **Status:** open. Surfaced 2026-09-30 by P3-14, which names a tracing tool as optional.
+- **What exists:** one JSON log line per request (DEC-098) with per-stage latency, tokens, cost,
+  config hash, refused flag and, on failure, the stage that failed. It answers "what did this
+  request cost and where was the time spent", which is what the story asks.
+- **What it does not give:** the retrieved chunks and the prompt per request, a timeline view,
+  or aggregation across many requests without a script.
+- **Decided by:** adopt a tracing tool only when a question comes up that the JSON log cannot
+  answer with a short script over `results/api_requests.jsonl`, and name that question in the
+  DEC. Choosing one is a new dependency and possibly a hosted service, so it is Krutik's call.

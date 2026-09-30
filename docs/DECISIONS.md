@@ -3663,3 +3663,58 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   cited sources), the first identical to the gate's run, at $0.
 - **Revisit if:** the runner gains a per-question step the Pipeline does not have (the refusal
   list must grow with it), or a hosted deploy is wanted (a new DEC: secrets, cost limits, abuse).
+
+## DEC-098 — P3-14: per-request JSON log, retries on every OpenRouter call, fallbacks gated model by model
+- **Date:** 2026-09-30
+- **Decided by:** Claude. Krutik asked for P3-14; the design choices below were made
+  without him and are flagged in chat.
+- **Status:** Active.
+- **Context:** P3-14 asks for per-request cost and latency, timeouts and bounded retries on
+  every OpenRouter call, and fallback models off by default, with an enabled fallback gated
+  like any other config.
+- **Decision:**
+  1. **Request log.** The API writes one JSON line per request to stdout and to
+     `results/api_requests.jsonl` (`RAG_API_LOG`; gitignored). Each line records:
+     - the request id, which is also returned in the response;
+     - per-stage latency: `embed` (the query embedding, timed by the pipeline around the embedder, not inside
+       `rag/embedding/`, which keys CI's index cache: MIS-050),
+       `retrieve` (the rest of retrieval), `assemble` and `generate`;
+     - generator and embedding tokens, cost, config hash, refused, citations, the model
+       that answered, attempts and whether the answer was replayed.
+     - A failed request logs `status: 502` with the stage that failed (`StageError`) and the
+       error. Writing the log can never fail the request.
+     - The **question is logged as a hash and a length, not as text**: an operator log is
+       the wrong place for what users type.
+  2. **Retries.** The request-path calls already had timeouts and bounded, backed-off retries:
+     - generator, embedder and reranker, with a separate 429 budget (MIS-010/014/024);
+     - the model check.
+     - The judge's openai-client retry is now written out (`JUDGE_HTTP_RETRIES = 2`, its
+       default, so no behaviour change).
+     - The cost estimator's and pricing refresh's GETs had a timeout but no retry. They now
+       use `rag/http_retry.get_json`: 4 attempts, 2 s doubling, transient statuses only.
+     - A test lists every file that calls OpenRouter directly and fails if a new one appears
+       without a timeout and an entry in that list.
+  3. **Fallbacks.** `generator_fallback_models`, empty by default:
+     - Empty, it is an absent dimension, so no config hash or call-cache key moves. The
+       promoted config and the gate's golden config hash as before.
+     - Set, it sends OpenRouter's ordered `models` list (docs: tried in order on error,
+       rate limit, downtime or context length; billed as the model that answered, named in
+       the response's `model`). Every answer records the model that served it, and the
+       request's cost is priced at that model's rate.
+     - **`rag ci-eval` gates each fallback as its own config.** A fallback answers only when
+       the primary fails, so a run of the chain would almost never exercise it. The gate
+       re-runs the golden generation and faithfulness with each fallback as the generator
+       (fallbacks cleared) and compares each run to the baseline under the same rules; the
+       gate's status is the worst of them. The CI estimate includes these runs.
+     - The API refuses to start if its generation fields differ from the gate's golden
+       config, so a fallback the gate never scored cannot reach users.
+- **Options considered:** gating only the chain as one config was rejected: the fallback
+  model would be almost entirely unscored. Refusing fallbacks outright was rejected: the
+  story asks for them to be possible.
+- **Tracing tool:** not adopted; OQ-051 records what would justify one.
+- **Evidence:** `tests/test_resilience_p3_14.py` (15 tests). The API ran locally in replay
+  mode and logged three golden requests at $0. The live per-stage latencies of a non-replayed
+  request are not measured here.
+- **Revisit if:** a fallback is proposed (its model is Krutik's choice, with a DEC, and each
+  gated run costs about one uncached golden run); the log's fields cannot answer an
+  operational question (OQ-051); or a new OpenRouter call site is added.
