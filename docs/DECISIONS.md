@@ -3758,3 +3758,37 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** the DECs and EXP rows named above.
 - **Revisit if:** any item above is found not to hold. Correct this entry by appending, and
   reopen the story it belongs to.
+
+## DEC-100 — P3-15 review: a durable CI history, a findings page, and four fixes to the report
+- **Date:** 2026-09-30
+- **Decided by:** Claude, on Krutik's request for a critical review of P3-15.
+- **Status:** Active.
+- **What the review found, measured against CLAUDE.md's own rules:**
+  1. **The CI numbers would lose their source.** The cost and wall-time table cited GitHub
+     artifacts, which GitHub deletes after 90 days (repository setting: 90, the maximum; these
+     expire 2026-12-29). After that no number in the table would trace to anything, which
+     breaks section 2's source-of-truth rule.
+  2. **No summary of the findings.** A hiring-manager reader had to go through 1,300 lines to
+     learn what was found.
+  3. **Section 2 ("How this was measured"), the credibility anchor, still described Phase 0**,
+     including judge-noise figures measured with the judge DEC-073 retired.
+  4. **The section 5 addendum lacked cost and latency**, which CLAUDE.md section 7 requires for
+     that table.
+  5. **One overstated sentence:** "since then an unchanged pipeline replays the baseline
+     exactly" ignored PR #18's partial rebuild (MIS-050).
+- **Decision:**
+  - `rag ci-history` (`rag/runner/ci_history.py`) writes one machine-written line per GitHub
+    `ci-eval` job to `ci/history.jsonl` (committed). Each line records wall time, verdict,
+    cost, cache hit rates, headline metrics and the store run ids. Rows already recorded are
+    never overwritten, so an expired artifact cannot erase them. The EXPERIMENTS.md table
+    now mirrors this file, and a test checks its total ($2.0256 over the first 36 jobs).
+  - NARRATIVE.md gains "The findings in one page" (every line with its EXP id) and a Phase 3
+    subsection in section 2.
+  - The section 5 addendum gains a cost and latency column, taken from each row's recorded
+    `$/query` and p95.
+  - The overstated sentence gets a CORRECTED note beneath it; the original stays.
+  - The abstention result is labelled an upper bound in the summary, because its threshold
+    was chosen on the questions it was scored on (EXP-0038's own caveat).
+- **Evidence:** `tests/test_ci_history.py`; `ci/history.jsonl` (38 jobs at writing).
+- **Revisit if:** the repository's artifact retention changes, or CI moves off GitHub Actions.
+  Run `rag ci-history` after gate runs you want on record; it is not automatic.

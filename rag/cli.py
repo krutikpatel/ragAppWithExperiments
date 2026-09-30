@@ -481,6 +481,18 @@ def ci_baseline_ratchet(base: str = typer.Option("origin/main", "--base", help="
     raise typer.Exit(0 if allowed else 1)
 
 
+@app.command("ci-history")
+def ci_history_cmd(out: str = typer.Option("ci/history.jsonl", "--out")) -> None:
+    """DEC-100: append every `ci-eval` job on GitHub not yet recorded to ci/history.jsonl — the
+    durable copy of the gate's evidence (GitHub deletes artifacts after 90 days). Needs `gh`."""
+    from pathlib import Path
+
+    from rag.runner.ci_history import collect
+
+    added, total = collect(Path(out))
+    typer.echo(f"{out}: {added} added, {total} jobs recorded")
+
+
 judge_app = typer.Typer(help="P3-04 synthetic judge sanity check.", no_args_is_help=True)
 app.add_typer(judge_app, name="judge-check")
 

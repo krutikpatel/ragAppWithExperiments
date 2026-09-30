@@ -1394,6 +1394,11 @@ answer that cites nothing has no bad citation (OQ-050).
 Wall time is the `ci-eval` job's start-to-finish; cost is `result.cost_usd.total` from the
 run's artifact (provider-reported, cached calls not billed).
 
+> **Source updated by DEC-100 on 2026-09-30.** GitHub deletes these artifacts after 90 days
+> (these expire 2026-12-29). Every row of this table is now mirrored from `ci/history.jsonl`,
+> one machine-written line per `ci-eval` job, committed and refreshed by `rag ci-history`.
+> A test checks that its first 36 jobs sum to the $2.0256 below.
+
 | Kind of run | Runs | Wall time | Cost per run | Answer-cache hit rate | Run ids |
 |---|---|---|---|---|---|
 | **Cached** — pipeline code changed, answers unchanged | 13 | **1.3–1.6 min** (median 1.45) | **$0.0000** | 1.0 | `36534823865`, `36535125729`, `36603288510`, `36603537156`, `36603766240`, `36603976232`, `36604488132`, `36604706247`, `36605039248`, `36654934913`, `36655090767`, `36671888131`, `36672067930` |

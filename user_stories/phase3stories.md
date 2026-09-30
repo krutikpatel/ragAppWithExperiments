@@ -492,7 +492,7 @@ Acceptance criteria:
 
 ### P3-15 — Phase 3 report and narrative
 
-> **Status: DONE** (2026-09-30) — DEC-099
+> **Status: DONE** (2026-09-30) — DEC-099; reviewed and revised by DEC-100 (durable `ci/history.jsonl`, findings page, section 2 update)
 > - [x] `EXPERIMENTS.md` Phase 3 scorecard: golden-slice composition + per-stratum recall, synthetic judge check, answered-without-gold breakdown, detection floor (one-run and two-run), drills, CI cost and wall time for all 36 GitHub gate jobs (cached vs cold vs regenerated)
 > - [x] `NARRATIVE.md`: Phase 3 chapters in section 4, section 8 written, Phase 2–3 addenda to 5–7, Phase 3 lessons and gaps; every number carries an EXP id (run ids in EXPERIMENTS.md)
 > - [x] `README.md`: how to run the eval and the gate, the detection floor, known limitations (incomplete doc-level gold; judge validated only on clear-cut synthetic cases; and more)

@@ -10,6 +10,40 @@ Sections that depend on runs stay empty until those runs exist.
 > section 3 (the baseline), section 4 (every experiment, ending with the gate), section 8
 > (what makes it shippable).
 
+## The findings in one page
+
+Each line is a measured result with the experiment behind it. Section 4 tells each one in full.
+
+- **One technique change won, and it won big.** Dense retrieval (`qwen3-embedding-8b`) found
+  every gold article in the top five for 71.5% of `dev` questions, against 41.0% for BM25
+  (EXP-0005 vs EXP-0004). On the held-out test split the gap was larger, +0.335 (EXP-0046).
+- **Nothing after it beat the dense control on retrieval.** Seven Phase 2 axes: chunking,
+  embeddings, hybrid, reranking, query rewriting, context assembly, grounding. The best
+  combination reached 0.750 against 0.720, at p = 0.444, which is not a finding (EXP-0042).
+  Several lost significantly, sentence-window chunking by 0.190 (EXP-0019).
+- **The answer is usually already in reach.** The gold article is among the top 50 candidates
+  for 98.5% of questions (EXP-0024). What remains is ranking the right one into the top five.
+- **More evidence did not make better answers.** Showing ten articles instead of five put the
+  gold in the prompt 15 points more often (0.670 → 0.820), and citation precision fell
+  significantly (EXP-0051).
+- **The cheapest safety fix was the best one.** Declining to answer when the top retrieval
+  score is low halved answers to unanswerable questions (0.267 → 0.133), with no model call
+  and no extra false refusals (EXP-0038). The threshold was chosen on the same questions it
+  was scored on, so this is an upper bound until it is re-checked on new ones. A second-model self-check did worse on both counts
+  (EXP-0041).
+- **No overfitting to the practice questions was measurable.** After 58 runs on `dev`, the
+  held-out test split scored 0.680 against 0.720, inside the sampling noise (EXP-0046).
+- **Answers written without their gold article were not invented.** Their faithfulness was
+  0.854 against 0.866 with gold, a gap inside its noise (EXP-0058).
+- **The gate knows its blind spot, and was tested by breaking it.** It catches a 0.032 drop
+  in faithfulness and a 0.030 drop in recall; smaller changes pass as noise (EXP-0059,
+  DEC-091). Six planted regressions got six correct verdicts (EXP-0064). An unchanged pipeline
+  costs $0 and about 1.5 minutes to check (`ci/history.jsonl`).
+- **The instruments needed as much work as the system.** A parser that could not read a curly
+  apostrophe hid most refusals (DEC-045). A judge check first failed on its own labels
+  (EXP-0054 to EXP-0056). The gate's first thresholds were built for the wrong comparison
+  (MIS-047). Each was caught by reading outputs, not aggregates.
+
 ## 1. The problem and the corpus
 
 The corpus is the Wix Help Center: 6,221 support articles, snapshotted 2024-12-02,
@@ -101,6 +135,26 @@ question per run, with the ranked documents, the gold ranks, and the per-questio
 metric values. Aggregates say a technique gained four points; those rows say which
 questions flipped and what came back instead, and that is what a findings document is
 actually made of.
+
+### How Phase 3 measures (added 2026-09-30)
+
+The paragraphs above describe the Phase 0 harness, and two things in them have changed since.
+
+**The judge.** The judge-noise figures above were measured with `gpt-oss-120b`. That model
+was later retired because it comes from the same lab as the generator, and a judge from the
+generator's own lab may favour its answers (DEC-073, MIS-042). The Phase 3 judge,
+`deepseek-v4.1-flash` pinned to one host, was chosen by a synthetic check with its pass bar
+written down first (EXP-0057, DEC-079). It splits each answer into claims and checks every
+claim against the exact context the generator saw (DEC-081).
+
+**The noise, re-measured for the new judge and for the question the gate asks.** Three fresh
+runs on the golden slice set one run's spread (EXP-0059). Five fresh runs set the threshold
+for comparing two runs, which is what the gate does (DEC-091). Retrieval deltas use paired
+tests on the same questions: a bootstrap confidence interval and a permutation test in
+`rag compare` (DEC-047), and an exact McNemar test at α = 0.05 in the gate (DEC-082).
+
+**The golden slice.** 95 questions chosen by a script, not by hand (DEC-074). It deliberately over-samples the hard cases, so its scores are only compared with
+each other, never quoted as system scores.
 
 ## 3. The baseline
 
@@ -1042,6 +1096,11 @@ Since then an unchanged pipeline replays the baseline exactly. Thirteen later ga
 1.3 to 1.6 minutes each and cost nothing. The thresholds only matter when answers are
 regenerated, which is exactly when a change can hurt.
 
+> **CORRECTED by DEC-100 on 2026-09-30.** "Exactly" held for every run whose code left the
+> index cache's key alone. PR #18's first gate run did not: an edit under `rag/embedding/`
+> changed the key, the index was rebuilt, and 13 answers were regenerated ($0.0855, 17.4
+> minutes; MIS-050). It still passed. The rule is now in the preflight list.
+
 ### Breaking it on purpose: six drills (EXP-0064)
 
 A gate that has never failed has not been tested. I wrote down what each of six planted
@@ -1104,14 +1163,14 @@ compared yet — the Tier 2 rows are the control, not a treatment.
 under it ("no generation technique has been compared yet") was true when written. What the
 later axes measured, with the same rule that a difference inside its noise is not a finding:
 
-| Change | Measured | Verdict | Ref |
-|---|---|---|---|
-| Abstain when the top retrieval score is below 0.575 (no model call) | false-answer rate 0.2667 → **0.1333**, false refusals unchanged at 0.0299 | the only free win in Phase 2; the threshold was chosen on the data it is scored on | EXP-0038 |
-| Show ten articles instead of five | gold in the prompt 0.6700 → **0.8200**; citation precision 0.5455 → **0.4604** (significant) | more evidence, worse citing; not promoted | EXP-0051 |
-| HyDE + `rerank-4-fast`, the best combination | strict R@5 0.720 → **0.750**, p = 0.444 | highest number in the project, and not a finding | EXP-0042 |
-| Groundedness self-check (a second model call) | false answers 0.2667 → 0.2222, false refusals 0.0299 → 0.1212 | dominated by the free threshold on both | EXP-0041 |
-| Citation enforcement (every step must cite) | false answers 0.2667 → **0.8444**; the system stopped refusing | the largest regression in the phase | EXP-0039 |
-| The held-out test split, opened once | strict R@5 0.720 on dev, **0.680** on test, CI [−0.130, +0.050] | no measurable optimism gap after 58 runs on dev | EXP-0046 |
+| Change | Measured | Cost and latency, as recorded | Verdict | Ref |
+|---|---|---|---|---|
+| Abstain when the top retrieval score is below 0.575 (no model call) | false-answer rate 0.2667 → **0.1333**, false refusals unchanged at 0.0299 | $0, no model call, no added latency | the only free win in Phase 2; the threshold was chosen on the data it is scored on | EXP-0038 |
+| Show ten articles instead of five | gold in the prompt 0.6700 → **0.8200**; citation precision 0.5455 → **0.4604** (significant) | $0.00038/query, p95 5,247 ms | more evidence, worse citing; not promoted | EXP-0051 |
+| HyDE + `rerank-4-fast`, the best combination | strict R@5 0.720 → **0.750**, p = 0.444 | $0.0022918/query forever, p95 2,980 ms (dense control: $0.0000004, 665 ms) | highest number in the project, and not a finding | EXP-0042 |
+| Groundedness self-check (a second model call) | false answers 0.2667 → 0.2222, false refusals 0.0299 → 0.1212 | $0.00041/query, +4,600 ms per answered question | dominated by the free threshold on both | EXP-0041 |
+| Citation enforcement (every step must cite) | false answers 0.2667 → **0.8444**; the system stopped refusing | $0.00037/query | the largest regression in the phase | EXP-0039 |
+| The held-out test split, opened once | strict R@5 0.720 on dev, **0.680** on test, CI [−0.130, +0.050] | $0.0000004/query (retrieval only) | no measurable optimism gap after 58 runs on dev | EXP-0046 |
 
 Phase 3 compared no techniques. It measured the instruments (EXP-0054 to EXP-0059) and the
 gate built from them (EXP-0060 to EXP-0064).
@@ -1216,7 +1275,7 @@ text echoed into two answers (a `v2` prompt item, DEC-042).
 **What Phase 3's faithfulness judge adds.** In the Phase 2 control's answers, two thirds had
 at least one claim the judge could not find in the context. Reading 30 of those claims, 3
 were factual errors; the rest restated steps in the user's words, thanked the user, or were
-artifacts of how claims are split (EXP-0058, OQ-048). No answer was wholly unsupported, even
+artifacts of how claims are split (EXP-0058, OQ-048; FAILURES F18–F22). No answer was wholly unsupported, even
 among the 27 written without their gold article. The measurable failure that remains is
 the refusal one: on the golden slice the gate's baseline answers 3 of 15 unanswerable
 questions (EXP-0063), and without the refusal rule it answers 12 (EXP-0064).
