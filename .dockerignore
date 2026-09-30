@@ -1,0 +1,12 @@
+.venv
+.git
+.env
+results
+indexes
+data/frozen
+ci/out
+docs
+tests
+user_stories
+temp
+**/__pycache__

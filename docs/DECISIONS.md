@@ -3626,3 +3626,40 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** run `36603537156`'s artifact (`ci/out/gh_36603537156/`).
 - **Revisit if:** the replay was not exact — it was (all caches 1.0), so every other number is
   the DEC-093 baseline's.
+
+## DEC-097 — P3-13: the answer API shares the eval's pipeline; FastAPI as an optional extra; Docker local only
+- **Date:** 2026-09-29
+- **Decided by:** Krutik asked for P3-13; the design below is Claude's, flagged in chat. The
+  story's open question "local Docker Compose or hosted" is answered with the story's own
+  acceptance criterion: local only.
+- **Status:** Active.
+- **One pipeline, not two.** `rag ask` wired its own index, retriever, assembler and generator —
+  a second copy of the runner's pipeline, rebuilt per call. `rag/pipeline.py` now holds that
+  wiring once (`Pipeline`, built once and reused), and both `rag ask` and the API answer through
+  it. It **refuses** a config with a query transform, reranker, context compression or the
+  grounding self-check: the runner implements those and the one-question path does not, so
+  serving such a config would silently differ from what the gate scored.
+- **The API** (`rag/api.py`): `POST /ask` returns `{answer, citations: [{article_title, url,
+  chunk_text}], refused, meta: {config_hash, latency_ms, cost_usd}}` (plus per-stage timings,
+  model, prompt, and whether the answer was replayed). Only *cited* articles are returned; an
+  id the model cited but was not given is flagged, not hidden. A provider failure is a 502, never
+  a made-up answer. It serves `configs/baseline_dense_tier2_v2.yaml` (the v2 control) and at
+  startup **refuses** it if its retrieval differs from `configs/promoted.yaml` in any Tier 1
+  field — the story's "it loads promoted.yaml". `RAG_API_REPLAY=1` answers through the ci-eval
+  call cache (DEC-084), off by default.
+- **The page** (`rag/api_page.html`): question → answer → each cited article's title, link and the
+  exact paragraph the model was given.
+- **Contract test** (`tests/test_api_p3_13.py`): for 5 golden questions, with every model call
+  blocked, the API returns the gate's own stored answers character for character (run
+  `run_20260928_235211_9557`) at $0 — possible only if it rebuilt the exact prompts the gate
+  built. Runs where the frozen data, results store and call cache exist (locally); skips in CI.
+- **Dependencies:** `fastapi`, `uvicorn` in a new optional extra `api` (`uv pip install -e
+  ".[api]"`), so the core install and CI's unit tests need no web server.
+- **Docker:** `Dockerfile` + `docker-compose.yml`, local only. The image holds code, configs,
+  prompts and the golden slice; the frozen corpus, index and results caches are mounted from the
+  host (gitignored, large, rebuilt from pinned inputs). No hosted deploy.
+- **Evidence:** the contract test; 502 tests pass; the image built and `RAG_API_REPLAY=1 docker
+  compose up` answered 5 golden questions through the container (one a refusal, four with 1–5
+  cited sources), the first identical to the gate's run, at $0.
+- **Revisit if:** the runner gains a per-question step the Pipeline does not have (the refusal
+  list must grow with it), or a hosted deploy is wanted (a new DEC: secrets, cost limits, abuse).

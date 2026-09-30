@@ -448,7 +448,12 @@ Acceptance criteria:
 
 ### P3-13 — Answer API and demo page
 
-> **Status: NOT STARTED** — Part F, first to drop
+> **Status: DONE** — DEC-097
+> - [x] `POST /ask` returns {answer, citations: [{article_title, url, chunk_text}], refused, meta: {config_hash, latency_ms, cost_usd}}
+> - [x] loads promoted.yaml (refuses a served config whose retrieval differs) and the versioned prompts; imports the same pipeline code as the eval (`rag/pipeline.py`, shared with `rag ask`)
+> - [x] minimal page: question → answer → cited source paragraph
+> - [x] runs locally via Docker Compose — image built, `RAG_API_REPLAY=1 docker compose up`, /health ready, a golden question answered identically to the gate's run at $0
+> - [x] contract test: 5 golden questions, API answers equal the gate's own, at $0
 
 **As a reviewer, I want to ask a question and see the answer next to the exact source paragraph.**
 
