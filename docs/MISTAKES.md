@@ -241,6 +241,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 61. **After changing what the API reads at startup, rebuild the image and start it.** Unit
     tests run from the repo root and see every file; the image sees only what the Dockerfile
     copies. A test now checks the Dockerfile copies what the API reads (MIS-051).
+62. **A hosted API behind a CDN returns the CDN's errors too.** Retry every 5xx, not a
+    hand-picked list; Cloudflare's 520–524 are not in any provider's docs. And a crashed run
+    must still record what it spent: save reranker usage on failure (MIS-052).
 
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
@@ -1677,3 +1680,26 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** a change to what a deployable reads at startup is verified by building
   and starting that deployable, not by running the code from the repo.
 - **Added to preflight:** yes, item 61.
+
+## MIS-052 — EXP-0065's first attempt died on one Cloudflare 520, and recorded $0 for calls it paid for
+- **Date:** 2026-09-30
+- **Severity:** Medium. One run VOID (`run_20260930_234257_a382`); its spend is unrecorded.
+- **What happened:** TypeSafe's API returned HTTP 520 ("Web server is returning an unknown
+  error", a Cloudflare page) partway through the run. `rag/reranking/typesafe.py` retried
+  only 408/409/425/429/500/502/503/504/529, so it raised on the first 520 and the run
+  stopped. The VOID row shows `calls: 0, cost_usd: 0.0`: the reranker's usage is saved only
+  at the start and the end of a run, and `pool.map` discarded the finished calls in the
+  failing question's batch. Every Jev call before the 520 was billed and not counted.
+- **How it was caught:** the traceback, then reading the VOID row's `reranker_meta`.
+- **Root cause:** I copied the OpenRouter reranker's retry list without checking what sits
+  in front of TypeSafe's API; the 5-question probe (270 calls) hit no errors, so nothing
+  tested it. The runner's crash path never saved reranker usage — true of every hosted
+  reranker since P2-10, unseen because none had crashed after its first paid call.
+- **Impact:** one VOID run. Spend is unknown: at most the full-run estimate ($0.41), likely
+  less. The number to trust is TypeSafe's billing page.
+- **Fix applied:** Jev retries every 5xx plus 408/409/425/429. `rerank` counts the usage of
+  every successful call in a question before raising the first failure. The runner saves
+  the reranker's usage on the VOID row when reranking raises. Tests cover all three.
+- **Prevention rule:** retry by status class (all 5xx), not by a list; save spend on the
+  failure path, not only on success.
+- **Added to preflight:** yes, item 62.

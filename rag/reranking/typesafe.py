@@ -44,9 +44,14 @@ TYPESAFE_URL = "https://api.typesafe.ai/v1/systemone"
 TYPESAFE_PROVIDER = "TypeSafe"
 KEY_ENV = "TYPESAFE_JEV_KEY"
 QUESTION_KEY = "relevant"
-# 529 is TypeSafe's "overloaded" (API reference); the rest are transient by nature.
-# 401/403/422 are raised on first occurrence: a retried auth error is a hidden bug (MIS-014).
-_RETRY_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, 529})
+# Every 5xx is retried: 529 is TypeSafe's "overloaded" (API reference), and the API sits
+# behind Cloudflare, whose 520-524 killed EXP-0065's first attempt (MIS-052). 4xx other
+# than these are raised on first occurrence: a retried auth error is a hidden bug (MIS-014).
+_RETRY_4XX = frozenset({408, 409, 425, 429})
+
+
+def _retryable(status: int) -> bool:
+    return status >= 500 or status in _RETRY_4XX
 
 
 @register_reranker("typesafe_jev")
@@ -126,13 +131,23 @@ class TypeSafeJevReranker(Reranker):
             return []
         bodies = [self._body(query, self.chunk_text[c.chunk_id]) for c in chunks]
         with ThreadPoolExecutor(max_workers=min(self.workers, len(bodies))) as pool:
-            outcomes = list(pool.map(self._call, bodies))
+            futures = [pool.submit(self._call, body) for body in bodies]
+        # Every call that succeeded was billed, so its usage is counted before any
+        # failure in the same question is raised (MIS-052).
         scored: list[ScoredChunk] = []
-        for chunk, (payload, latency_ms, retries, rate_limited) in zip(chunks, outcomes):
+        failure: BaseException | None = None
+        for chunk, future in zip(chunks, futures):
+            error = future.exception()
+            if error is not None:
+                failure = failure or error
+                continue
+            payload, latency_ms, retries, rate_limited = future.result()
             self.usage.retries += retries
             self.usage.rate_limited += rate_limited
             self.usage.latency_ms_total += latency_ms
             scored.append(ScoredChunk(chunk_id=chunk.chunk_id, doc_id=chunk.doc_id, score=self._parse(payload)))
+        if failure is not None:
+            raise failure
         self.usage.candidates += len(chunks)
         # Ties break on chunk_id, as everywhere else in this repo (MIS-003).
         scored.sort(key=lambda c: (-c.score, c.chunk_id))
@@ -173,7 +188,7 @@ class TypeSafeJevReranker(Reranker):
                 last_error = exc
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
-                if status not in _RETRY_STATUS:
+                if not _retryable(status):
                     raise RuntimeError(
                         f"{self.model}: HTTP {status} from TypeSafe: {exc.response.text[:500]}"
                     ) from exc

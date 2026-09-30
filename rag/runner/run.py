@@ -776,16 +776,22 @@ def _execute(
             from rag.reranking.base import rerank_result
 
             started = time.perf_counter()
-            result, record = rerank_result(
-                result,
-                reranker,
-                query=row["question"],
-                chunk_to_doc=index.chunk_to_doc,
-                n_docs=config.rerank_candidates,
-                k_docs=config.top_k,
-                candidate_pool=config.candidate_pool,
-                doc_pooling=config.doc_pooling,
-            )
+            try:
+                result, record = rerank_result(
+                    result,
+                    reranker,
+                    query=row["question"],
+                    chunk_to_doc=index.chunk_to_doc,
+                    n_docs=config.rerank_candidates,
+                    k_docs=config.top_k,
+                    candidate_pool=config.candidate_pool,
+                    doc_pooling=config.doc_pooling,
+                )
+            except Exception:
+                # MIS-052: a hosted reranker has billed every call before the one that
+                # failed. Record that usage on the VOID row, or the row says $0.
+                store.update_run(run_id, reranker_meta=json.dumps(reranker.provenance(), default=str))
+                raise
             rerank_latency_ms[row["question_id"]] = int((time.perf_counter() - started) * 1000)
             rerank_records[row["question_id"]] = record
         results.append(result)

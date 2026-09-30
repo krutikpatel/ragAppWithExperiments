@@ -139,6 +139,34 @@ def test_call_retries_overload_and_rate_limits_then_succeeds(monkeypatch):
     assert (retries, rate_limited) == (2, 1)
 
 
+def test_call_retries_cloudflare_errors(monkeypatch):
+    """MIS-052: an HTTP 520 from Cloudflare ended EXP-0065's first attempt."""
+    import rag.reranking.typesafe as ts
+
+    monkeypatch.setenv("TYPESAFE_JEV_KEY", "test-key")
+    replies = [_response(520), _response(524), _response(200, _payload())]
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: replies.pop(0))
+    monkeypatch.setattr(ts.time, "sleep", lambda s: None)
+    assert _jev()._call({})[2] == 2
+
+
+def test_a_failed_call_still_counts_the_billed_calls_beside_it(monkeypatch):
+    """MIS-052: the chunks that were scored were paid for, even if one call failed."""
+    jev = _jev(chunk_text={"a": "ok", "b": "boom", "c": "ok"}, workers=3)
+
+    def call(body):
+        if body["state"]["passage"] == "boom":
+            raise RuntimeError("HTTP 520")
+        return _payload(tokens=100), 5, 0, 0
+
+    monkeypatch.setattr(jev, "_call", call)
+    chunks = [ScoredChunk(chunk_id=c, doc_id=c, score=1.0) for c in ("a", "b", "c")]
+    with pytest.raises(RuntimeError, match="520"):
+        jev.rerank("q", chunks)
+    assert jev.usage.calls == 2
+    assert jev.usage.tokens == 200
+
+
 @pytest.mark.parametrize("status", [401, 403, 422])
 def test_call_raises_a_permanent_error_at_once(monkeypatch, status):
     """A retried auth or validation error is a hidden bug (MIS-014)."""
