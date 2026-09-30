@@ -20,6 +20,8 @@ PINNED_HASHES = {
     "baseline_answer@v1": "sha256:a5e9b4d936151a8",
     # P2-10: the LLM-as-reranker's ordering prompt (Axis 5).
     "rerank_llm@v1": "sha256:c89fb05085e9b10",
+    # DEC-101: the yes/no question TypeSafe Jev answers once per candidate chunk.
+    "rerank_jev@v1": "sha256:5b8ddb63a3ac7cc",
     # P2-13 (Axis 6). `contextual_chunk` is prefixed onto every chunk *before
     # indexing*, so an edit here without a version bump would silently mean the index
     # on disk was built by a prompt no longer in the repo — the most expensive

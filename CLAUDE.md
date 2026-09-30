@@ -543,13 +543,18 @@ rag/
                     table (MIS-025); llm.py — LLM-as-reranker through PipelineLLM
                     (temperature 0, cached, hit rate counted), whose output parser drops
                     invented and repeated candidate numbers and counts both; toy.py —
-                    smoke tests only. All DEC-058
+                    smoke tests only. All DEC-058. typesafe.py — TypeSafe Jev on its own
+                    API (`TYPESAFE_JEV_KEY`), one `noul` yes/no call per candidate chunk,
+                    sorted by P(relevant); pinned `jev-1.13.0`, aliases refused; cost =
+                    reported input tokens x the published rate (no cost in the response);
+                    not checked by `rag models verify` (DEC-101)
 
 prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0), query_{decompose,hyde,multi,step_back}.yaml (P2-12),
                     enforced_answer.yaml / span_answer.yaml / groundedness_check.yaml (P2-14),
                     baseline_answer.yaml (the Phase 1 control, DEC-042: numbered
                     steps, English, [doc:<id>] on every claim, NO URLs) and
-                    rerank_llm.yaml (P2-10's ordering prompt),
+                    rerank_llm.yaml (P2-10's ordering prompt), rerank_jev.yaml (DEC-101:
+                    the yes/no question Jev answers per chunk — YAML instructions + criteria),
                     contextual_chunk.yaml and compress_context.yaml (P2-13) — Ragas owns
                     the judge prompts. Never inline a prompt in Python. Content hashes
                     are pinned in tests/test_prompts.py, so an edit without a version
@@ -578,6 +583,8 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     control and no built-in judge (P3-07, DEC-082).
                     exp_0052/0053_rerank_4fast_c{20,100}_dev.yaml are OQ-038's candidate-count
                     runs (DEC-072; the c100 one sets retrieval_depth 150).
+                    exp_0065_rerank_jev_dev.yaml is TypeSafe Jev on the same 50 -> 5
+                    candidate shape (DEC-101, OQ-053).
                     exp_0031..0034_*.yaml are Axis 4 (P2-12, DEC-065 — decomposition
                     runs first per the story).
                     exp_0027_mmr_lambda*.yaml and exp_0028..0030_*.yaml are Axis 6
@@ -755,6 +762,7 @@ Rules that outlive any particular library:
 | Judge (Ragas LLM) | **`deepseek/deepseek-v4.1-flash` pinned to DeepInfra, no fallbacks** — chosen by the P3-04 bake-off (EXP-0057, DEC-079): recall 1.00, supported pass rate 0.90 on the v2 check; $0.00138/pair. Validated on literal support only; paraphrase unmeasured. Phase 0–2 used `openai/gpt-oss-120b` — **PLACEHOLDER, and now REFUSED** | **DEC-079** (bake-off DEC-075/076/078); old judge DEC-030 → DEC-073 | Old judge: **same lab as the generator** (DEC-073 supersedes DEC-030's `openai-oss` family): configs pairing it with `gpt-5-nano` are refused and read only as history. Historical notes: $0.037/$0.170 per Mtok, 131k ctx. The old judge pinned `provider: [Cerebras, Groq]` — a 37x speed spread otherwise, and providers do not return identical scores (DEC-032). **Real rate is Cerebras' $0.350/$0.750, not the model-level $0.037/$0.170**: measured **~$0.84 per 100-question Tier 2 run** (DEC-035 corrects DEC-034's $0.48). **Its scores are not measurements and must not reach EXPERIMENTS.md or NARRATIVE.md** (DEC-018). |
 | Embedding (Ragas `answer_relevance`) | `qwen/qwen3-embedding-8b` | DEC-027 | $0.010/Mtok, **32,768 context**. Whole index = 2.86M tokens = ~$0.03 to embed. Chosen on context length, not price: 34% of chunks exceed 512 tokens, so a 512-context model would truncate a third of the index. |
 | Embedding (dense retrieval) | `qwen/qwen3-embedding-8b` **pinned to DeepInfra** | DEC-041 | Same model as the Ragas embedder; Krutik chose hosted over the handover's local option. **Provider is part of the index key**: DeepInfra and Nebius return different vectors for the same input. Index: 8,218 × 4096 float32 = 134.6 MB, ~20 min and $0.031 to build (EXP-0005), cached under `indexes/`. Queries cost ~$0.0000004 each and are **not byte-deterministic** — three runs ranged 0.005 on strict recall@5 (OQ-023). `qwen3` prefix: instruct prefix on queries, none on passages. |
+| Reranker (Jev) | `jev-1.13.0` on **TypeSafe's own API**, not OpenRouter (which lists only the unpinnable `typesafe/jev-router`) | DEC-101 | Decision model: returns P(yes) for a typed question, no text. One call per candidate chunk. **Published** $0.042/Mtok input, output free, 1,200 req/min, 32k state — not yet measured; the response carries `input_tokens` but no cost. Queued as EXP-0065. |
 | Reranker | `cohere/rerank-v3.5` **pinned to Cohere** — tested, **not promoted** | DEC-059 | Axis 5's only run (EXP-0024): no measurable change at any depth on `dev`, at 4x latency and ~2,900x cost per query. `promoted.yaml` has no reranker. |
 | In-pipeline prefix writer / compressor | `openai/gpt-oss-20b` | DEC-064 | $0.018/$0.090 per Mtok, 131k ctx. Writes P2-13's chunk prefixes (8,218 calls, $0.2165) and does its contextual compression. Chosen on a **30-call probe of real articles**, because the failure mode — a "Here is the statement:" preamble — gets EMBEDDED in front of every chunk. Family `openai` (DEC-073), the generator's lab — fine for prefixes, compression and query rewriting, NOT for grading answers (EXP-0041 carries that caveat). **It is a reasoning model whose `reasoning_effort` is NOT honoured**: `"minimal"` and `"low"` give identical reasoning-token counts, one compression call spent 32,848 completion tokens on a 60-word answer, and the same input that empties its budget succeeds on retry. Every caller must treat a failed call as a per-unit fact (MIS-034). Emits non-ASCII punctuation (U+2011, curly quotes) into the indexed text. |
 | _(reranker availability)_ | — | DEC-059 | The rerank endpoint is `POST /api/v1/rerank` and there is no listing to browse (`/rerank/models` 404s; rerank is not a `/models` category), so availability is probed one id at a time. **Served** (measured 2026-09-22, 50 docs x 600 words): `cohere/rerank-v3.5` @Cohere $0.001/query 778 ms; `cohere/rerank-4-fast` @Cohere $0.002/query 1,298 ms; `qwen/qwen3-reranker-8b` @Fireworks $0.008125/query 1,847 ms. **Not served:** `qwen3-reranker-4b` (404), `baai/bge-reranker-v2-m3` and `mxbai-rerank-large-v2` (400, not on OpenRouter). **OpenRouter lists all of them at $0 and bills real money — cost comes from the response's `usage.cost`, never the table (MIS-025).** |
@@ -782,7 +790,8 @@ Two constraints now bind this table, both enforced in code rather than by intent
   would score as a genuinely bad answer. (MIS-006, DEC-028)
 
 Access is via **OpenRouter**; the API key is already in `.env` at the repo root
-(gitignored). Read it from the environment — never print, commit, or echo it.
+(gitignored). The one exception is Jev (DEC-101), called on TypeSafe's API with
+`TYPESAFE_JEV_KEY` from the same `.env`. Read it from the environment — never print, commit, or echo it.
 
 Rules for this table:
 

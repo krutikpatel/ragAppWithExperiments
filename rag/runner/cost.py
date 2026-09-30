@@ -101,6 +101,12 @@ RERANK_CHUNKS_PER_CANDIDATE_DOC = 58.4 / 50
 # Together these reproduce 6,050,240 of the 6,051,291 tokens actually billed.
 RERANK_CANDIDATE_LENGTH_FACTOR = 348 / 309
 RERANK_TOKENS_PER_PAIR_OVERHEAD = 76
+# TypeSafe Jev (DEC-101): one request per candidate CHUNK, each carrying the query, the
+# `noul` question's instructions and criteria (rerank_jev@v1, ~110 words) and the JSON
+# state keys. NOT CALIBRATED — a word count of the prompt x 1.27 plus padding, to be
+# replaced by the reported input_tokens of the pre-run probe.
+JEV_TOKENS_PER_CALL_OVERHEAD = 200
+JEV_CALIBRATION_RUN_ID = ""
 GENERATED_TOKENS_OUT_PER_QUESTION = 350  # measured 118-183 on smoke runs; padded
 
 
@@ -494,6 +500,9 @@ def estimate_rerank_cost(
         )
         return estimate
     provider = estimate_params.get("provider", "")
+    if kind == "per_chunk_tokens":
+        return _estimate_per_chunk_tokens(estimate, model, provider, n_questions, candidate_docs,
+                                          candidate_words, pricing)
     rule = pricing.rerank_price(model, provider)
     if not rule:
         estimate["price_unavailable"] = (
@@ -535,6 +544,47 @@ def estimate_rerank_cost(
         f"({candidate_chunks:.1f} (query,doc) pairs/query at {tokens_per_pair:.0f} tokens each — "
         f"a cross-encoder bills the query once PER DOCUMENT; calibrated on "
         f"run_20260924_033136_e51f, NOT validated out of sample)"
+    )
+    return estimate
+
+
+def _estimate_per_chunk_tokens(
+    estimate: dict[str, Any],
+    model: str,
+    provider: str,
+    n_questions: int,
+    candidate_docs: int,
+    candidate_words: int,
+    pricing: PricingTable,
+) -> dict[str, Any]:
+    """A reranker billed per input token with one request per candidate chunk (Jev).
+
+    The chunk count per candidate document and the candidate-length skew are the ones
+    measured on the dense control's candidate sets (EXP-0024/0026); the per-call
+    overhead is not calibrated until JEV_CALIBRATION_RUN_ID is set, and says so.
+    """
+    rule = pricing.rerank_price(model, provider)
+    if not rule or "usd_per_mtok" not in rule:
+        estimate["price_unavailable"] = (
+            f"{model} ({provider}) not in the rerank table ({pricing.pricing_version}); "
+            "an absent entry is unknown, never free (MIS-025)."
+        )
+        return estimate
+    calls = n_questions * candidate_docs * RERANK_CHUNKS_PER_CANDIDATE_DOC
+    tokens_per_call = (
+        candidate_words * RERANK_CANDIDATE_LENGTH_FACTOR * WORDS_TO_TOKENS + JEV_TOKENS_PER_CALL_OVERHEAD
+    )
+    tokens = int(calls * tokens_per_call)
+    calibrated = (f"overhead calibrated on {JEV_CALIBRATION_RUN_ID}" if JEV_CALIBRATION_RUN_ID
+                  else "per-call overhead NOT calibrated")
+    estimate["rerank_usd"] = round(tokens / 1e6 * float(rule["usd_per_mtok"]), 4)
+    estimate["tokens"] = tokens
+    estimate["calls"] = round(calls)
+    estimate["tokens_per_call"] = round(tokens_per_call, 1)
+    estimate["source"] = (
+        f"published ${rule['usd_per_mtok']}/Mtok input x {tokens:,} tokens "
+        f"({calls:,.0f} calls, one per candidate chunk, at {tokens_per_call:.0f} tokens each; "
+        f"{calibrated})"
     )
     return estimate
 

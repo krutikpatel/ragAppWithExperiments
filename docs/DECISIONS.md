@@ -3792,3 +3792,57 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** `tests/test_ci_history.py`; `ci/history.jsonl` (38 jobs at writing).
 - **Revisit if:** the repository's artifact retention changes, or CI moves off GitHub Actions.
   Run `rag ci-history` after gate runs you want on record; it is not automatic.
+
+## DEC-101 — Reopen Axis 5 for one reranker: TypeSafe Jev, called direct, one call per chunk
+- **Date:** 2026-09-30
+- **Decided by:** Krutik (the model, the version pin and one call per chunk); Claude (the
+  mechanism below: prompt wording, cost basis, the model-check exemption, 8 worker threads).
+- **Status:** Active
+- **Context:** Axis 5 closed with three hosted cross-encoders and no measurable difference
+  against the dense control (EXP-0024/0025/0026, then OQ-038's candidate-count runs
+  EXP-0052/0053). Krutik asked to test TypeSafe's Jev as a reranker on branch
+  `jev-experiment1`. Jev is a "System One" decision model: it answers a typed question
+  about a `state` with a probability rather than writing text. It is a different mechanism
+  from a cross-encoder's relevance score and from the LLM-as-reranker (cut in DEC-060).
+- **What was probed (preflight 10):**
+  - OpenRouter lists only `typesafe/jev-router` (price `-1`, zero endpoints — a router that
+    picks a model per request); `typesafe/jev-latest` and `typesafe/jev` are 404 on
+    `/models/<id>/endpoints`. A router cannot be pinned, so OpenRouter was not used.
+  - TypeSafe's own `POST https://api.typesafe.ai/v1/systemone`: 403 without a key; 422
+    "Field required: questions" with `TYPESAFE_JEV_KEY`, so the key authenticates. No
+    billable call was made.
+  - Published (docs.typesafe.ai and third-party pages, 2026-09-30, **not measured**):
+    models `jev-1.13.0` and alias `jev-latest`; $0.042/Mtok input, output free; 1,200
+    requests/min; 32k tokens of state + question per request.
+- **Options considered:**
+  1. `typesafe/jev-router` via OpenRouter — rejected: routes to an unrecorded model per
+     request, which breaks the exact-model-id rule (CLAUDE.md section 10).
+  2. `jev-latest` — rejected by Krutik: a floating alias.
+  3. Batch up to 30 chunks per request — rejected by Krutik: a chunk's score could depend on
+     the other chunks in its request.
+  4. **`jev-1.13.0` direct, one `noul` question per (query, chunk) request — chosen.**
+- **Decision:**
+  - `rag/reranking/typesafe.py`, registered `typesafe_jev`. State is
+    `{"query", "passage"}` (the chunk's indexed text); the question is `rerank_jev@v1`, whose
+    relevance rule mirrors `rerank_llm@v1`; the score is the `noul` probability. The
+    constructor refuses aliases (`*latest`, `*preview`) and an unpriced model.
+  - Every response is asserted: the answer exists, is a `noul` in [0, 1], reports
+    `input_tokens`, and (when present) `model` equals the pin.
+  - **Cost basis differs from MIS-025.** The response has no cost field, so cost = reported
+    `input_tokens` x the published $0.042/Mtok in `configs/pricing.yaml`, labelled NOT
+    MEASURED there and on the run row (`cost_basis`). After the first paid call, compare it
+    with TypeSafe's billing page and log any gap as a MIS entry.
+  - `rag models verify` does not check Jev (it is not on OpenRouter under this id);
+    `verified_by_model_check = False` on the class.
+  - EXP-0065 (`configs/exp_0065_rerank_jev_dev.yaml`) is a one-dimension diff against
+    promoted with the same candidate shape as EXP-0024/0025/0026: 50 distinct documents ->
+    top 5, `dev`. Decided by OQ-053.
+  - The cost estimate's per-call overhead (200 tokens) is **not calibrated**; a probe of a
+    few questions, approved separately, replaces it with measured `input_tokens`.
+- **Evidence:** No measured data on quality; probes above. `--estimate-only`: $0.3150 for
+  EXP-0065 on `dev` (uncalibrated estimate).
+- **Consequences:** A fourth reranker in the Axis 5 family, comparable to EXP-0024/0025/0026
+  (same corpus, split, candidate set). `.env` gains `TYPESAFE_JEV_KEY`.
+- **Revisit if:** the billed amount differs from the computed cost by more than 10%;
+  TypeSafe changes `jev-1.13.0`'s behaviour or retires it; or the response's `model` field
+  names something other than the pin.

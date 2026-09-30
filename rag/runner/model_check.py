@@ -79,7 +79,9 @@ def configured_models(config: RunConfig) -> list[ModelRef]:
 
     from_params("retriever", config.retriever_params)
     from_params("chunker", config.chunker_params)
-    if config.reranker:
+    # A reranker served outside OpenRouter (TypeSafe Jev, DEC-101) has no endpoint here
+    # to resolve; it pins its own version and asserts it on every response instead.
+    if config.reranker and _checked_on_openrouter(config.reranker):
         from_params("reranker", config.reranker_params)
     if config.query_transform:
         from_params("query transform", config.query_transform_params)
@@ -95,6 +97,12 @@ def configured_models(config: RunConfig) -> list[ModelRef]:
             if config.judge_embedding_model:
                 refs.append(ModelRef("judge embedder", config.judge_embedding_model))
     return [r for r in refs if r.model]
+
+
+def _checked_on_openrouter(reranker: str) -> bool:
+    from rag.runner.registry import reranker_class
+
+    return getattr(reranker_class(reranker), "verified_by_model_check", True)
 
 
 def fetch_endpoints(model: str) -> list[str] | None:

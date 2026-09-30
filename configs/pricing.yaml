@@ -173,3 +173,11 @@ rerank:
       unit: token
       usd_per_mtok: 0.2
       measured: 50 documents of 600 words = 40,627 tokens, $0.008125, 1847 ms
+  jev-1.13.0:
+    TypeSafe:
+      unit: token
+      usd_per_mtok: 0.042
+      measured: "NOT MEASURED. TypeSafe's published rate, $0.042/Mtok input, output free\
+        \ (docs.typesafe.ai; checked 2026-09-30). Called direct on api.typesafe.ai, not via\
+        \ OpenRouter. The response reports input_tokens but no cost, so run cost = tokens\
+        \ x this rate; reconcile against TypeSafe billing after the first run (DEC-101)"

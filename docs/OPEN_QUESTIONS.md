@@ -831,3 +831,25 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   refusing or answering from the articles. Above 3 of 30, it is a failure category for
   FAILURES.md and a candidate gate rule. The set is authored data: its own DEC, and Krutik's
   approval for the run's spend.
+
+## OQ-053 — Does TypeSafe Jev reranking change strict recall@5 against the dense control?
+- **Status:** queued as EXP-0065 (DEC-101). Not yet run.
+- **What is known:** three cross-encoders gave no measurable difference against promoted
+  (EXP-0024/0025/0026). Jev scores each (query, chunk) pair as a yes/no probability, a
+  mechanism not yet tested here. External claim (TypeSafe re-ranking cookbook and
+  community rerankers built on Jev): it is usable as a calibrated reranker. **Untested here.**
+- **Decided by:** strict recall@5 on `dev` via `rag compare` against promoted (0.720) and
+  against EXP-0025 (`cohere/rerank-4-fast`). A finding needs p < 0.05 with the paired CI
+  excluding zero; otherwise "no measurable difference". Same candidate set as the other
+  three rerankers (50 documents -> top 5).
+
+## OQ-054 — Can Jev's probability be used as a cut-off, not only a sort key?
+- **Status:** open. Surfaced 2026-09-30 while proposing DEC-101.
+- **What is known:** Jev's `noul` answer is a probability, which the vendor describes as
+  calibrated. External claim, **untested here.** A cut-off would send fewer than 5
+  documents to the generator when few pass it — a Tier 2 (generation) question, not a
+  retrieval one.
+- **Decided by:** only after OQ-053. Replay thresholds over EXP-0065's stored scores (as
+  P2-14 did for abstention), then run the chosen threshold at Tier 2 on `dev`: faithfulness
+  and the refusal rate on the unanswerable slice against the same config without the
+  cut-off. Its own DEC first.
