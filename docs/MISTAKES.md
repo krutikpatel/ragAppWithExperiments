@@ -234,6 +234,10 @@ Derived from the prevention rules below. Run through it and say in chat that you
 
 59. **Save a non-reproducible CI cache with `if: always()`.** The combined cache action skips
     saving when the job fails, and a rebuilt index is not the same index. (MIS-049)
+60. **Before editing `rag/embedding/`, `rag/chunking/` or `configs/promoted.yaml`, remember they
+    key CI's dense-index cache.** Any edit there rebuilds the index on the PR and again on main,
+    and a rebuilt index changes some answers. Put new code outside them when you can; if not,
+    say so in the PR (MIS-050).
 
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
@@ -1628,3 +1632,24 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** in CI, save every cache whose rebuild is not byte-identical with
   `if: always()` — a failing job is exactly when the next run needs to reproduce it.
 - **Added to preflight:** yes — item 59.
+
+## MIS-050 — A timing counter in rag/embedding/ invalidated CI's index cache and made the gate partly fresh
+- **Date:** 2026-09-30
+- **Severity:** Low — $0.0855 and 17 minutes of CI; the gate still passed. No result was
+  invalidated.
+- **What happened:** for P3-14's per-request `embed` latency I added a timing counter to
+  `rag/embedding/base.py`. CI keys the dense-index cache on
+  `hashFiles('rag/chunking/**', 'rag/embedding/**', 'configs/promoted.yaml')`, so the
+  key changed and PR #18's gate rebuilt the index. Hosted embeddings are not byte-identical
+  between builds (OQ-023), so 13 golden questions got different context, new answers (answer
+  cache hit rate 0.8632) and new judgments.
+- **How it was caught:** the gate took 17m26s instead of about 1.5 minutes and reported cost
+  $0.0855; the log showed "Cache not found" for the `indexes-` key.
+- **Root cause:** I edited a file without checking what CI derives from it. The cache key is
+  deliberately broad (a change there *can* change the vectors), and my change could not.
+- **Fix applied:** the timing moved to `rag/pipeline.py`, which wraps the embedder instance.
+  `rag/embedding/` is back to main's bytes, so the key is main's again and the merge does not
+  repeat the rebuild. A test asserts the counter is not in `rag/embedding/base.py`.
+- **Prevention rule:** before editing a path that feeds a CI cache key, check the key; put
+  code that does not change what is cached somewhere else.
+- **Added to preflight:** yes — item 60.

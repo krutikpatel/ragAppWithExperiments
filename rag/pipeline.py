@@ -82,6 +82,28 @@ class Pipeline:
             reasoning_effort=config.generator_reasoning_effort,
             fallback_models=config.generator_fallback_models,
         ))
+        self._time_query_embedding()
+
+    def _time_query_embedding(self) -> None:
+        """The `embed` stage of the request log (P3-14): wall time of QUERY embedding, cache
+        lookups included. Measured here, around the embedder instance, and not inside
+        rag/embedding/ — CI keys its dense-index cache on that directory, and an edit there
+        rebuilds the index (MIS-050)."""
+        self.query_embed_ms = 0.0
+        embedder = getattr(self.retriever, "embedder", None)
+        if embedder is None:
+            return
+        inner = embedder.embed_texts
+
+        def timed(texts: list[str], *, input_type: str) -> list[list[float]]:
+            started = time.perf_counter()
+            try:
+                return inner(texts, input_type=input_type)
+            finally:
+                if input_type == "query":
+                    self.query_embed_ms += (time.perf_counter() - started) * 1000
+
+        embedder.embed_texts = timed  # `embed_text` calls it, so single queries are timed too
 
     @classmethod
     def from_config_file(cls, path: str) -> Pipeline:
@@ -95,7 +117,7 @@ class Pipeline:
             return 0.0, 0, 0.0
         usage = embedder.provenance().get("usage") or {}
         return (float(usage.get("cost_usd") or 0.0), int(usage.get("prompt_tokens") or 0),
-                float(getattr(embedder, "query_ms", 0.0)))
+                float(getattr(self, "query_embed_ms", 0.0)))
 
     def answer(self, question: str, *, question_id: str = "ask") -> PipelineAnswer:
         from rag.runner.cost import PricingTable

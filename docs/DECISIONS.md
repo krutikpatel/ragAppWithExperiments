@@ -3676,7 +3676,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   1. **Request log.** The API writes one JSON line per request to stdout and to
      `results/api_requests.jsonl` (`RAG_API_LOG`; gitignored). Each line records:
      - the request id, which is also returned in the response;
-     - per-stage latency: `embed` (the query embedding, now timed inside the embedder),
+     - per-stage latency: `embed` (the query embedding, timed by the pipeline around the embedder, not inside
+       `rag/embedding/`, which keys CI's index cache: MIS-050),
        `retrieve` (the rest of retrieval), `assemble` and `generate`;
      - generator and embedding tokens, cost, config hash, refused, citations, the model
        that answered, attempts and whether the answer was replayed.

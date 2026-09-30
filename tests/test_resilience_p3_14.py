@@ -191,6 +191,7 @@ def test_ci_eval_runs_and_gates_the_fallback_and_fails_when_only_the_fallback_re
 # --- the API: serves only gated generation, logs every request -------------------------
 
 def test_the_api_serves_only_the_generation_the_gate_scored():
+    pytest.importorskip("fastapi")  # the `api` extra; CI's unit tests do not install it
     import rag.api as api
 
     served = load_config_file(api.DEFAULT_CONFIG)
@@ -284,3 +285,25 @@ def test_the_pipeline_names_the_stage_that_failed():
     with pytest.raises(StageError) as err:
         pipeline.answer("q")
     assert err.value.stage == "retrieve" and isinstance(err.value.cause, httpx.ReadTimeout)
+
+
+def test_query_embedding_is_timed_without_touching_rag_embedding():
+    """The embed stage wraps the embedder instance; rag/embedding/ is CI's index-cache key (MIS-050)."""
+    from rag.pipeline import Pipeline
+
+    class Embedder:
+        def embed_texts(self, texts, *, input_type):
+            return [[0.0] for _ in texts]
+
+        def embed_text(self, text, *, input_type):
+            return self.embed_texts([text], input_type=input_type)[0]
+
+    pipeline = object.__new__(Pipeline)
+    pipeline.retriever = SimpleNamespace(embedder=Embedder())
+    pipeline._time_query_embedding()
+    pipeline.retriever.embedder.embed_text("q", input_type="query")
+    assert pipeline.query_embed_ms > 0
+    before = pipeline.query_embed_ms
+    pipeline.retriever.embedder.embed_texts(["p"], input_type="passage")
+    assert pipeline.query_embed_ms == before
+    assert "query_ms" not in Path("rag/embedding/base.py").read_text()
