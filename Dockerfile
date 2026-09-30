@@ -10,6 +10,8 @@ COPY configs ./configs
 COPY prompts ./prompts
 COPY eval ./eval
 COPY data/authored ./data/authored
+# The API refuses generation the gate did not score, so it reads the gate's config (P3-14, MIS-051).
+COPY ci/gate.yaml ./ci/gate.yaml
 # Editable, so `rag.paths` resolves data/, indexes/ and results/ under /app, where they are mounted.
 RUN uv pip install --system --no-cache -e ".[api]"
 EXPOSE 8000
