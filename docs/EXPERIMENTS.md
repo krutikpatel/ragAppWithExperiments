@@ -1307,3 +1307,104 @@ WixQA qrels, document level.
   against, on the same 80 questions.
 - The stratum was defined from the Tier 2 run `run_20260913_205058_dc03`; this Tier 1 run
   embedded the same questions separately. They agree on all 27 (0 hits at 5 in both).
+
+## Phase 3 scorecard — from experiment platform to a shippable gate (P3-15)
+
+Everything below mirrors recorded runs: the results store (`run_…` ids), and for CI the GitHub
+Actions runs (numeric ids) whose `ci-eval` artifact holds `ci_eval.json`. GitHub keeps those
+artifacts for 90 days; the numbers here were read from them on 2026-09-30.
+
+### Golden slice `golden_v1` — composition (P3-03, DEC-074)
+
+95 questions, selected by `rag data golden` (seed 20260928) with zero manual labelling;
+`eval/golden/DATASHEET.md` has the rules. Baseline strict recall per stratum is the section
+"Phase 3 — golden slice v1" above.
+
+| Stratum | n | How chosen | strict R@5 at baseline |
+|---|---|---|---|
+| answered_without_gold | 27 | all dev questions the Phase 2 control answered with no gold article in context (`run_20260913_205058_dc03`) | 0.0000 (true by definition) |
+| multi_doc | 20 | ≥ 2 gold articles, seeded sample | 0.6000 |
+| single_doc | 33 | 1 gold article, seeded sample | 0.9091 |
+| unanswerable | 15 | 5 per reason, from the authored set | — |
+| **all answerable** | **80** | 45 ExpertWritten, 35 Simulated | **0.5250** (`run_20260912_225005_be04`) |
+
+### Synthetic judge check (P3-04, EXP-0054–0057)
+
+Bar declared before any run (DEC-076): unsupported-flag recall ≥ 0.95, supported pass rate ≥
+0.85, call failures ≤ 5%. 240 pairs per run: 80 supported, 80 unsupported (unrelated articles) —
+the 160 that gate — and 80 hard negatives (the retriever's top non-gold articles, report-only).
+
+| Run | Judge @ host | Pairs | Recall (unsupported flagged) | Supported pass rate | Failures | AUROC | $/pair | Clears? |
+|---|---|---|---|---|---|---|---|---|
+| EXP-0054 `run_20260928_052254_e257` | deepseek-v4.1-flash @DeepInfra | v1 (WixQA expert answers) | 1.0000 | 0.3544 | 1 | 0.9744 | 0.00244 | no |
+| EXP-0055 `run_20260928_054308_6f23` | qwen3.8-flash @Alibaba | v1 | 1.0000 | 0.3973 | 22 | 0.9583 | 0.00292 | no |
+| EXP-0056 `run_20260928_054455_44bb` | gemini-3.8-flash @Google AI Studio | v1 | 1.0000 | 0.3875 | 0 | 0.9500 | 0.01003 | no |
+| **EXP-0057** `run_20260928_143152_c11c` | **deepseek-v4.1-flash @DeepInfra** | **v2 (extracts, supported by construction, DEC-078)** | **1.0000** | **0.9000** (72/80) | **0** | **0.9938** | **0.00138** | **yes → production judge (DEC-079)** |
+
+The v1 failures were the labels, not the judges: the three agreed on 58 of 73 supported pairs,
+and the rejected reference answers are not supported by their own gold articles (OQ-047). What
+EXP-0057 validates is literal support; paraphrase and human agreement are unmeasured.
+
+### Answered without gold — the breakdown (P3-06, EXP-0058, `run_20260928_175207_f723`)
+
+The Phase 2 dev control's 92 answered questions, every claim judged against the context the
+generator actually saw.
+
+| Group | n | fully supported | partially | unsupported | mean faithfulness | unsupported-answer rate |
+|---|---|---|---|---|---|---|
+| gold in context | 65 | 25 | 40 | 0 | 0.8661 | 0.6154 |
+| **answered without gold** | **27** | 6 | 21 | 0 | **0.8540** | 0.7778 |
+| — no gold article in context | 14 | 4 | 10 | 0 | 0.8483 | 0.7143 |
+| — multi-doc, part of its gold | 13 | 2 | 11 | 0 | 0.8600 | 0.8462 |
+
+Faithfulness difference +0.0122, 95% CI [−0.045, +0.069]; unsupported-answer difference +0.162,
+CI [−0.034, +0.359]. Neither excludes zero. Of 30 unsupported claims read by hand, 3 are factual
+errors (OQ-048).
+
+### Detection floor (P3-07, EXP-0059; corrected for two-run comparison by DEC-091)
+
+| Metric | One run's spread (EXP-0059, 3 fresh runs) | **Gate threshold, two runs compared** (2·√2·stdev, 5 fresh runs) | Largest gap seen, unchanged pipeline |
+|---|---|---|---|
+| mean faithfulness (drop) | 0.026 | **0.032** | 0.027 |
+| unsupported-answer rate (rise) | 0.064 | **0.109** | 0.100 |
+| false-answer rate, 15 unanswerable (rise) | 0.077 (2 questions) | **0.158** (3 questions) | 0.133 |
+| citation validity (drop) | 0.041 | **0.051** | 0.040 |
+| refusal rate (report only) | 0.073 | 0.078 | 0.063 |
+
+Retrieval, exact McNemar at α = 0.05: a change that only loses questions is caught at 6 lost
+(**0.030** on dev); one that also gains 20 needs 36 lost (net 0.080). Identical runs flip 1 of
+200 dev questions. Full statement: `ci/DETECTION_FLOOR.md`.
+
+### Regression drills (P3-12, EXP-0064, gate v5)
+
+| # | Planted change | Verdict | What caught it | Cost | CI run |
+|---|---|---|---|---|---|
+| 1 | `top_k` 5 → 1 | **FAIL** | gold-in-context 0.720 → 0.305 | $0.2144 | `36605473028` |
+| 2 | no grounding / citation rule in the prompt | **FAIL** | faithfulness 0.874 → 0.743; unsupported-answer 0.658 → 0.788 | $0.2840 | `36622687904` |
+| 3 | no refusal rule | **FAIL** | false-answer 0.200 → 0.800 (3 → 12 of 15) | $0.3561 | `36617027669` |
+| 4 | `top_k` 5 → 4 (near the floor) | **FAIL** | gold-in-context 0.720 → 0.635 | $0.3266 | `36611691523` |
+| 5 | comment-only change | **PASS** | every delta 0.0000, all caches hit | $0.0000 | `36605039248` |
+| 6 | pipeline change + baseline edit | **REJECTED** | ratchet, before any model call | $0.0000 | `36605272913` |
+
+All six behaved as pre-registered (H-041). Drill 2's citation metrics read 1.000 because an
+answer that cites nothing has no bad citation (OQ-050).
+
+### CI cost and wall time per run (every `ci-eval` job on GitHub, 2026-09-28 → 2026-09-30)
+
+Wall time is the `ci-eval` job's start-to-finish; cost is `result.cost_usd.total` from the
+run's artifact (provider-reported, cached calls not billed).
+
+| Kind of run | Runs | Wall time | Cost per run | Answer-cache hit rate | Run ids |
+|---|---|---|---|---|---|
+| **Cached** — pipeline code changed, answers unchanged | 13 | **1.3–1.6 min** (median 1.45) | **$0.0000** | 1.0 | `36534823865`, `36535125729`, `36603288510`, `36603537156`, `36603766240`, `36603976232`, `36604488132`, `36604706247`, `36605039248`, `36654934913`, `36655090767`, `36671888131`, `36672067930` |
+| **Cold** — nothing cached (first runs) | 2 | 39.6 min (ERROR) · **61.7 min** (PASS, became the baseline) | $0.3577 · $0.3216 | 0.0 | `36523052541` (EXP-0061), `36529043366` (EXP-0063) |
+| **Answers regenerated** — a planted regression | 4 | 32.7–51.9 min | $0.2144–$0.3561 | 0.0 | drills 1–4 (EXP-0064) |
+| **Partly fresh** — the dense index rebuilt, some answers changed | 2 | 14.3 min · 17.4 min | $0.0797 · $0.0855 | 0.8842 · 0.8632 | `36526811707` (EXP-0062, MIS-049), `36670362945` (MIS-050) |
+| **Rejected** by the ratchet | 1 | 0.5 min | $0 | — | `36605272913` (drill 6) |
+| **Skipped** — no pipeline file changed | 12 | 0.25–0.5 min | $0 | — | docs-only PRs and their merges |
+| Cancelled | 2 | — | $0 | — | superseded pushes |
+
+**Total billed by CI over these 36 jobs: $2.0256**, of which the four drills were $1.1811 and
+the two cold runs $0.6793. Locally, `rag ci-eval` took about 20 minutes cold ($0.3024) and
+about 5 seconds cached ($0.0000) (EXP-0060): the CI runner's judging is about 8 times slower
+than local (EXP-0063).

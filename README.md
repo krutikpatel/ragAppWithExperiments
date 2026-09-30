@@ -61,53 +61,92 @@ number.
 | `docs/MISTAKES.md` | Every error made, and the rule that prevents recurrence |
 | `docs/FAILURES.md` | Taxonomy of queries the system answers badly |
 | `docs/OPEN_QUESTIONS.md` | Untested hypotheses and their decision rules |
+| `docs/HYPOTHESES.md` | Expectations written before a run, resolved after |
+| `docs/GLOSSARY.md` | Project and dataset terms |
+| `ci/DETECTION_FLOOR.md` | What the quality gate can and cannot catch |
+| `eval/golden/DATASHEET.md` | How the golden CI slice was chosen |
 
 An experiment is not finished when the run completes. It is finished when the index
 row and the detail file are written.
 
 ## Status
 
-**Phase 0 complete — P0-01 through P0-14.** The evaluation harness is built, tested,
-and has produced its first two experiments.
+**Phases 0–3 complete (2026-09-30).** 64 recorded experiments, and a quality gate that runs on
+every pull request. The story, with a run id behind every number, is `docs/NARRATIVE.md`.
 
-**The baseline exists.** EXP-0001: BM25 over 512-word chunks, top-5, on the 200-question
-`dev` split — **strict recall@5 0.405**, loose 0.505, nDCG@10 0.384, deterministic to
-twelve decimal places across three runs. Half the questions get no gold document in
-the top five; multi-document questions find one required article two thirds of the
-time and all of them under a fifth. EXP-0002 ran the WixQA paper's own retrieval
-configuration (whole documents) one axis away: no measurable difference.
+- **Phase 0 — the harness.** Pinned, hashed corpus and splits; document-level retrieval
+  metrics via `ranx`; deterministic generation metrics; a results store with one row per
+  question per run. Baseline: BM25 over 512-word chunks, strict recall@5 **0.405** on `dev`
+  (EXP-0001).
+- **Phase 1 — the controls.** Dense retrieval (`qwen3-embedding-8b`) beat BM25 by 0.305
+  (EXP-0005). It is the one technique change in the project that measurably won, and on the
+  held-out test split the gap was larger (+0.335, EXP-0046).
+- **Phase 2 — seven technique axes.** Chunking, embeddings, hybrid retrieval, reranking,
+  query transformation, context assembly, grounding, and combinations. Nothing beat the dense
+  control on retrieval beyond run-to-run noise; the best number, 0.750, was not significant
+  (EXP-0042). The one free win was abstaining on a low retrieval score, which halved false
+  answers (EXP-0038). The test split, opened once, showed no measurable optimism gap: 0.720 on
+  dev, 0.680 on test (EXP-0046).
+- **Phase 3 — the shippable gate.** A validated faithfulness judge (EXP-0057), a golden CI
+  slice, a measured detection floor, `rag ci-eval` as a required check on `main`, a baseline
+  ratchet, six regression drills that all behaved as specified (EXP-0064), and a local answer
+  API with a request log.
 
-What the harness does:
+**Models** (each a `DECISIONS.md` entry, each pinned to an exact id):
 
-- **Inputs are pinned and hashed.** Corpus frozen to one HuggingFace commit (6,221
-  articles, 2.96M tokens); four hashed splits; 45 authored unanswerable questions
-  (**LLM-drafted, human verification pending**).
-- **Document-level scoring** with strict and loose recall@{1,3,5,10,20}, nDCG@10, and
-  MRR on the single-gold subset, all via `ranx`, all on labelled `article_ids`.
-- **Generation metrics.** Citation precision/recall, step coverage and refusal are
-  deterministic and free. Judged metrics come from **Ragas**, pinned exactly, behind
-  the `Judge` interface, with providers pinned for speed and reproducibility.
-- **Two tiers.** Tier 1 scores `dev` in ~12 seconds with zero LLM calls. Tier 2 scores
-  a fixed 100-question subsample in ~20 minutes for ~$0.84, and prints a validated
-  cost estimate first.
-- **A results store** with per-question rows and `rag diff`, which refuses to call two
-  runs comparable when their corpus, split, pooling, judge, provider or Ragas version
-  differ.
-- **Interfaces for Phase 1** — `DatasetAdapter`, `Embedder`, `Reranker` (interface
-  only) — with a test that the runner has no benchmark-specific import.
-- **Test-split discipline.** Opening `test` needs `--open-test` and a reason, and
-  every opening is appended to `docs/DECISIONS.md` automatically. It has been opened
-  zero times.
+| Role | Model | Decision |
+|---|---|---|
+| Generator | `openai/gpt-5-nano` | DEC-017 |
+| Retrieval embeddings | `qwen/qwen3-embedding-8b` @DeepInfra | DEC-041 |
+| Faithfulness judge | `deepseek/deepseek-v4.1-flash` @DeepInfra, no fallbacks | DEC-079 |
 
-**Models.** Generator `openai/gpt-5-nano` (DEC-017). Judge `openai/gpt-oss-120b`,
-pinned to Cerebras/Groq (DEC-030/032) — still a **plumbing placeholder** whose scores
-are not measurements. Embeddings `qwen/qwen3-embedding-8b` (DEC-027).
+## Running the evaluation and the gate
 
-**The investigation is recorded as it happened.** `docs/DECISIONS.md` has 36 entries,
-`docs/MISTAKES.md` has 9 — including three wrong premises in the handover caught by
-counting, a metric that scored a different ranking than the system returned, a
-capability I wrongly declared absent, and a provider pin that cost 6× more than
-recorded. Each carries the rule that prevents it recurring.
+```bash
+uv venv --python 3.11 && uv pip install -e ".[dev]"      # add ",api" for the answer API
+echo "OPENROUTER_API_KEY=..." > .env                      # gitignored; read from the environment
+
+rag corpus freeze && rag data splits                      # rebuild the pinned corpus and splits
+rag data golden --check                                   # re-derive the golden CI slice, fail on drift
+
+# One experiment
+rag run configs/promoted.yaml --estimate-only             # cost first; free
+rag run configs/promoted.yaml                             # Tier 1 retrieval on dev, ~$0.0001
+rag faithfulness <run_id> --judge-config configs/baseline_dense_tier2_v2.yaml
+
+# The quality gate, exactly as CI runs it
+rag ci-eval --estimate-only
+rag ci-eval                                               # exit 0 pass, 1 fail, 2 error, 3 needs approval
+rag ci-baseline verify                                    # the baseline's integrity stamp
+
+# The answer API and demo page (local only)
+RAG_API_REPLAY=1 docker compose up                        # http://localhost:8000; replay = $0 on golden questions
+```
+
+A run that would cost more than $2 stops before it starts and needs `--approve-cost`. The gate
+has its own $1.00 budget per run (`ci/gate.yaml`).
+
+**What a gate run costs** (36 GitHub runs, `docs/EXPERIMENTS.md`): **$0 and about 1.5 minutes**
+when the answers are unchanged, because the gate replays cached calls. **$0.21–$0.36 and
+33–62 minutes** when every answer is regenerated. $2.03 in total so far.
+
+## What the gate can and cannot catch
+
+From `ci/DETECTION_FLOOR.md`, measured on this judge, generator, prompt and slice (EXP-0059,
+DEC-091). **A change smaller than these passes, not because it is harmless, but because the
+gate cannot tell it from noise:**
+
+| Metric | Caught at |
+|---|---|
+| strict recall@5 / gold-in-context on `dev` | a drop of **0.030** if the change only loses questions (paired test, α = 0.05); about 0.08 if it also wins some back |
+| mean faithfulness | a drop of **0.032** |
+| share of answers with an unsupported claim | a rise of **0.109** |
+| answered unanswerable questions | **3 more** of 15 |
+| citation validity | a drop of **0.051** |
+
+Zero tolerance for citing a real article that was not retrieved, empty answers, and a changed
+corpus, split, question set or judge. A judge failure or provider outage is an error, never a
+quality failure.
 
 ## Known limitations
 
@@ -118,6 +157,16 @@ recorded. Each carries the rule that prevents it recurring.
   evidence** (`eval/golden/DATASHEET.md`). Its absolute scores are not `dev` scores; the
   gate only compares a run to a baseline on the same slice.
 
+- **The gate's golden slice overlaps `dev`**, the split every Phase 2 experiment used
+  (DEC-074). Phase 3 tuned nothing on it; a future phase that tunes on `dev` must hold its 95
+  questions out.
+- **Blind spots the drills found** (EXP-0064): a change that only stops answers citing passes
+  every rule (OQ-050), and the share of answers with an unsupported claim mostly measures
+  style, not errors (OQ-048).
+- **Not measured:** live per-request latency of the API, behaviour under prompt injection
+  (OQ-052), and model drift under an unchanged pipeline (the on-demand drift check has never
+  run, DEC-094). The API runs locally only; there is no hosted deployment.
+
 - **The faithfulness judge is validated only on clear-cut synthetic cases.**
   `deepseek/deepseek-v4.1-flash` passed the P3-04 check (EXP-0057): it flagged 80 of 80
   answers copied from unrelated articles and passed 72 of 80 copied from the right ones.
@@ -126,7 +175,7 @@ recorded. Each carries the rule that prevents it recurring.
   the check, built on WixQA's expert answers, failed every judge because about half of
   those answers are not supported by their own gold articles (EXP-0054–0056, OQ-047).
 
-## Quickstart
+## Quickstart — the harness commands
 
 ```bash
 uv venv --python 3.11 && uv pip install -e ".[dev]"

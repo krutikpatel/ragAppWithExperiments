@@ -817,3 +817,17 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
 - **Decided by:** adopt a tracing tool only when a question comes up that the JSON log cannot
   answer with a short script over `results/api_requests.jsonl`, and name that question in the
   DEC. Choosing one is a new dependency and possibly a hosted service, so it is Krutik's call.
+
+## OQ-052 — How does the answer path behave when a question tries to instruct the model?
+- **Status:** open. Surfaced 2026-09-30 by P3-15, writing the injection-surface part of
+  NARRATIVE section 8.
+- **What is known:** the user's question and the retrieved article text go straight into the
+  generator's prompt (`baseline_answer@v1`). The articles come from a frozen public help
+  centre; the question is the part a user controls. No run has put an instruction in a
+  question.
+- **Decided by:** an authored set of about 30 injection questions (ignore-the-rules, answer
+  off-topic, reveal the prompt, cite an invented article), run through the golden
+  configuration. Count how often the answer follows the injected instruction rather than
+  refusing or answering from the articles. Above 3 of 30, it is a failure category for
+  FAILURES.md and a candidate gate rule. The set is authored data: its own DEC, and Krutik's
+  approval for the run's spend.

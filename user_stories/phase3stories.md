@@ -448,7 +448,7 @@ Acceptance criteria:
 
 ### P3-13 — Answer API and demo page
 
-> **Status: DONE** — DEC-097
+> **Status: DONE** (2026-09-30) — DEC-097; PR #17
 > - [x] `POST /ask` returns {answer, citations: [{article_title, url, chunk_text}], refused, meta: {config_hash, latency_ms, cost_usd}}
 > - [x] loads promoted.yaml (refuses a served config whose retrieval differs) and the versioned prompts; imports the same pipeline code as the eval (`rag/pipeline.py`, shared with `rag ask`)
 > - [x] minimal page: question → answer → cited source paragraph
@@ -471,7 +471,7 @@ Acceptance criteria:
 
 ### P3-14 — Request logging and resilience
 
-> **Status: DONE** — DEC-098
+> **Status: DONE** (2026-09-30) — DEC-098, MIS-050; PR #18
 > - [x] structured JSON log per request: per-stage latency (embed, retrieve, assemble, generate), tokens, cost, config hash, refused flag; failures log the stage (`rag/api.py`, `results/api_requests.jsonl` + stdout). Tracing tool not adopted — OQ-051
 > - [x] timeouts and bounded retries with backoff on every OpenRouter call; a test inventories every call site (`tests/test_resilience_p3_14.py`)
 > - [x] fallback models off by default (`generator_fallback_models: []`); an enabled one is its own config hash, `rag ci-eval` gates each fallback model as its own config, and the API refuses generation the gate did not score
@@ -492,7 +492,11 @@ Acceptance criteria:
 
 ### P3-15 — Phase 3 report and narrative
 
-> **Status: NOT STARTED**
+> **Status: DONE** (2026-09-30) — DEC-099
+> - [x] `EXPERIMENTS.md` Phase 3 scorecard: golden-slice composition + per-stratum recall, synthetic judge check, answered-without-gold breakdown, detection floor (one-run and two-run), drills, CI cost and wall time for all 36 GitHub gate jobs (cached vs cold vs regenerated)
+> - [x] `NARRATIVE.md`: Phase 3 chapters in section 4, section 8 written, Phase 2–3 addenda to 5–7, Phase 3 lessons and gaps; every number carries an EXP id (run ids in EXPERIMENTS.md)
+> - [x] `README.md`: how to run the eval and the gate, the detection floor, known limitations (incomplete doc-level gold; judge validated only on clear-cut synthetic cases; and more)
+> - [x] `DECISIONS.md` (DEC-099, the definition of done item by item) and `MISTAKES.md` (through MIS-050) up to date
 
 **As the project owner, I need the whole lifecycle story written from recorded numbers.**
 

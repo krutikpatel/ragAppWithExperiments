@@ -3718,3 +3718,43 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** a fallback is proposed (its model is Krutik's choice, with a DEC, and each
   gated run costs about one uncached golden run); the log's fields cannot answer an
   operational question (OQ-051); or a new OpenRouter call site is added.
+
+## DEC-099 — Phase 3 closed: the definition of done, item by item, with its deviations
+- **Date:** 2026-09-30
+- **Decided by:** Claude, writing P3-15; the deviations it lists were each decided earlier and
+  are named with their DEC. Krutik has not reviewed this summary.
+- **Status:** Active.
+- **Context:** P3-15 asks for `DECISIONS.md` and `MISTAKES.md` to be up to date and the whole
+  arc written from recorded numbers. This entry is the checklist a reader can verify against
+  the phase's section 4, "Definition of done".
+- **Item by item:**
+  1. P3-01 audit recorded, no leak (DEC-070). **Done.**
+  2. `phase3-baseline` tag with config hash, prompt version, verified slugs (DEC-071); re-tagged
+     `phase3-baseline-v2` for the production judge (DEC-080). **Done.**
+  3. Golden slice v1, scripted, versioned, datasheet, zero manual labelling (DEC-074). **Done.**
+  4. Synthetic judge check against a pre-declared bar; judged metrics marked gating
+     (DEC-076, DEC-078, DEC-079; EXP-0054–0057). **Done**, with the v1 pairs replaced by
+     pairs supported by construction.
+  5. `rag faithfulness` with per-claim verdicts and all metrics by stratum (DEC-081). **Done.**
+  6. The answered-without-gold question answered numerically (EXP-0058). **Done.**
+  7. `ci/DETECTION_FLOOR.md` published (DEC-083), corrected for two-run comparison (DEC-091).
+     **Done.**
+  8. `ci/gate.yaml` declared before the first gated PR (DEC-087); now v5. **Done.**
+  9. `rag ci-eval` a required check on `main`; infra errors distinct (DEC-088, DEC-089).
+     **Done.** Deviation: `enforce_admins` is false, and the admin bypass was used once, for PR
+     #2 (DEC-092).
+  10. Ratchet enforced (DEC-090). **Done.** Deviation: the drift job is **on demand, not
+      scheduled**, by Krutik's choice (DEC-094), and it has not been run.
+  11. Drills 1–3, 5, 6 as specified; drill 4 recorded (EXP-0064). **Done**, after gate v4/v5
+      added gold-in-context, because drill 1's named metric could not move (DEC-095).
+  12. Part F **done, not dropped**: P3-13 (DEC-097) and P3-14 (DEC-098).
+  13. `NARRATIVE.md` and `README.md` complete; cost gate respected. **Done in P3-15.** Paid
+      experiment runs went through the spend-approval rule (DEC-053). CI's own spend, $2.0256 over 36 jobs, stayed
+      within the $1.00-per-run budget he confirmed (DEC-089). The $0.0855 of MIS-050 was not
+      planned.
+- **The CI cost table's source:** each GitHub run's `ci-eval` artifact (`ci_eval.json`), read
+  on 2026-09-30. GitHub keeps artifacts 90 days, so the table in `EXPERIMENTS.md` carries the
+  run ids and is the durable copy.
+- **Evidence:** the DECs and EXP rows named above.
+- **Revisit if:** any item above is found not to hold. Correct this entry by appending, and
+  reopen the story it belongs to.

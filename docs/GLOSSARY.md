@@ -79,3 +79,47 @@ is that the model sees every candidate at once and can compare them to each othe
 **Search unit** — Cohere's billing unit for reranking: one query with up to 100
 documents. It is a per-*query* charge, so a reranking experiment costs more on a
 bigger question set, unlike an index which is paid for once.
+
+## Phase 3 — the quality gate
+
+**Golden slice (`golden_v1`)** — The fixed set of 95 questions the CI gate runs on: 80
+answerable (single-doc, multi-doc, and the ones the system once answered without its
+evidence) and 15 unanswerable. Chosen by a script, never by hand. Its scores are not system
+scores, because it over-samples hard cases on purpose; they are only compared with each other.
+
+**Gold in context** — Did every gold article actually reach the generator's prompt? Recall@5
+is read off the ranking; this is read off what the model was shown, so it moves when `top_k`
+changes and recall@5 cannot.
+
+**Faithfulness (claim-level)** — The judge splits an answer into claims and checks each one
+against the exact context the generator saw. Mean faithfulness is the share of supported
+claims. An **unsupported answer** has at least one claim the judge could not find in the
+context. A **false answer** is an answer (not a refusal) to an unanswerable question.
+
+**Citation validity** — The share of answers whose citations are all well-formed ids of
+articles the answer was given. Garbled ids count against it.
+
+**MDD / detection floor** — Minimum detectable difference: the smallest change a metric can
+show that run-to-run noise does not. A change smaller than it passes the gate, not because
+it is harmless, but because it cannot be told from noise. `ci/DETECTION_FLOOR.md` lists them.
+
+**Pairwise threshold** — The MDD for comparing *two* runs (a PR run against the baseline
+run), about √2 times one run's spread. The gate uses these (DEC-091).
+
+**Baseline (CI)** — `ci/baseline.json`: the per-question results of a reference gate run,
+written only by `rag ci-baseline update --reason DEC-NNN` and stamped with a hash so a hand
+edit is detected.
+
+**Ratchet** — The rule that a pull request may not change pipeline code and the baseline's
+results together. A change is measured against the old baseline before it can become the new
+one.
+
+**Call cache** — The gate's cache of query embeddings, answers and judgments. An unchanged
+pipeline replays them and the gate costs $0; experiments never use it.
+
+**Drill** — A deliberately planted regression opened as a throwaway pull request, to check
+that the gate fails (or passes) as it should.
+
+**PASS / FAIL / ERROR / NEEDS APPROVAL** — The gate's four outcomes (exit 0 / 1 / 2 / 3). FAIL
+means quality got measurably worse; ERROR means the gate could not measure (a judge failure,
+an outage), which is never reported as a quality failure.
