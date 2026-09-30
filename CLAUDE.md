@@ -588,16 +588,19 @@ ci/                 Phase 3 CI gate files. phase3_baseline.yaml records what the
                     golden slice, hashes and model slugs with their OpenRouter verification
                     date (DEC-080; v1 at tag `phase3-baseline`, DEC-071); a test
                     fails if the files it names drift from it. DETECTION_FLOOR.md (P3-07,
-                    DEC-083). gate.yaml — the rules `rag ci-eval` applies (declared, v2:
-                    DEC-087/088). baseline.json — what CI compares to, written only by
+                    DEC-083). gate.yaml — the rules `rag ci-eval` applies (declared; v5,
+                    DEC-095/096; v1 DEC-087). baseline.json — what CI compares to, written only by
                     `rag ci-baseline update --reason DEC-NNN`, stamped with
                     `result_sha256` (DEC-090). run_gate.sh — what the CI job runs:
                     ratchet, skip on no pipeline change, NOT VERIFIED without the key,
                     estimate, ci-eval, exit → PASS/FAIL/ERROR/NEEDS APPROVAL (DEC-088).
                     out/ is GITIGNORED (the ci-eval artifacts)
-.github/workflows/  ci.yml — unit-tests on every PR/push, ci-eval after it (required checks on
-                    main, DEC-089); drift.yml — weekly `rag ci-eval --no-cache` on main,
-                    opens a `drift` issue on a quality FAIL, never blocks PRs (DEC-090)
+.github/workflows/  ci.yml — unit-tests and ci-eval in parallel on every PR/push (both required
+                    on main, DEC-089/095). Its dense-index cache is keyed on rag/chunking/**,
+                    rag/embedding/** and configs/promoted.yaml: ANY edit there rebuilds the
+                    index and changes some answers (MIS-050). drift.yml — `rag ci-eval
+                    --no-cache` on main, ON DEMAND only (DEC-094, supersedes DEC-090's weekly
+                    schedule); opens a `drift` issue on a quality FAIL, never blocks PRs
 indexes/            dense vector indexes, <key>/vectors.npy + index.meta.json.
                     GITIGNORED, rebuilt on demand; key = (corpus_hash, normalization,
                     chunker_id, model_id, revision, prefix_convention).

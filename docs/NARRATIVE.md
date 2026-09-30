@@ -3,6 +3,13 @@
 The story of the investigation, written from `EXPERIMENTS.md` and nothing else.
 Sections that depend on runs stay empty until those runs exist.
 
+> **Where this stands (2026-09-30):** Phases 0 to 3 are complete: a harness, a baseline,
+> 64 recorded experiments, and a quality gate that runs on every pull request. Sections were
+> written as each phase happened. Where an early section says something is pending or
+> untested, a later section records what happened. The arc in order: section 2 (the harness),
+> section 3 (the baseline), section 4 (every experiment, ending with the gate), section 8
+> (what makes it shippable).
+
 ## 1. The problem and the corpus
 
 The corpus is the Wix Help Center: 6,221 support articles, snapshotted 2024-12-02,
@@ -988,6 +995,79 @@ answer unsupported", mostly measures style on this system. I left the definition
 because changing a metric after seeing its value is exactly the move this project exists
 to avoid, and recorded the question instead (OQ-048).
 
+### How small a regression can the gate see? (EXP-0059)
+
+A quality gate that fails builds has to know its own blind spot first. I ran the unchanged
+system three times from scratch on the 95-question golden slice, with fresh answers and fresh
+judging each time, and judged one run's answers twice more with nothing else changing ($1.39).
+
+Mean faithfulness came out at 0.8506, 0.8621 and 0.8369, so one run's spread was 0.026.
+Re-judging the same answers moved it by 0.023 on its own: nearly all the noise is the judge,
+not the generator. Refusals and false answers did not move at all under re-judging; their
+noise is the generator's. Retrieval is close to deterministic, and two identical runs flip 1
+of 200 `dev` questions, so a paired test at α = 0.05 catches a change that only loses
+questions once it loses 6 (0.030 of recall). A change that wins some back needs a larger net
+drop, about 0.08 at the churn the Phase 2 rerankers produced (EXP-0059).
+
+I published those numbers as the detection floor, and the next day they turned out to be
+the wrong numbers for the job.
+
+### The gate meets GitHub: two false alarms before a pass (EXP-0060 to EXP-0063)
+
+`rag ci-eval` runs the whole evaluation as one command: retrieval on `dev`, answers on the
+golden slice, faithfulness on those answers, then a comparison to a stored baseline. Locally
+it worked first time. With nothing changed it passed with every delta at 0.0000, because an
+opt-in cache replays identical calls, and it cost nothing (EXP-0060).
+
+Its first run on GitHub, on a PR that changed no answer-producing code, failed anyway
+(EXP-0061). It also ended in ERROR, because two answers could not be judged. The failure was
+the more instructive part: the unsupported-answer rate rose from 0.5714 to 0.6400, just
+over the 0.064 floor. CI's cache was empty, so it had regenerated every answer; the gate was
+comparing two fresh runs against a threshold measured for one. The difference of two noisy
+runs is about √2 times noisier than either. Five fresh runs on record spanned 0.5714 to
+0.6711 with nothing changed. I rebuilt the thresholds for comparing two runs (2·√2 times
+the standard deviation), which put faithfulness at 0.032 and unsupported-answer rate at 0.109
+(DEC-091, MIS-047).
+
+The re-run failed again, for a different reason (EXP-0062). The first run had built the search
+index, but CI only saved caches when a job succeeded, so the re-run rebuilt it. Hosted
+embeddings are not byte-identical between builds, 11 questions got different context and new
+answers, and the unsupported-answer rate reached 0.7051 against a baseline produced on my
+laptop. Two fixes followed: save caches even when the job fails (MIS-049), and take the
+baseline from CI's own run on `main` rather than from a machine whose cache CI cannot see
+(MIS-048, DEC-093). That run, cold, took 61.7 minutes and $0.32 and passed; it became the
+baseline (EXP-0063).
+
+Since then an unchanged pipeline replays the baseline exactly. Thirteen later gate runs took
+1.3 to 1.6 minutes each and cost nothing. The thresholds only matter when answers are
+regenerated, which is exactly when a change can hurt.
+
+### Breaking it on purpose: six drills (EXP-0064)
+
+A gate that has never failed has not been tested. I wrote down what each of six planted
+changes must do before opening any of them (H-041), then opened each as a throwaway PR.
+
+The first drill exposed a gap before it ran. Showing the generator one article instead of
+five cannot move recall@5, because recall@5 is read off the ranking, and `top_k` only
+decides how many ranked articles reach the prompt. The gate, as declared, could not see the
+change the story asked it to catch. I added "gold in context" (did every gold article reach
+the generator?) as a gating rule first (DEC-095), and then the drill failed as it should:
+0.720 → 0.305.
+
+The others: removing the grounding and citation rules from the prompt dropped faithfulness
+from 0.874 to 0.743. Removing the refusal rule took false answers from 3 of 15 to 12 of 15;
+the system answered "Where do I change the checkout currency in Squarespace?" in full. Taking
+one article away (`top_k` 5 → 4), the drill nearest the floor, failed on gold in context,
+0.720 → 0.635. A comment-only change passed at $0, and a PR that changed code and edited the
+baseline's results together was rejected before any model call. Six of six behaved as
+specified, for $1.18 (EXP-0064).
+
+Two results are worth more than the pass count. When one article reached the prompt, the
+judged metrics *improved*: shorter answers make fewer claims that can go wrong. And when the
+prompt stopped asking for citations, citation validity rose to 1.000: an answer that cites
+nothing has no bad citation. A judged metric alone would have passed the first drill, and no
+current rule would catch a change that only stopped citing (OQ-050).
+
 ## 5. What actually moved the needle
 
 One experiment is a technique comparison in this phase; the rest are the control
@@ -1019,6 +1099,22 @@ loss (EXP-0014 to EXP-0018), the chunking axis from a null to a nineteen-point l
 reranking produced no measurable change at any depth while multiplying latency by four
 and cost per query by roughly 2,900 (EXP-0024). No generation technique has been
 compared yet — the Tier 2 rows are the control, not a treatment.
+
+**Added 2026-09-30, after Phases 2 and 3.** The table above stops at reranking; the sentence
+under it ("no generation technique has been compared yet") was true when written. What the
+later axes measured, with the same rule that a difference inside its noise is not a finding:
+
+| Change | Measured | Verdict | Ref |
+|---|---|---|---|
+| Abstain when the top retrieval score is below 0.575 (no model call) | false-answer rate 0.2667 → **0.1333**, false refusals unchanged at 0.0299 | the only free win in Phase 2; the threshold was chosen on the data it is scored on | EXP-0038 |
+| Show ten articles instead of five | gold in the prompt 0.6700 → **0.8200**; citation precision 0.5455 → **0.4604** (significant) | more evidence, worse citing; not promoted | EXP-0051 |
+| HyDE + `rerank-4-fast`, the best combination | strict R@5 0.720 → **0.750**, p = 0.444 | highest number in the project, and not a finding | EXP-0042 |
+| Groundedness self-check (a second model call) | false answers 0.2667 → 0.2222, false refusals 0.0299 → 0.1212 | dominated by the free threshold on both | EXP-0041 |
+| Citation enforcement (every step must cite) | false answers 0.2667 → **0.8444**; the system stopped refusing | the largest regression in the phase | EXP-0039 |
+| The held-out test split, opened once | strict R@5 0.720 on dev, **0.680** on test, CI [−0.130, +0.050] | no measurable optimism gap after 58 runs on dev | EXP-0046 |
+
+Phase 3 compared no techniques. It measured the instruments (EXP-0054 to EXP-0059) and the
+gate built from them (EXP-0060 to EXP-0064).
 
 ## 6. What did not work, and what that suggests
 
@@ -1082,6 +1178,23 @@ apostrophe (DEC-045). Neither is a technique result, but both cost historical nu
 their first decimal, and both are recorded as corrections rather than overwritten.
 The lesson is in section 9.
 
+**Phase 3, three things that did not work the first time.** Each is a way an evaluation
+lies, and each was caught only because it produced a result that could not be right.
+
+- **A judge check that tested its own labels.** Three judges from three labs all failed
+  to pass WixQA's expert answers against their gold articles, and they agreed with each other
+  58 times in 73. The expert answers were the problem: about half are not supported by the
+  articles they cite (EXP-0054 to EXP-0056). Rebuilding the supported pairs from the articles
+  themselves let the same bar separate the judges (EXP-0057). When every candidate fails
+  the same way, suspect the test.
+- **Thresholds built for the wrong comparison.** The gate's first thresholds described how
+  far one run strays, and the gate compares two. It failed an unchanged pipeline on its first
+  real run (EXP-0061, MIS-047).
+- **Metrics that improve when the system gets worse.** With one article in the prompt,
+  answers had fewer unsupported claims; with no citation rule, citation validity reached
+  1.000 (EXP-0064). A metric that scores what *is* there cannot see what is missing. The gate
+  catches both drills through other rules; OQ-050 records the one it would not catch.
+
 ## 7. Where the system still fails
 
 Seven categories, each named from a run rather than in advance, with the questions
@@ -1100,9 +1213,85 @@ step coverage of zero on a correct-looking procedure because the reference's ste
 under headings the matcher does not see (OQ-007), and the prompt's own instruction
 text echoed into two answers (a `v2` prompt item, DEC-042).
 
+**What Phase 3's faithfulness judge adds.** In the Phase 2 control's answers, two thirds had
+at least one claim the judge could not find in the context. Reading 30 of those claims, 3
+were factual errors; the rest restated steps in the user's words, thanked the user, or were
+artifacts of how claims are split (EXP-0058, OQ-048). No answer was wholly unsupported, even
+among the 27 written without their gold article. The measurable failure that remains is
+the refusal one: on the golden slice the gate's baseline answers 3 of 15 unanswerable
+questions (EXP-0063), and without the refusal rule it answers 12 (EXP-0064).
+
 ## 8. Production engineering
 
-_Pending Phase 3._
+Phase 3 turned the experiment platform into something a team could ship behind. Nothing
+here changed what the system answers; it changed what is allowed to reach `main`, and what an
+operator can see.
+
+**The quality gate.** Every pull request that touches pipeline code runs `rag ci-eval`, and
+`main` refuses a merge unless both it and the unit tests pass (DEC-089). The rules live in
+`ci/gate.yaml` (version 5), and every threshold in it was measured, not chosen:
+
+- Retrieval: fail when strict recall@5 or gold-in-context on `dev` drops *and* the exact
+  paired test is significant at α = 0.05. The questions lost and gained are always listed.
+- Answers: fail when faithfulness drops by more than 0.032, the unsupported-answer rate
+  rises by more than 0.109, false answers rise by 3 or more of 15, or citation validity drops
+  by more than 0.051. These are the thresholds for comparing two runs (DEC-091, EXP-0059).
+- Zero tolerance: an answer citing a real article it was not given, an empty answer, a
+  malformed result, a changed question set, or a changed corpus, split or judge fails
+  outright.
+- Infrastructure is not quality: a judge that cannot score an answer, or a provider outage,
+  is an ERROR (exit 2), never a FAIL (DEC-088).
+
+`ci/DETECTION_FLOOR.md` states in plain words what the gate cannot see: a faithfulness drop
+under 0.032 passes, because it cannot be told from noise. The drills showed what it can:
+six planted changes, six correct verdicts (EXP-0064).
+
+**The baseline cannot be quietly moved.** `ci/baseline.json` changes only through
+`rag ci-baseline update --reason DEC-NNN`, which stamps a hash of its results; a hand-edited
+or unstamped baseline is an error. A PR that changes pipeline code and the baseline's results
+together is rejected: a change must be measured against the old baseline before it may
+become the new one (DEC-090). Drill 6 tested that and was rejected before any model call
+(EXP-0064). An improvement never updates the baseline automatically.
+
+**Cost.** The gate has a $1.00 budget per run; a run estimated above it stops as NEEDS
+APPROVAL, and a maintainer's label re-runs it with approval (DEC-088, DEC-089). What it
+actually cost over its first 36 jobs is in `EXPERIMENTS.md`:
+
+- $0.0000 and 1.3–1.6 minutes when answers are unchanged (13 runs);
+- $0.21–$0.36 and 33–62 minutes when every answer is regenerated;
+- $2.03 in total, $1.18 of it the drills.
+
+**Caching is part of the measurement.** The gate's speed comes from an opt-in cache of query
+embeddings, answers and judgments, used only inside `rag ci-eval`; experiments always call
+the models (DEC-084). Three mistakes came from treating caches as plumbing: a baseline built
+where CI could not replay it (MIS-048), an index not saved when a job failed (MIS-049), and a
+harmless edit in a folder whose contents key the index cache, which rebuilt it and changed 13
+answers (MIS-050). Each moved a metric with no change to the system.
+
+**The answer API.** `docker compose up` serves a page and a `POST /ask` endpoint on the
+promoted configuration (P3-13, DEC-097). The answer comes with each cited article's title,
+link and the exact paragraph the model was given, and a flag if the model cited an article it
+was not given. The API answers through the same pipeline code as the evaluation. A contract
+test blocks every model call and requires the API to return the gate's own stored answers for
+five golden questions, character for character, which it can only do if it builds the same
+prompts. At startup it refuses a configuration whose retrieval differs from `promoted.yaml`,
+or whose answer settings differ from what the gate scored. It runs locally only; there is no
+hosted deployment.
+
+**Observability and degradation.** Each request writes one JSON log line: per-stage time
+(embedding, search, prompt, generation), tokens, cost, config hash, whether it refused, and
+the model that answered. The question is stored as a hash and a length, not as text (P3-14,
+DEC-098). Every call to OpenRouter has a timeout and a bounded, backed-off retry, and a test
+fails if a new call site appears without one. When the provider still fails, the user gets an
+error naming the failed stage, never a made-up answer. Fallback models are off; if one is
+switched on, the gate scores each fallback model as its own configuration, because a backup
+that answers only during an outage would otherwise never be evaluated. Per-stage latency of a
+live, non-replayed request has not been measured.
+
+**Injection surface, stated rather than tested.** The user's question and the retrieved
+article text both go straight into the generator's prompt. The articles come from a frozen
+public help centre, so the realistic surface is the question: a user can instruct the model
+directly. Nothing in this project measures how the system behaves when they do (OQ-052).
 
 ## 9. Lessons that transfer
 
@@ -1212,6 +1401,32 @@ before the first comparison, because the figure is specific to all three, and
 because the cheapest time to learn it is before you have written a results table
 against it.
 
+### Lessons from Phase 3: building a gate
+
+**Validate the test before you validate with it.** The judge bake-off failed three judges
+because its "known good" labels were not good. The clue was that the judges agreed with each
+other; the fix was to build labels that are true by construction, keep the bar exactly as
+declared, and state narrowly what passing it proves (EXP-0054 to EXP-0057).
+
+**A threshold belongs to the comparison it gates.** One run's spread is the wrong yardstick
+for the difference between two runs. The gate's first real run failed an unchanged pipeline
+because of that, and nothing about the system was wrong (EXP-0061, MIS-047).
+
+**A cache is part of the measurement.** Replaying cached calls is what makes the gate cost $0
+in 1.5 minutes. It also means that whatever decides whether the cache hits decides what gets
+measured. A baseline built on another machine, an index not saved on failure, and an edit to
+a file that keys a cache each moved a metric with no change to the system (MIS-048 to
+MIS-050).
+
+**Break the gate on purpose, and check that it can see what you plan to break.** The first
+drill could not have failed on the metric the story named, because that metric cannot move
+when `top_k` does. Writing the expected verdicts down first (H-041) turned that into a gate
+fix rather than a surprise (DEC-095, EXP-0064).
+
+**Separate "worse" from "broken".** A judge that times out or a provider outage ends the job
+as ERROR, never FAIL (DEC-088). A gate that blames the code for the network soon gets
+ignored.
+
 ## 10. What remains untested
 
 Every retrieval technique — that is Phase 1. Within Phase 0 itself, the open questions
@@ -1237,3 +1452,25 @@ that gate what the numbers can be trusted to mean:
 
 The full list, each with the decision rule that would settle it, is in
 `OPEN_QUESTIONS.md`.
+
+**After Phase 3 (2026-09-30).** What the gate and the production work leave open, each with a
+decision rule in `OPEN_QUESTIONS.md`:
+
+- **How the judge treats paraphrase, and whether it agrees with a person.** It was validated
+  on literal extracts only (EXP-0057); generated answers are paraphrase. No human agreement
+  was measured (OQ-047).
+- **Whether the unsupported-answer rate measures errors or style** (OQ-048), and whether it is
+  too noisy to gate: its two-run threshold, 0.109, is the loosest relative to its range
+  (OQ-049).
+- **A change that only stops the answers citing** would pass every gate rule (OQ-050).
+- **Drift.** The on-demand drift check (a full uncached run on `main`, DEC-094) exists and has
+  never been run, so whether the hosted models have changed under an unchanged pipeline is
+  unknown.
+- **The golden slice overlaps `dev`,** the split every Phase 2 experiment ran on. Accepted
+  for Phase 3, which tuned nothing (DEC-074); a later phase that tunes on `dev` must hold
+  those 95 questions out.
+- **Document-level gold is incomplete** where WixQA has near-duplicate articles, so strict
+  recall counts some correct retrievals as misses.
+- **Live latency, and injection.** Per-stage latency of a real, non-replayed API request has
+  not been measured (DEC-098), and nothing measures what happens when a question tries to
+  instruct the model (OQ-052). Whether the API needs a tracing tool is OQ-051.
