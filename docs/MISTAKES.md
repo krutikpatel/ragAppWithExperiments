@@ -1729,3 +1729,21 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** before quoting an MDD label, check the family's runs contain every
   random stage the compared run has.
 - **Added to preflight:** yes, item 63.
+
+## MIS-054 — Four Jev runs ran with no HYPOTHESES entry (MIS-033 again)
+- **Date:** 2026-09-30
+- **Severity:** Low. No number is affected; the record of what was expected is.
+- **What happened:** EXP-0065, 0066, 0067 and 0068 ran without a `docs/HYPOTHESES.md`
+  entry written beforehand, despite preflight item 42.
+- **How it was caught:** going through the preflight checklist before EXP-0069.
+- **Root cause:** the preflight was stated in chat for those runs but not walked item by
+  item. Item 42 is the one with no tool enforcing it.
+- **Impact:** EXP-0065..0068 have no recorded prior expectation; their write-ups say only
+  what was measured. They are not back-filled: an entry written after the run is not
+  evidence of anything.
+- **Fix applied:** H-042 was written before EXP-0069. EXP-0070 gets its own entry before it
+  runs.
+- **Prevention rule:** before launching, read the checklist file itself, not a memory of
+  it.
+- **Added to preflight:** no. Item 42 already says it; this entry records that the item
+  was missed.

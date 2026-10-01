@@ -1207,3 +1207,22 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      p ≈ 0). I under-called it: a change that only ever loses questions reaches significance
      at 6 losses (DETECTION_FLOOR).
   5. PASS at $0 → confirmed. 6. REJECTED at $0 → confirmed.
+
+## H-042 — A 0.55 Jev floor trades a few gold documents for cleaner citations (EXP-0069)
+- **Date written:** 2026-09-30, before EXP-0069 ran.
+- **Source:** Claude's expectations. The floor value is the cookbook's `evidence_min`
+  (DEC-102); the replay numbers are measured on EXP-0068's stored scores; nothing else
+  here is measured.
+- **Setup:** EXP-0069 against EXP-0068, same 100-question `dev` subsample. Only
+  `context_floor: 0.55` changes. Jev is re-called, so EXP-0069 also carries Jev's run-to-run
+  noise (OQ-055).
+- **Expectations:**
+  1. Gold in context falls from 0.880 to about the replay's 0.820, within ±0.03 for Jev's
+     noise. The fall is significant on the paired test, because a floor only removes.
+  2. Citation precision rises from 0.404, but by less than its MDD (0.08). The answer model
+     cited weak documents at top 10 (EXP-0068), and fewer weak documents are offered.
+  3. Citation recall: no measurable difference.
+  4. The refusal rate rises by 0–3 questions; the replay shows one empty context.
+  5. Mean documents in context are about 7.7.
+- **The part I trust least:** 2. EXP-0068's precision drop may come from the generator
+  citing documents that were relevant but not gold, which a floor would keep.
