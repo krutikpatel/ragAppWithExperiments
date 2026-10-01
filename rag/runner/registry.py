@@ -30,6 +30,7 @@ def _ensure_builtins() -> None:
     import rag.reranking.mmr  # noqa: F401
     import rag.reranking.toy  # noqa: F401
     import rag.reranking.openrouter  # noqa: F401
+    import rag.reranking.typesafe  # noqa: F401
     import rag.retrieval.bm25  # noqa: F401
     import rag.retrieval.dense  # noqa: F401
     import rag.retrieval.hybrid  # noqa: F401

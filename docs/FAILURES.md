@@ -341,6 +341,7 @@ P3-09.
 |---|---|---|---|
 | EXP-0058 | `07e6923e` | `e0d9a442…` — not a corpus id | — |
 | EXP-0058 | `f1ad8664` | `1294bb65…` (63 characters) — not a corpus id | — |
+| EXP-0069 | `5c3ab38e` | `question`, on all four steps. The 0.55 Jev floor left an **empty context**, and the generator answered from nothing instead of refusing; the refusal detector scored it as an answer | — (OQ-061) |
 
 ## Counts by run
 

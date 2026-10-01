@@ -1,0 +1,36 @@
+# EXP-0068 — Jev reranking at Tier 2 with top_k 10 (OQ-058)
+#
+# One dimension against EXP-0067: only top_k moves, 5 -> 10. The same question EXP-0051
+# asked of the dense ranking (OQ-040: gold reached the generator more often, and citation
+# precision fell by more than its MDD). top_k cannot change a retrieval metric
+# (DEC-040/061), so only generation metrics are reported. context_max_tokens stays at
+# the default; EXP-0051 measured ~3,425 context words at k=10, under the budget.
+# Judge skipped (DEC-063), as in EXP-0051.
+name: "EXP-0068 — Jev 50 -> top-10, Tier 2 dev: does more Jev-ranked context help the generator? (OQ-058)"
+axis: assembly
+split: dev
+eval_tier: tier2
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 10
+reranker: typesafe_jev
+reranker_params:
+  model: jev-1.13.0
+  prompt_version: v1
+  workers: 8
+rerank_candidates: 50
+doc_pooling: max
+seed: 1
+generator_model: openai/gpt-5-nano
+generator_prompt: baseline_answer@v1
+skip_judge: true

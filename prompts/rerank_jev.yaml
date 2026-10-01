@@ -1,0 +1,24 @@
+id: rerank_jev
+description: >
+  The yes/no question TypeSafe Jev answers once per (query, chunk) pair when it is the
+  reranker (DEC-101). Jev returns P(true), and the chunks are sorted by it. The state it
+  is asked about is {"query": <the question>, "passage": <the chunk's indexed text>}.
+  The template is YAML with `instructions` and `criteria.true` / `criteria.false`, which
+  become the `noul` question's fields; it has no format fields.
+versions:
+  v1:
+    description: >
+      Mirrors rerank_llm@v1's relevance rule: a passage that gives the actual steps or
+      answer is relevant; one that only mentions the same product is not.
+    template: |
+      instructions: >
+        The state holds a Wix Help Center support question (`query`) and one help
+        article passage (`passage`). Decide whether the passage is useful for answering
+        THIS question. Judge only this question and this passage.
+      criteria:
+        "true": >
+          The passage gives the actual answer to the question, or the steps that do what
+          the question asks, or information a correct answer needs.
+        "false": >
+          The passage does not help answer this question, even if it mentions the same
+          product, feature or settings page.

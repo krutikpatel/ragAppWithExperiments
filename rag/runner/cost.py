@@ -101,6 +101,14 @@ RERANK_CHUNKS_PER_CANDIDATE_DOC = 58.4 / 50
 # Together these reproduce 6,050,240 of the 6,051,291 tokens actually billed.
 RERANK_CANDIDATE_LENGTH_FACTOR = 348 / 309
 RERANK_TOKENS_PER_PAIR_OVERHEAD = 76
+# TypeSafe Jev (DEC-101): one request per candidate CHUNK, each carrying the query, the
+# `noul` question's instructions and criteria (rerank_jev@v1) and the JSON state keys.
+# Calibrated on the approved 5-question probe (not a store run; artifacts under
+# results/probes/jev_20260930/, raw responses in tests/fixtures/): 270 calls reported a
+# mean 816.0 input tokens at 339.4 passage words, so 816.0 - 339.4 x 1.27 = 385. The
+# first guess, 200, was 21% low per call. NOT yet validated out of sample (DEC-035).
+JEV_TOKENS_PER_CALL_OVERHEAD = 385
+JEV_CALIBRATION_RUN_ID = "probe jev_20260930 (5 dev questions, 270 calls)"
 GENERATED_TOKENS_OUT_PER_QUESTION = 350  # measured 118-183 on smoke runs; padded
 
 
@@ -494,6 +502,9 @@ def estimate_rerank_cost(
         )
         return estimate
     provider = estimate_params.get("provider", "")
+    if kind == "per_chunk_tokens":
+        return _estimate_per_chunk_tokens(estimate, model, provider, n_questions, candidate_docs,
+                                          candidate_words, pricing)
     rule = pricing.rerank_price(model, provider)
     if not rule:
         estimate["price_unavailable"] = (
@@ -535,6 +546,47 @@ def estimate_rerank_cost(
         f"({candidate_chunks:.1f} (query,doc) pairs/query at {tokens_per_pair:.0f} tokens each — "
         f"a cross-encoder bills the query once PER DOCUMENT; calibrated on "
         f"run_20260924_033136_e51f, NOT validated out of sample)"
+    )
+    return estimate
+
+
+def _estimate_per_chunk_tokens(
+    estimate: dict[str, Any],
+    model: str,
+    provider: str,
+    n_questions: int,
+    candidate_docs: int,
+    candidate_words: int,
+    pricing: PricingTable,
+) -> dict[str, Any]:
+    """A reranker billed per input token with one request per candidate chunk (Jev).
+
+    The chunk count per candidate document and the candidate-length skew are the ones
+    measured on the dense control's candidate sets (EXP-0024/0026); the per-call
+    overhead is not calibrated until JEV_CALIBRATION_RUN_ID is set, and says so.
+    """
+    rule = pricing.rerank_price(model, provider)
+    if not rule or "usd_per_mtok" not in rule:
+        estimate["price_unavailable"] = (
+            f"{model} ({provider}) not in the rerank table ({pricing.pricing_version}); "
+            "an absent entry is unknown, never free (MIS-025)."
+        )
+        return estimate
+    calls = n_questions * candidate_docs * RERANK_CHUNKS_PER_CANDIDATE_DOC
+    tokens_per_call = (
+        candidate_words * RERANK_CANDIDATE_LENGTH_FACTOR * WORDS_TO_TOKENS + JEV_TOKENS_PER_CALL_OVERHEAD
+    )
+    tokens = int(calls * tokens_per_call)
+    calibrated = (f"overhead calibrated on {JEV_CALIBRATION_RUN_ID}, not validated out of sample"
+                  if JEV_CALIBRATION_RUN_ID else "per-call overhead NOT calibrated")
+    estimate["rerank_usd"] = round(tokens / 1e6 * float(rule["usd_per_mtok"]), 4)
+    estimate["tokens"] = tokens
+    estimate["calls"] = round(calls)
+    estimate["tokens_per_call"] = round(tokens_per_call, 1)
+    estimate["source"] = (
+        f"published ${rule['usd_per_mtok']}/Mtok input x {tokens:,} tokens "
+        f"({calls:,.0f} calls, one per candidate chunk, at {tokens_per_call:.0f} tokens each; "
+        f"{calibrated})"
     )
     return estimate
 
@@ -837,9 +889,11 @@ def actual_run_cost(
     rerank_usage = (reranker_meta or {}).get("usage") or {}
     if rerank_usage.get("cost_usd"):
         # Provider-reported, straight off `usage.cost`; no table is consulted
-        # because no table is trustworthy for rerank models (MIS-025).
+        # because no table is trustworthy for rerank models (MIS-025). The one
+        # exception declares itself: Jev reports tokens only (DEC-101).
         parts["rerank"] = round(float(rerank_usage["cost_usd"]), 6)
-        measured.append("rerank")
+        measured.append("rerank" if not (reranker_meta or {}).get("cost_basis")
+                        else "rerank (reported tokens x published rate)")
     if judge_estimate_usd is not None:
         parts["judge"] = judge_estimate_usd
         estimated.append("judge")

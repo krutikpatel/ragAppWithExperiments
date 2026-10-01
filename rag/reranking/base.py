@@ -86,6 +86,11 @@ class Reranker(ABC):
     # reads it exactly as it reads a retriever's, records the cache hit rate and
     # marks the run `pipeline_nondeterministic` (P2-03).
     pipeline_llm: PipelineLLM | None = None
+    # OQ-054, DEC-102: a reranker whose scores are probabilities may set a floor. The
+    # context then holds only reranked chunks scoring at least this, so fewer than
+    # top_k documents can reach the generator. The RANKING is untouched — every
+    # retrieval metric reads the same list with or without a floor.
+    context_floor: float | None = None
 
     def __init__(
         self,
@@ -243,6 +248,16 @@ def rerank_result(
     scored = [ScoredChunk(chunk_id=cid, doc_id=chunk_to_doc[cid], score=score) for cid, score in spliced]
     docs = pool_chunks_to_docs(spliced, chunk_to_doc, rule=doc_pooling)
     context = select_distinct_docs(spliced, chunk_to_doc, k=k_docs, candidate_pool=candidate_pool)
+    floor = reranker.context_floor
+    floor_cut = 0
+    if floor is not None:
+        # Only reranked chunks have a score on the reranker's scale; the tail was never
+        # judged, so it cannot pass a floor. `reranked` is sorted best first, so the
+        # filter keeps a prefix and the walk order is unchanged.
+        passing = [(c.chunk_id, c.score) for c in reranked if c.score >= floor]
+        unfloored = context
+        context = select_distinct_docs(passing, chunk_to_doc, k=k_docs, candidate_pool=candidate_pool)
+        floor_cut = len(unfloored.doc_ids) - len(context.doc_ids)
     new = RetrievalResult(
         question_id=result.question_id,
         chunks=scored,
@@ -265,4 +280,8 @@ def rerank_result(
         # question, which is a fact worth having per question and not just on average.
         "rerank_topk_changed": float(len(set(after_docs) - set(before_docs))),
     }
+    if floor is not None:
+        # Documents the floor kept out of the context. A floored question also reads
+        # `pool_exhausted` = 1 (fewer than top_k documents); this says why.
+        record["context_floor_cut"] = float(floor_cut)
     return new, record

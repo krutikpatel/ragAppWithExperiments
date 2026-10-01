@@ -1207,3 +1207,59 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      p ≈ 0). I under-called it: a change that only ever loses questions reaches significance
      at 6 losses (DETECTION_FLOOR).
   5. PASS at $0 → confirmed. 6. REJECTED at $0 → confirmed.
+
+## H-042 — A 0.55 Jev floor trades a few gold documents for cleaner citations (EXP-0069)
+- **Date written:** 2026-09-30, before EXP-0069 ran.
+- **Source:** Claude's expectations. The floor value is the cookbook's `evidence_min`
+  (DEC-102); the replay numbers are measured on EXP-0068's stored scores; nothing else
+  here is measured.
+- **Setup:** EXP-0069 against EXP-0068, same 100-question `dev` subsample. Only
+  `context_floor: 0.55` changes. Jev is re-called, so EXP-0069 also carries Jev's run-to-run
+  noise (OQ-055).
+- **Expectations:**
+  1. Gold in context falls from 0.880 to about the replay's 0.820, within ±0.03 for Jev's
+     noise. The fall is significant on the paired test, because a floor only removes.
+  2. Citation precision rises from 0.404, but by less than its MDD (0.08). The answer model
+     cited weak documents at top 10 (EXP-0068), and fewer weak documents are offered.
+  3. Citation recall: no measurable difference.
+  4. The refusal rate rises by 0–3 questions; the replay shows one empty context.
+  5. Mean documents in context are about 7.7.
+- **The part I trust least:** 2. EXP-0068's precision drop may come from the generator
+  citing documents that were relevant but not gold, which a floor would keep.
+- **Resolution (2026-10-01, EXP-0069 `run_20261001_054236_d7ea`):** **mixed.**
+  1. Gold in context: the level was right (0.880 → 0.820, the replay's 0.820), but the
+     significance was **wrong**: p = 0.069, although the bootstrap CI [−0.12, −0.01]
+     excludes zero. Seven losses against one gain did not reach p < 0.05 on 100
+     questions.
+  2. Citation precision rose by less than its MDD → **confirmed**: +0.048, p = 0.202. The
+     part I trusted least held in direction; it is not a finding.
+  3. Citation recall, no measurable difference → **confirmed** (−0.023, p = 0.630).
+  4. Refusals rise by 0–3 → **confirmed at the edge** (1 → 4). But the one empty context
+     was **not** among them: it was answered with invented steps (F23), which I did not
+     foresee.
+  5. About 7.7 documents → **confirmed** (7.73).
+
+## H-043 — Sending the article title to Jev makes no measurable difference on strict recall@5 (EXP-0070)
+- **Date written:** 2026-10-01, before either EXP-0070 run.
+- **Source:** Claude's expectation. The 24.9% of candidate chunks with no title is measured
+  (DEC-102); nothing else here is.
+- **Setup:** EXP-0070 runs 1 and 2 against both EXP-0066 runs (`run_20261001_010640_e5b4`,
+  `run_20261001_011054_df57`: strict recall@5 0.760 / 0.750). Only `include_title: true`
+  changes. Decided by OQ-059.
+- **Expectations:**
+  1. strict recall@5: no measurable difference against either EXP-0066 run, in both runs.
+     The two EXP-0066 runs differ by 0.010, and the title reaches only a quarter of the
+     chunks, most of them second chunks of articles whose first chunk already carries the
+     title.
+  2. strict recall@1 and nDCG@10 within ±0.02 of EXP-0066.
+  3. Tokens per call rise by about 10–15 (the title), so cost is within 3% of EXP-0066's
+     $0.0816.
+- **The part I trust least:** 1. A second chunk with its title may now outrank the first
+  chunk, which changes which chunk represents the document but not the document order. The
+  effect on recall could go either way, and I have no basis for its size.
+- **Resolution (2026-10-01, EXP-0070 `run_20261001_061721_a50f`, `run_20261001_062210_ec9c`):**
+  1. No measurable difference on strict recall@5 → **confirmed**: Δ −0.020 … −0.005, p ≥ 0.212
+     in all four pairings. The part I trusted least held.
+  2. strict@1 and nDCG@10 within ±0.02 → **confirmed** (+0.005 … +0.010; −0.001 … +0.002).
+  3. +10–15 tokens per call → **wrong**: +24 (846.6 → 870.6). Cost within 3% → **wrong at
+     the edge**: +2.9% against EXP-0066's actual, +3.4% against the estimate.

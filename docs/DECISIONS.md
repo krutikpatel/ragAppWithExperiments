@@ -3792,3 +3792,164 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Evidence:** `tests/test_ci_history.py`; `ci/history.jsonl` (38 jobs at writing).
 - **Revisit if:** the repository's artifact retention changes, or CI moves off GitHub Actions.
   Run `rag ci-history` after gate runs you want on record; it is not automatic.
+
+## DEC-101 — Reopen Axis 5 for one reranker: TypeSafe Jev, called direct, one call per chunk
+- **Date:** 2026-09-30
+- **Decided by:** Krutik (the model, the version pin and one call per chunk); Claude (the
+  mechanism below: prompt wording, cost basis, the model-check exemption, 8 worker threads).
+- **Status:** Active
+- **Context:** Axis 5 closed with three hosted cross-encoders and no measurable difference
+  against the dense control (EXP-0024/0025/0026, then OQ-038's candidate-count runs
+  EXP-0052/0053). Krutik asked to test TypeSafe's Jev as a reranker on branch
+  `jev-experiment1`. Jev is a "System One" decision model: it answers a typed question
+  about a `state` with a probability rather than writing text. It is a different mechanism
+  from a cross-encoder's relevance score and from the LLM-as-reranker (cut in DEC-060).
+- **What was probed (preflight 10):**
+  - OpenRouter lists only `typesafe/jev-router` (price `-1`, zero endpoints — a router that
+    picks a model per request); `typesafe/jev-latest` and `typesafe/jev` are 404 on
+    `/models/<id>/endpoints`. A router cannot be pinned, so OpenRouter was not used.
+  - TypeSafe's own `POST https://api.typesafe.ai/v1/systemone`: 403 without a key; 422
+    "Field required: questions" with `TYPESAFE_JEV_KEY`, so the key authenticates. No
+    billable call was made.
+  - Published (docs.typesafe.ai and third-party pages, 2026-09-30, **not measured**):
+    models `jev-1.13.0` and alias `jev-latest`; $0.042/Mtok input, output free; 1,200
+    requests/min; 32k tokens of state + question per request.
+- **Options considered:**
+  1. `typesafe/jev-router` via OpenRouter — rejected: routes to an unrecorded model per
+     request, which breaks the exact-model-id rule (CLAUDE.md section 10).
+  2. `jev-latest` — rejected by Krutik: a floating alias.
+  3. Batch up to 30 chunks per request — rejected by Krutik: a chunk's score could depend on
+     the other chunks in its request.
+  4. **`jev-1.13.0` direct, one `noul` question per (query, chunk) request — chosen.**
+- **Decision:**
+  - `rag/reranking/typesafe.py`, registered `typesafe_jev`. State is
+    `{"query", "passage"}` (the chunk's indexed text); the question is `rerank_jev@v1`, whose
+    relevance rule mirrors `rerank_llm@v1`; the score is the `noul` probability. The
+    constructor refuses aliases (`*latest`, `*preview`) and an unpriced model.
+  - Every response is asserted: the answer exists, is a `noul` in [0, 1], reports
+    `input_tokens`, and (when present) `model` equals the pin.
+  - **Cost basis differs from MIS-025.** The response has no cost field, so cost = reported
+    `input_tokens` x the published $0.042/Mtok in `configs/pricing.yaml`, labelled NOT
+    MEASURED there and on the run row (`cost_basis`). After the first paid call, compare it
+    with TypeSafe's billing page and log any gap as a MIS entry.
+  - `rag models verify` does not check Jev (it is not on OpenRouter under this id);
+    `verified_by_model_check = False` on the class.
+  - EXP-0065 (`configs/exp_0065_rerank_jev_dev.yaml`) is a one-dimension diff against
+    promoted with the same candidate shape as EXP-0024/0025/0026: 50 distinct documents ->
+    top 5, `dev`. Decided by OQ-053.
+  - The cost estimate's per-call overhead (200 tokens) is **not calibrated**; a probe of a
+    few questions, approved separately, replaces it with measured `input_tokens`.
+- **Evidence:** No measured data on quality; probes above. `--estimate-only`: $0.3150 for
+  EXP-0065 on `dev` (uncalibrated estimate).
+- **Consequences:** A fourth reranker in the Axis 5 family, comparable to EXP-0024/0025/0026
+  (same corpus, split, candidate set). `.env` gains `TYPESAFE_JEV_KEY`.
+- **Revisit if:** the billed amount differs from the computed cost by more than 10%;
+  TypeSafe changes `jev-1.13.0`'s behaviour or retires it; or the response's `model` field
+  names something other than the pin.
+- **Probe, 2026-09-30 (approved by Krutik; 5 `dev` questions, not a store run; artifacts in
+  `results/probes/jev_20260930/`, raw responses committed as
+  `tests/fixtures/jev_1_13_0_responses.jsonl`):**
+  - 270 calls (50–60 chunks per question), 0 retries, 0 rate limits. p50 latency 171 ms per
+    call, max 383 ms; about 1.3 s per question with 8 workers.
+  - The response is `{"model", "answers": {"relevant": {"type", "noul"}}, "usage":
+    {"input_tokens", "output_tokens"}}`. `model` was `jev-1.13.0` on every call, so the pin
+    assertion holds.
+  - 220,328 input tokens = **$0.009254** computed. Mean 816.0 tokens per call at 339.4
+    passage words; the estimator's per-call overhead moves from the 200 guess to 385, and the
+    EXP-0065 estimate from $0.3150 to **$0.4058**.
+  - **Scores are rounded to two decimals**: 79 distinct values across 270 calls, so ties
+    are common and break on `chunk_id` (MIS-003).
+  - **Scores are not repeatable.** Three identical requests, each sent four times, returned
+    0.26/0.24/0.23/0.28, 0.11/0.13/0.13/0.15 and 0.29/0.36/0.28/0.29. The request exposes no
+    seed or temperature. Tracked as OQ-055.
+  - Still open: the billed amount on TypeSafe's dashboard against the computed $0.009254.
+
+## DEC-102 — Two opt-in Jev options from TypeSafe's RAG guidance: a probability floor on the context, and the article title in the state
+- **Date:** 2026-09-30
+- **Decided by:** Krutik (the floor, and its value 0.4: "ignore the jev response if score is
+  lower than 40 or something"); Claude (where the floor applies, the title option, and
+  what was left out — said in chat).
+- **Status:** Active
+- **Context:** Krutik added `docs/typesafe-rag-guide.md`, a guide to using Jev in a RAG
+  pipeline built from TypeSafe's *Classifying RAG passages* and *Re-ranking* cookbooks.
+  It was compared with DEC-101's usage. The cookbooks were re-read on 2026-09-30.
+  External claims, **untested here.** What DEC-101 already does as the guide says: one
+  request per (query, passage) pair, a pinned `jev-1.13.0`, a `noul` question with `true`
+  and `false` criteria whose `false` names the near-miss, the full chunk text, sorting by
+  the probability.
+- **Options considered:**
+  1. **A floor on Jev's probability (OQ-054) — chosen, opt-in.** `reranker_params.
+     context_floor`: reranked chunks below it cannot reach the generator, so a question gets
+     0 to `top_k` documents. It is applied in `rerank_result` to the **context only**; the
+     ranking is unchanged, so no retrieval metric can move (tested). Tail chunks, which Jev
+     never scored, cannot pass a floor. Each question records `context_floor_cut`. A floored
+     question also reads `pool_exhausted` = 1. An empty context still goes to the generator,
+     whose prompt tells it to refuse. 0.4 is a probability: `40` is refused.
+  2. **The article title in the state (OQ-059) — chosen, opt-in.** `reranker_params.
+     include_title: true` sends `passage: {"title", "text"}` rather than the text alone.
+     Measured on EXP-0065 run 1's candidates: 2,913 of 11,680 scored chunks (24.9%) were not
+     their article's first chunk, so they reached Jev with no title. `source_type` and `id`
+     from the guide's state are left out: every article has the same source, and an id
+     carries no meaning for the question.
+  3. **Several `noul` questions per call with routing (relevance, answer evidence,
+     contradicts-the-premise, prompt injection) — not built now, OQ-060.** `dev` has no
+     false-premise or injected passages to measure the last two on. Each extra question adds
+     its instruction tokens to every call. The relevance + evidence blend has no measured
+     basis here.
+  4. Change the default for the existing configs — rejected: EXP-0065..0068 must reproduce.
+     Both options are off unless a config sets them, and neither key appears in an earlier
+     config, so no earlier `config_hash` moves.
+- **Decision:** Options 1 and 2, each off by default. EXP-0069
+  (`configs/exp_0069_rerank_jev_topk10_floor04_tier2_dev.yaml`, one dimension against
+  EXP-0068) tests the floor. EXP-0070 (`configs/exp_0070_rerank_jev_c10_title_dev.yaml`, one
+  dimension against EXP-0066) tests the title. Neither has run; each needs Krutik's spend
+  approval.
+  > **CORRECTED by the addendum below on 2026-09-30:** EXP-0069 uses a floor of 0.55, not 0.4,
+  > and its config file is now `exp_0069_rerank_jev_topk10_floor055_tier2_dev.yaml`.
+- **Evidence:** A replay of floors over stored scores, with no API calls (OQ-054):
+  - **Method.** For each run, the reranked head was re-walked with the floor applied.
+    `results/probes/jev_threshold_replay/replay.py`, output `replay.csv` (gitignored).
+  - **Check.** With no floor, the replay matched the stored context on every question of
+    all six runs.
+  - **EXP-0068 (`run_20261001_012227_eaa4`, top 10, 100 questions):**
+
+    | Floor | Docs in context (mean) | Gold in context |
+    |---|---|---|
+    | none | 10 | 0.880 |
+    | 0.4 | 8.53 | 0.840 |
+    | 0.5 | 8.05 | 0.830 |
+    | 0.7 | 6.09 | 0.770 |
+
+    At 0.4, no question had an empty context.
+  - **EXP-0065 run 1 (`run_20260930_234940_b728`, top 5):** at 0.4, 4.74 docs and gold in
+    context 0.730 → 0.715.
+  - **A floor can only remove documents.** It never adds a gold document, so gold in context
+    can only stay level or fall. Whether removing documents changes the answers is EXP-0069's
+    question.
+- **Consequences:** `Reranker.context_floor` exists on the base class and only `typesafe_jev`
+  sets it. Run rows with a floor carry `metrics_json.context_floor`. A Jev call with the
+  title adds the title's tokens, which the cost estimate does not count. The guide's
+  calibration table is not used: its example scores do not match the stored runs (see
+  OQ-059).
+- **Revisit if:** EXP-0069 shows no measurable difference on any generation metric; a split
+  with unanswerable questions is run with a floor (OQ-054's refusal half); or TypeSafe
+  documents a supported way to pass passage metadata.
+- **Addendum, 2026-09-30 — the floor is 0.55, not 0.4 (Krutik, before any run):**
+  - **Why it changed.** 0.4 came from Krutik's "40 or something". Asked whether the guide
+    gives a real number, it gives two, both copied from TypeSafe's cookbook: `relevant_min`
+    0.45 and `evidence_min` 0.55. The guide calls them "starting points only; tune on your
+    own data".
+  - **Why 0.55.** `rerank_jev@v1`'s criteria are word for word the guide's
+    `has_answer_evidence` criteria, so 0.55 is the guide's number for this question.
+  - **Options put to Krutik:**
+    - A — 0.55 from the guide, **chosen**: the value comes from outside this corpus, so
+      nothing is tuned on `dev`.
+    - B — a value from a rule on `dev` scores (e.g. keep ≥95% of gold documents → 0.3):
+      tuning on `dev`, while EXP-0069's subsample is drawn from `dev`.
+  - **Measured on the two EXP-0065 runs:** 242 gold documents and 9,758 other documents with
+    a Jev score. A 0.55 floor keeps 86.8% / 86.4% of gold documents and 21.9% / 21.8% of the
+    others. Median score: gold 0.90, other 0.15.
+  - **Replay at 0.55 on EXP-0068 (`run_20261001_012227_eaa4`):** 7.71 documents per
+    question, gold in context 0.880 → 0.820, one question with an empty context.
+  - **The config was renamed before any run:**
+    `configs/exp_0069_rerank_jev_topk10_floor055_tier2_dev.yaml`.

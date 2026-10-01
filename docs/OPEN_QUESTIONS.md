@@ -831,3 +831,160 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   refusing or answering from the articles. Above 3 of 30, it is a failure category for
   FAILURES.md and a candidate gate rule. The set is authored data: its own DEC, and Krutik's
   approval for the run's spend.
+
+## OQ-053 — Does TypeSafe Jev reranking change strict recall@5 against the dense control?
+- **Status:** **answered by EXP-0065** (2026-10-01): no measurable difference. strict
+  recall@5 0.720 → 0.730 (p = 0.899) and → 0.745 (p = 0.598) over two runs; vs EXP-0025
+  Δ 0.000 / +0.015.
+- **What is known:** three cross-encoders gave no measurable difference against promoted
+  (EXP-0024/0025/0026). Jev scores each (query, chunk) pair as a yes/no probability, a
+  mechanism not yet tested here. External claim (TypeSafe re-ranking cookbook and
+  community rerankers built on Jev): it is usable as a calibrated reranker. **Untested here.**
+- **Decided by:** strict recall@5 on `dev` via `rag compare` against promoted (0.720) and
+  against EXP-0025 (`cohere/rerank-4-fast`). A finding needs p < 0.05 with the paired CI
+  excluding zero; otherwise "no measurable difference". Same candidate set as the other
+  three rerankers (50 documents -> top 5).
+
+## OQ-054 — Can Jev's probability be used as a cut-off, not only a sort key?
+- **Status:** **queued** (2026-09-30): stored-score replay done (DEC-102); Tier 2 run
+  EXP-0069 configured, awaiting spend approval. Surfaced 2026-09-30 while proposing DEC-101.
+  > **Status update 2026-10-01:** the Tier 2 half on `dev` is **answered by EXP-0069**. A
+  > 0.55 floor cut the context by 23% with no measurable difference on any answer metric
+  > (citation precision +0.048, p = 0.202). The refusal half, on the `unanswerable` split,
+  > is still open. On `dev` the one empty context was not refused (OQ-061).
+- **What is known:** Jev's `noul` answer is a probability, which the vendor describes as
+  calibrated. External claim, **untested here.** A cut-off would send fewer than 5
+  documents to the generator when few pass it — a Tier 2 (generation) question, not a
+  retrieval one.
+- **Decided by:** only after OQ-053. Replay thresholds over EXP-0065's stored scores (as
+  P2-14 did for abstention), then run the chosen threshold at Tier 2 on `dev`: faithfulness
+  and the refusal rate on the unanswerable slice against the same config without the
+  cut-off. Its own DEC first.
+- **Replay, 2026-09-30 (DEC-102):**
+  - **Method.** Floors 0.2–0.8 were replayed over the six stored Jev runs, with no API
+    calls. With no floor, the replay matched the stored context on every question.
+  - **EXP-0068 (top 10) at 0.4:** 8.53 documents per question, gold in context 0.880 →
+    0.840, no empty context.
+  - **EXP-0065 run 1 (top 5) at 0.4:** 4.74 documents, gold in context 0.730 → 0.715.
+  - **What a floor can and cannot do.** It only removes documents, so gold in context
+    cannot rise.
+  - **What the replay cannot tell us.** `dev` has no unanswerable questions, so it cannot
+    show whether an emptier context produces correct refusals. The refusal half still needs
+    a run on the `unanswerable` split, both with and without the floor.
+  - **Next step.** EXP-0069 (floor 0.4, Krutik's value) against EXP-0068 on the 100-question
+    subsample: citation precision and recall, gold in context, refusal rate, step coverage.
+    > **CORRECTED by DEC-102's addendum on 2026-09-30:** the floor is 0.55, the guide's
+    > `evidence_min`. Replay at 0.55 on EXP-0068: 7.71 documents per question, gold in
+    > context 0.880 → 0.820, one empty context.
+
+## OQ-055 — How much does Jev's run-to-run score noise move EXP-0065's result?
+- **Status:** **answered by EXP-0065** (2026-10-01): two identical `dev` runs gave strict
+  recall@5 0.730 and 0.745 (Δ 0.015, p = 0.502); 64/200 questions got a different top-5
+  set. A single Jev run's strict recall@5 moves about 0.015 on its own.
+- **What is known:** identical Jev requests returned scores differing by up to 0.08 across
+  four sends, rounded to two decimals, with no seed to fix. Chunks whose scores sit close
+  together can swap places between runs, so one EXP-0065 run may not reproduce its own
+  top 5. Same situation as the query embeddings (OQ-023), at a size not yet measured.
+- **Decided by:** running the EXP-0065 config twice on `dev` and comparing the two by
+  `rag compare`: the share of questions whose top-5 documents differ, and the strict
+  recall@5 gap between the runs. That gap is the noise floor any Jev delta must clear
+  before it counts as a finding.
+
+## OQ-056 — Does Jev help expert-written questions and hurt simulated ones?
+- **Status:** open. Surfaced 2026-10-01 by EXP-0065.
+- **What is known:** on the `source:expertwritten` slice (n=100) both Jev runs scored
+  +0.110 strict recall@5 against the control (p = 0.029, 0.035); on `source:simulated`
+  (n=100) −0.090 and −0.060 (p = 0.19, 0.39). One slice of eight, looked at after the run,
+  so it is not a finding.
+- **Decided by:** a fresh sample, not the same 200 questions: the slice's direction on
+  another split that has both sources (Krutik's call on which; `test` needs
+  `--open-test`), at p < 0.05 on that slice alone. Its own approval for spend.
+
+## OQ-057 — Does Jev rank differently with 10 candidate documents instead of 50?
+- **Status:** **answered by EXP-0066** (2026-10-01): no measurable difference on strict
+  recall@5 against promoted (p = 0.229 / 0.408) or against EXP-0065. strict recall@1 and
+  nDCG@10 were below p = 0.05 in both runs (not the deciding metric). Surfaced 2026-10-01,
+  Krutik's request.
+- **What is known:** at 50 candidates Jev showed no measurable difference against the
+  dense control (EXP-0065). For cohere/rerank-4-fast, 20 vs 50 vs 100 candidates made no
+  measurable difference (OQ-038, EXP-0052/0053). Jev with 10 candidates is untested.
+- **Decided by:** strict recall@5 on `dev` via `rag compare`, each run against promoted and
+  against both EXP-0065 runs; p < 0.05 with the CI excluding zero, in both EXP-0066 runs.
+  The two EXP-0066 runs against each other give its own noise gap.
+
+## OQ-058 — With Jev's ranking, does sending 10 documents to the generator instead of 5 change the answers?
+- **Status:** **answered by EXP-0068** (2026-10-01): same shape as OQ-040. Gold in context
+  0.740 → 0.880 (p = 0.0001), citation precision 0.492 → 0.404 (p = 0.016), citation
+  recall no measurable difference. Surfaced 2026-10-01, Krutik's request.
+- **What is known:** for the dense ranking, top_k 10 put the gold document in front of the
+  generator more often (0.670 → 0.820) but citation precision fell by more than its MDD
+  (EXP-0051, OQ-040). The same question with Jev's ranking is untested.
+- **Decided by:** EXP-0068 against EXP-0067 on the fixed 100-question dev subsample, on
+  the deterministic generation metrics OQ-040 used: gold in context, citation precision
+  and recall, step coverage, refusal rate, judged against their measured MDDs via
+  `rag diff`. Judge skipped (DEC-063). EXP-0067 against EXP-0006 also gives Jev's effect
+  on answers at top 5. Single runs; Jev's noise at Tier 2 is unmeasured, which the
+  write-up must say.
+
+## OQ-059 — Does giving Jev the article title change its ranking?
+- **Status:** queued (EXP-0070 configured, awaiting spend approval). Surfaced 2026-09-30
+  from Krutik's `docs/typesafe-rag-guide.md`.
+  > **Status update 2026-10-01: answered by EXP-0070.** No measurable difference: strict
+  > recall@5 Δ −0.020 … −0.005 against both EXP-0066 runs, p ≥ 0.212 in all four pairings.
+- **What is known:**
+  - The guide and TypeSafe's *Classifying RAG passages* cookbook put
+    `{id, title, text, source_type}` in the state. External claim, **untested here.**
+  - DEC-101 sends the chunk text alone.
+  - In EXP-0065 run 1, 2,913 of 11,680 scored chunks (24.9%) were not the first chunk of
+    their article, so they reached Jev with no title.
+- **The guide's calibration example does not match the stored runs.** The guide shows
+  "Wix Account and Site Ownership Disputes" scoring 0.34 for question `08bad226…`.
+  - In both EXP-0065 runs that pair scored **0.97**, rank 1.
+  - The gold article, "Roles & Permissions: Inviting People to Collaborate on Your Site",
+    scored 0.93 and 0.92 (rank 3).
+  - The 0.34 is line 1 of `tests/fixtures/jev_1_13_0_responses.jsonl`, a different probe
+    call (a 476-word passage). It was shown next to the rebuilt request in a chat answer.
+  - So on this example, the guide's own check fails: the near-miss outscored the gold.
+- **Decided by:** EXP-0070 (`include_title: true`) against both EXP-0066 runs. The
+  deciding metric is strict recall@5 on `dev` via `rag compare`, with p < 0.05 and the CI
+  excluding zero in both of EXP-0070's two runs. strict recall@1 and nDCG@10 are reported,
+  not deciding.
+
+## OQ-060 — Do several Jev questions per passage, routed in code, beat one relevance question?
+- **Status:** open. Surfaced 2026-09-30 from Krutik's `docs/typesafe-rag-guide.md`.
+- **What is known:**
+  - The guide asks four `noul` questions per passage in one call: relevant, has answer
+    evidence, contradicts the premise, prompt injection. It routes on fixed thresholds
+    (0.70 / 0.70 / 0.45 / 0.55) and ranks by 0.7 × evidence + 0.3 × relevance.
+  - TypeSafe's cookbook reports this routing on 6 queries / 72 passages, including one
+    injected passage caught at 0.99. External claims, **untested here.**
+  - The thresholds and weights are the cookbook's, not tuned on this corpus.
+- **Why not now:**
+  - `dev` has no false-premise or injected passages, so two of the four questions have
+    nothing to be measured on.
+  - Each extra question adds its instruction tokens to every call. Jev's per-call overhead
+    is 385 tokens at one question (probe, DEC-101).
+- **Decided by:**
+  1. First, a probe (its own spend approval) for the tokens per call with 2 and 4
+     questions.
+  2. Then relevance + evidence blended, against `rerank_jev@v1` alone, at 10 candidates on
+     `dev`, two runs: strict recall@5 via `rag compare`, p < 0.05 in both.
+  3. The contradiction and injection questions need an authored set with known false-premise
+     and injected passages. Krutik decides whether to build one.
+
+## OQ-061 — When the floor leaves no document, should the pipeline refuse without calling the generator?
+- **Status:** open. Surfaced 2026-10-01 from EXP-0069.
+- **What is known:**
+  - In EXP-0069 one question (`5c3ab38e…`) had an empty context. gpt-5-nano answered it
+    anyway, with four generic steps citing `[doc:question]`.
+  - `baseline_answer@v1` says to refuse when the articles do not cover the question; with
+    no articles it did not, in 1 of 1 cases.
+  - The refusal detector scored it as an answer.
+  - One case is not a rate.
+- **Decided by:**
+  1. Count first: the `unanswerable` split, Jev top 10 with the 0.55 floor. How many
+     questions get an empty context, and what the generator does with each.
+  2. If empty contexts are answered more than refused, a DEC for a pipeline rule: an
+     empty context returns the fixed refusal and makes no generator call. Measured
+     against the same config without the rule, on the `unanswerable` split's false-answer
+     rate.

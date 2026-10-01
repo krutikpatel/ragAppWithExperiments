@@ -1,0 +1,39 @@
+# EXP-0065 — Axis 5 reranking: TypeSafe Jev (jev-1.13.0), 50 candidate docs -> top-5
+#
+# DEC-101 reopens Axis 5 for one reranker, Krutik's choice. A one-dimension diff
+# against configs/promoted.yaml: the dense control, plus a reranker. Everything else
+# matches EXP-0024/0025/0026, so the four rerankers share one candidate set shape:
+# 50 distinct documents (~58 chunks per question) -> top 5 documents.
+#
+# Jev is called on TypeSafe's own API (TYPESAFE_JEV_KEY), one yes/no question per
+# candidate chunk (`rerank_jev@v1`), and chunks are sorted by P(relevant). Pinned to
+# jev-1.13.0, not the jev-latest alias. Cost = reported input tokens x the published
+# $0.042/Mtok, because the response carries no cost (DEC-101).
+#
+# Decided by OQ-053: strict recall@5 via `rag compare` against promoted and against
+# EXP-0025. Split: `dev` decides (DEC-055).
+name: "EXP-0065 — Axis 5 reranking: TypeSafe Jev jev-1.13.0, one call per chunk, 50 candidate docs -> top-5"
+axis: reranking
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+reranker: typesafe_jev
+reranker_params:
+  model: jev-1.13.0
+  prompt_version: v1
+  workers: 8
+rerank_candidates: 50
+doc_pooling: max
+seed: 1

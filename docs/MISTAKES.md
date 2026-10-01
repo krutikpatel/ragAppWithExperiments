@@ -241,6 +241,15 @@ Derived from the prevention rules below. Run through it and say in chat that you
 61. **After changing what the API reads at startup, rebuild the image and start it.** Unit
     tests run from the repo root and see every file; the image sees only what the Dockerfile
     copies. A test now checks the Dockerfile copies what the API reads (MIS-051).
+62. **A hosted API behind a CDN returns the CDN's errors too.** Retry every 5xx, not a
+    hand-picked list; Cloudflare's 520–524 are not in any provider's docs. And a crashed run
+    must still record what it spent: save reranker usage on failure (MIS-052).
+63. **An MDD label is only as good as its family.** Before quoting "significant" from
+    `rag compare`, check the family's runs had every random stage the compared run has (a
+    hosted reranker adds its own). Otherwise use the paired test (MIS-053).
+64. **Launch a paid run with a time limit at least 4x its expected wall clock, and watch it.**
+    A background job killed by its own timeout loses everything already paid for, because
+    question rows are written only at the end (MIS-055).
 
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
@@ -1677,3 +1686,103 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** a change to what a deployable reads at startup is verified by building
   and starting that deployable, not by running the code from the repo.
 - **Added to preflight:** yes, item 61.
+
+## MIS-052 — EXP-0065's first attempt died on one Cloudflare 520, and recorded $0 for calls it paid for
+- **Date:** 2026-09-30
+- **Severity:** Medium. One run VOID (`run_20260930_234257_a382`); its spend is unrecorded.
+- **What happened:** TypeSafe's API returned HTTP 520 ("Web server is returning an unknown
+  error", a Cloudflare page) partway through the run. `rag/reranking/typesafe.py` retried
+  only 408/409/425/429/500/502/503/504/529, so it raised on the first 520 and the run
+  stopped. The VOID row shows `calls: 0, cost_usd: 0.0`: the reranker's usage is saved only
+  at the start and the end of a run, and `pool.map` discarded the finished calls in the
+  failing question's batch. Every Jev call before the 520 was billed and not counted.
+- **How it was caught:** the traceback, then reading the VOID row's `reranker_meta`.
+- **Root cause:** I copied the OpenRouter reranker's retry list without checking what sits
+  in front of TypeSafe's API; the 5-question probe (270 calls) hit no errors, so nothing
+  tested it. The runner's crash path never saved reranker usage — true of every hosted
+  reranker since P2-10, unseen because none had crashed after its first paid call.
+- **Impact:** one VOID run. Spend is unknown: at most the full-run estimate ($0.41), likely
+  less. The number to trust is TypeSafe's billing page.
+- **Fix applied:** Jev retries every 5xx plus 408/409/425/429. `rerank` counts the usage of
+  every successful call in a question before raising the first failure. The runner saves
+  the reranker's usage on the VOID row when reranking raises. Tests cover all three.
+- **Prevention rule:** retry by status class (all 5xx), not by a list; save spend on the
+  failure path, not only on success.
+- **Added to preflight:** yes, item 62.
+
+## MIS-053 — `rag compare` labelled a Jev delta "significant" using the embeddings' noise floor
+- **Date:** 2026-10-01
+- **Severity:** Medium. No wrong number reached a document; the label was caught before
+  writing.
+- **What happened:** `rag compare promoted run_20261001_002530_3ca4` printed
+  `strict_recall@5 … Δ+0.025, MDD ±0.012 → significant`, while the paired test on the same
+  questions gave p = 0.598. The MDD came from the `dense-control-v1` family, which measured
+  run-to-run noise of the query embeddings alone. EXP-0065's two identical runs differ by
+  0.015 on that metric, so a reranker with its own randomness has a larger floor.
+- **How it was caught:** the two outputs disagreed, and EXP-0065 had measured Jev's own
+  run-to-run gap.
+- **Root cause:** `rag/eval/noise_floor.py` matches a run to a retrieval noise family
+  without checking whether the run adds a non-deterministic stage (a hosted reranker) that
+  the family's runs did not have.
+- **Impact:** none on the record: EXP-0065 and its index rows use the paired test and
+  call the label invalid. Earlier Axis 5 rows used the paired test too.
+- **Fix applied:** **not yet** — changing how the tool picks a noise family is a metric
+  decision and needs Krutik (CLAUDE.md section 9). Proposed: refuse a retrieval MDD label
+  when the run has a reranker the family does not, printing "no MDD measured".
+- **Prevention rule:** before quoting an MDD label, check the family's runs contain every
+  random stage the compared run has.
+- **Added to preflight:** yes, item 63.
+
+## MIS-054 — Four Jev runs ran with no HYPOTHESES entry (MIS-033 again)
+- **Date:** 2026-09-30
+- **Severity:** Low. No number is affected; the record of what was expected is.
+- **What happened:** EXP-0065, 0066, 0067 and 0068 ran without a `docs/HYPOTHESES.md`
+  entry written beforehand, despite preflight item 42.
+- **How it was caught:** going through the preflight checklist before EXP-0069.
+- **Root cause:** the preflight was stated in chat for those runs but not walked item by
+  item. Item 42 is the one with no tool enforcing it.
+- **Impact:** EXP-0065..0068 have no recorded prior expectation; their write-ups say only
+  what was measured. They are not back-filled: an entry written after the run is not
+  evidence of anything.
+- **Fix applied:** H-042 was written before EXP-0069. EXP-0070 gets its own entry before it
+  runs.
+- **Prevention rule:** before launching, read the checklist file itself, not a memory of
+  it.
+- **Added to preflight:** no. Item 42 already says it; this entry records that the item
+  was missed.
+
+## MIS-055 — EXP-0069 was killed by the launching shell's 30-minute limit, with ~$0.21 of Jev calls already spent
+- **Date:** 2026-10-01
+- **Severity:** Medium. One paid run lost: $0.205919 of Jev calls (computed) plus ~$0.009 of
+  generation.
+- **What happened:** Claude launched EXP-0069 as a background shell job with the default
+  30-minute limit. It had estimated about 9 minutes from EXP-0067/0068 but did not size the
+  limit to cover a slow run. The run passed 30 minutes in its generation step and was
+  killed. Its RUNNING row was set to VOID by hand.
+- **How it was caught:** the task notification "stopped after reaching its background time
+  limit".
+- **Root cause:**
+  1. The time limit was left at its default instead of being set from the worst case.
+  2. The runner gives no progress output during generation, so a slow step looks the same
+     as a hung one. Nothing showed the run falling behind before the kill.
+  - Why generation was slow is still unknown.
+- **Impact:** EXP-0069 attempt 1 is VOID. A re-run calls Jev again (another ~$0.21), and
+  needs Krutik's approval.
+- **Fix applied:** none in code yet. Re-runs are launched with the maximum time limit
+  (2 hours) and watched by a monitor on the store row.
+- **Prevention rule:** launch a paid run with a time limit of at least 4x its expected wall
+  clock (the tool's maximum is 2 hours), and watch it with something that reports progress.
+  A run that cannot finish inside the limit is money spent for nothing.
+- **Added to preflight:** yes, item 64.
+- **Addendum, 2026-10-01 (attempt 2):**
+  - **Attempt 2 completed.** `run_20261001_054236_d7ea` took about 31 minutes with the
+    2-hour limit.
+  - **Where the time went.** Stored stage latencies sum to about 14 minutes: retrieval
+    385 s, Jev 139 s, generation 326 s. Retrieval's tail was long, with one query embedding
+    at 83 s. The other ~17 minutes are not recorded by the runner.
+  - **Attempt 1's cause is still unknown.** Its stall may not have been the generator; a
+    30-minute run is within what attempt 2 needed.
+  - **A second error, during attempt 2.** Claude told Krutik Jev was slow, from counting
+    open connections once a second. The run's stored per-call mean was 175.8 ms, the same
+    as EXP-0068. A once-a-second sample of 0.2-second connections undercounts them.
+    Judge a stage's speed from what the run records, not from sampling sockets.

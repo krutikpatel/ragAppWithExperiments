@@ -776,16 +776,22 @@ def _execute(
             from rag.reranking.base import rerank_result
 
             started = time.perf_counter()
-            result, record = rerank_result(
-                result,
-                reranker,
-                query=row["question"],
-                chunk_to_doc=index.chunk_to_doc,
-                n_docs=config.rerank_candidates,
-                k_docs=config.top_k,
-                candidate_pool=config.candidate_pool,
-                doc_pooling=config.doc_pooling,
-            )
+            try:
+                result, record = rerank_result(
+                    result,
+                    reranker,
+                    query=row["question"],
+                    chunk_to_doc=index.chunk_to_doc,
+                    n_docs=config.rerank_candidates,
+                    k_docs=config.top_k,
+                    candidate_pool=config.candidate_pool,
+                    doc_pooling=config.doc_pooling,
+                )
+            except Exception:
+                # MIS-052: a hosted reranker has billed every call before the one that
+                # failed. Record that usage on the VOID row, or the row says $0.
+                store.update_run(run_id, reranker_meta=json.dumps(reranker.provenance(), default=str))
+                raise
             rerank_latency_ms[row["question_id"]] = int((time.perf_counter() - started) * 1000)
             rerank_records[row["question_id"]] = record
         results.append(result)
@@ -844,6 +850,16 @@ def _execute(
         aggregate["reranker"] = config.reranker
         aggregate["rerank_candidates"] = config.rerank_candidates
         aggregate["rerank_profile"] = reranker.provenance()
+        if reranker.context_floor is not None:
+            # OQ-054, DEC-102: what the floor did to the context, run-wide. An empty
+            # context still goes to the generator, whose prompt says to refuse.
+            rows_ = list(per_question.values())
+            aggregate["context_floor"] = {
+                "floor": reranker.context_floor,
+                "docs_cut_mean": round(sum(r["context_floor_cut"] for r in rows_) / len(rows_), 3),
+                "context_docs_mean": round(sum(r["context_docs"] for r in rows_) / len(rows_), 3),
+                "empty_context_questions": sum(1 for r in rows_ if r["context_docs"] == 0),
+            }
     aggregate.update(_selection_summary(per_question))
     aggregate["chunking_profile"] = chunking_profile
 
@@ -946,6 +962,13 @@ def _execute(
             else "exact: provider-reported per-query cost (embeddings and/or rerank); "
                  "index build cost in retriever_meta"
         )
+        # DEC-101: a reranker whose response carries tokens but no cost (Jev) is
+        # reported tokens x the published rate — measured volume, not a provider bill.
+        rerank_basis = reranker.provenance().get("cost_basis") if reranker else None
+        if query_cost and rerank_basis:
+            aggregate["cost_per_query_source"] = (
+                f"measured: query embeddings provider-reported; rerank = {rerank_basis}"
+            )
     elif "total_usd" in cost_estimate and rows:
         aggregate["cost_per_query_usd"] = round((cost_estimate["total_usd"] + query_cost) / len(rows), 5)
         aggregate["cost_per_query_source"] = "estimate: pre-run cost estimate / questions, plus exact query embedding cost"

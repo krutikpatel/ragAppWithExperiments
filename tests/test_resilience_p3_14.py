@@ -27,6 +27,7 @@ CALL_SITES = {
     "rag/generation/base.py": "OpenRouterGenerator._complete: max_attempts + a 429 budget, backoff",
     "rag/embedding/base.py": "OpenRouterEmbedder: retries with backoff, a 429 budget",
     "rag/reranking/openrouter.py": "OpenRouterReranker: retries with backoff, a 429 budget",
+    "rag/reranking/typesafe.py": "TypeSafeJevReranker._call: retries with backoff, a 429 budget (DEC-101)",
     "rag/runner/model_check.py": "fetch_endpoints: RETRIES with backoff",
     "rag/http_retry.py": "get_json: bounded retries with backoff (cost estimator, pricing refresh)",
     "rag/eval/judge.py": "AsyncOpenAI(max_retries=JUDGE_HTTP_RETRIES) + FaithfulnessClaims' one retry",
