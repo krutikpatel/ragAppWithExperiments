@@ -869,6 +869,9 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
     a run on the `unanswerable` split, both with and without the floor.
   - **Next step.** EXP-0069 (floor 0.4, Krutik's value) against EXP-0068 on the 100-question
     subsample: citation precision and recall, gold in context, refusal rate, step coverage.
+    > **CORRECTED by DEC-102's addendum on 2026-09-30:** the floor is 0.55, the guide's
+    > `evidence_min`. Replay at 0.55 on EXP-0068: 7.71 documents per question, gold in
+    > context 0.880 → 0.820, one empty context.
 
 ## OQ-055 — How much does Jev's run-to-run score noise move EXP-0065's result?
 - **Status:** **answered by EXP-0065** (2026-10-01): two identical `dev` runs gave strict

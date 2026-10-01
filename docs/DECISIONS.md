@@ -3904,6 +3904,8 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
   EXP-0068) tests the floor. EXP-0070 (`configs/exp_0070_rerank_jev_c10_title_dev.yaml`, one
   dimension against EXP-0066) tests the title. Neither has run; each needs Krutik's spend
   approval.
+  > **CORRECTED by the addendum below on 2026-09-30:** EXP-0069 uses a floor of 0.55, not 0.4,
+  > and its config file is now `exp_0069_rerank_jev_topk10_floor055_tier2_dev.yaml`.
 - **Evidence:** A replay of floors over stored scores, with no API calls (OQ-054):
   - **Method.** For each run, the reranked head was re-walked with the floor applied.
     `results/probes/jev_threshold_replay/replay.py`, output `replay.csv` (gitignored).
@@ -3932,3 +3934,22 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
 - **Revisit if:** EXP-0069 shows no measurable difference on any generation metric; a split
   with unanswerable questions is run with a floor (OQ-054's refusal half); or TypeSafe
   documents a supported way to pass passage metadata.
+- **Addendum, 2026-09-30 — the floor is 0.55, not 0.4 (Krutik, before any run):**
+  - **Why it changed.** 0.4 came from Krutik's "40 or something". Asked whether the guide
+    gives a real number, it gives two, both copied from TypeSafe's cookbook: `relevant_min`
+    0.45 and `evidence_min` 0.55. The guide calls them "starting points only; tune on your
+    own data".
+  - **Why 0.55.** `rerank_jev@v1`'s criteria are word for word the guide's
+    `has_answer_evidence` criteria, so 0.55 is the guide's number for this question.
+  - **Options put to Krutik:**
+    - A — 0.55 from the guide, **chosen**: the value comes from outside this corpus, so
+      nothing is tuned on `dev`.
+    - B — a value from a rule on `dev` scores (e.g. keep ≥95% of gold documents → 0.3):
+      tuning on `dev`, while EXP-0069's subsample is drawn from `dev`.
+  - **Measured on the two EXP-0065 runs:** 242 gold documents and 9,758 other documents with
+    a Jev score. A 0.55 floor keeps 86.8% / 86.4% of gold documents and 21.9% / 21.8% of the
+    others. Median score: gold 0.90, other 0.15.
+  - **Replay at 0.55 on EXP-0068 (`run_20261001_012227_eaa4`):** 7.71 documents per
+    question, gold in context 0.880 → 0.820, one question with an empty context.
+  - **The config was renamed before any run:**
+    `configs/exp_0069_rerank_jev_topk10_floor055_tier2_dev.yaml`.

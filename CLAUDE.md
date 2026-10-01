@@ -588,7 +588,7 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     runs (DEC-072; the c100 one sets retrieval_depth 150).
                     exp_0065_rerank_jev_dev.yaml is TypeSafe Jev on the same 50 -> 5
                     candidate shape (DEC-101, OQ-053).
-                    exp_0069 is Jev top-10 at Tier 2 with a 0.4 floor (OQ-054) and
+                    exp_0069 is Jev top-10 at Tier 2 with a 0.55 floor (OQ-054) and
                     exp_0070 Jev 10 -> 5 with the title in the state (OQ-059), DEC-102.
                     exp_0031..0034_*.yaml are Axis 4 (P2-12, DEC-065 — decomposition
                     runs first per the story).
