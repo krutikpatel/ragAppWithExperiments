@@ -247,6 +247,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 63. **An MDD label is only as good as its family.** Before quoting "significant" from
     `rag compare`, check the family's runs had every random stage the compared run has (a
     hosted reranker adds its own). Otherwise use the paired test (MIS-053).
+64. **Launch a paid run with a time limit at least 4x its expected wall clock, and watch it.**
+    A background job killed by its own timeout loses everything already paid for, because
+    question rows are written only at the end (MIS-055).
 
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
@@ -1747,3 +1750,27 @@ Derived from the prevention rules below. Run through it and say in chat that you
   it.
 - **Added to preflight:** no. Item 42 already says it; this entry records that the item
   was missed.
+
+## MIS-055 — EXP-0069 was killed by the launching shell's 30-minute limit, with ~$0.21 of Jev calls already spent
+- **Date:** 2026-10-01
+- **Severity:** Medium. One paid run lost: $0.205919 of Jev calls (computed) plus ~$0.009 of
+  generation.
+- **What happened:** Claude launched EXP-0069 as a background shell job with the default
+  30-minute limit. It had estimated about 9 minutes from EXP-0067/0068 but did not size the
+  limit to cover a slow run. The run passed 30 minutes in its generation step and was
+  killed. Its RUNNING row was set to VOID by hand.
+- **How it was caught:** the task notification "stopped after reaching its background time
+  limit".
+- **Root cause:**
+  1. The time limit was left at its default instead of being set from the worst case.
+  2. The runner gives no progress output during generation, so a slow step looks the same
+     as a hung one. Nothing showed the run falling behind before the kill.
+  - Why generation was slow is still unknown.
+- **Impact:** EXP-0069 attempt 1 is VOID. A re-run calls Jev again (another ~$0.21), and
+  needs Krutik's approval.
+- **Fix applied:** none in code yet. Re-runs are launched with the maximum time limit
+  (2 hours) and watched by a monitor on the store row.
+- **Prevention rule:** launch a paid run with a time limit of at least 4x its expected wall
+  clock (the tool's maximum is 2 hours), and watch it with something that reports progress.
+  A run that cannot finish inside the limit is money spent for nothing.
+- **Added to preflight:** yes, item 64.
