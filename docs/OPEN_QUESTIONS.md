@@ -833,7 +833,9 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   approval for the run's spend.
 
 ## OQ-053 — Does TypeSafe Jev reranking change strict recall@5 against the dense control?
-- **Status:** queued as EXP-0065 (DEC-101). Not yet run.
+- **Status:** **answered by EXP-0065** (2026-10-01): no measurable difference. strict
+  recall@5 0.720 → 0.730 (p = 0.899) and → 0.745 (p = 0.598) over two runs; vs EXP-0025
+  Δ 0.000 / +0.015.
 - **What is known:** three cross-encoders gave no measurable difference against promoted
   (EXP-0024/0025/0026). Jev scores each (query, chunk) pair as a yes/no probability, a
   mechanism not yet tested here. External claim (TypeSafe re-ranking cookbook and
@@ -855,7 +857,9 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   cut-off. Its own DEC first.
 
 ## OQ-055 — How much does Jev's run-to-run score noise move EXP-0065's result?
-- **Status:** open. Surfaced 2026-09-30 by the DEC-101 probe.
+- **Status:** **answered by EXP-0065** (2026-10-01): two identical `dev` runs gave strict
+  recall@5 0.730 and 0.745 (Δ 0.015, p = 0.502); 64/200 questions got a different top-5
+  set. A single Jev run's strict recall@5 moves about 0.015 on its own.
 - **What is known:** identical Jev requests returned scores differing by up to 0.08 across
   four sends, rounded to two decimals, with no seed to fix. Chunks whose scores sit close
   together can swap places between runs, so one EXP-0065 run may not reproduce its own
@@ -864,3 +868,13 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   `rag compare`: the share of questions whose top-5 documents differ, and the strict
   recall@5 gap between the runs. That gap is the noise floor any Jev delta must clear
   before it counts as a finding.
+
+## OQ-056 — Does Jev help expert-written questions and hurt simulated ones?
+- **Status:** open. Surfaced 2026-10-01 by EXP-0065.
+- **What is known:** on the `source:expertwritten` slice (n=100) both Jev runs scored
+  +0.110 strict recall@5 against the control (p = 0.029, 0.035); on `source:simulated`
+  (n=100) −0.090 and −0.060 (p = 0.19, 0.39). One slice of eight, looked at after the run,
+  so it is not a finding.
+- **Decided by:** a fresh sample, not the same 200 questions: the slice's direction on
+  another split that has both sources (Krutik's call on which; `test` needs
+  `--open-test`), at p < 0.05 on that slice alone. Its own approval for spend.

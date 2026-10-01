@@ -952,6 +952,13 @@ def _execute(
             else "exact: provider-reported per-query cost (embeddings and/or rerank); "
                  "index build cost in retriever_meta"
         )
+        # DEC-101: a reranker whose response carries tokens but no cost (Jev) is
+        # reported tokens x the published rate — measured volume, not a provider bill.
+        rerank_basis = reranker.provenance().get("cost_basis") if reranker else None
+        if query_cost and rerank_basis:
+            aggregate["cost_per_query_source"] = (
+                f"measured: query embeddings provider-reported; rerank = {rerank_basis}"
+            )
     elif "total_usd" in cost_estimate and rows:
         aggregate["cost_per_query_usd"] = round((cost_estimate["total_usd"] + query_cost) / len(rows), 5)
         aggregate["cost_per_query_source"] = "estimate: pre-run cost estimate / questions, plus exact query embedding cost"

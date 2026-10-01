@@ -889,9 +889,11 @@ def actual_run_cost(
     rerank_usage = (reranker_meta or {}).get("usage") or {}
     if rerank_usage.get("cost_usd"):
         # Provider-reported, straight off `usage.cost`; no table is consulted
-        # because no table is trustworthy for rerank models (MIS-025).
+        # because no table is trustworthy for rerank models (MIS-025). The one
+        # exception declares itself: Jev reports tokens only (DEC-101).
         parts["rerank"] = round(float(rerank_usage["cost_usd"]), 6)
-        measured.append("rerank")
+        measured.append("rerank" if not (reranker_meta or {}).get("cost_basis")
+                        else "rerank (reported tokens x published rate)")
     if judge_estimate_usd is not None:
         parts["judge"] = judge_estimate_usd
         estimated.append("judge")

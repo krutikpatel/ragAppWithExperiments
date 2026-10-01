@@ -244,6 +244,9 @@ Derived from the prevention rules below. Run through it and say in chat that you
 62. **A hosted API behind a CDN returns the CDN's errors too.** Retry every 5xx, not a
     hand-picked list; Cloudflare's 520–524 are not in any provider's docs. And a crashed run
     must still record what it spent: save reranker usage on failure (MIS-052).
+63. **An MDD label is only as good as its family.** Before quoting "significant" from
+    `rag compare`, check the family's runs had every random stage the compared run has (a
+    hosted reranker adds its own). Otherwise use the paired test (MIS-053).
 
 ## MIS-001 — Implemented a normalization rule from a description, not from the data
 - **Date:** 2026-09-09
@@ -1703,3 +1706,26 @@ Derived from the prevention rules below. Run through it and say in chat that you
 - **Prevention rule:** retry by status class (all 5xx), not by a list; save spend on the
   failure path, not only on success.
 - **Added to preflight:** yes, item 62.
+
+## MIS-053 — `rag compare` labelled a Jev delta "significant" using the embeddings' noise floor
+- **Date:** 2026-10-01
+- **Severity:** Medium. No wrong number reached a document; the label was caught before
+  writing.
+- **What happened:** `rag compare promoted run_20261001_002530_3ca4` printed
+  `strict_recall@5 … Δ+0.025, MDD ±0.012 → significant`, while the paired test on the same
+  questions gave p = 0.598. The MDD came from the `dense-control-v1` family, which measured
+  run-to-run noise of the query embeddings alone. EXP-0065's two identical runs differ by
+  0.015 on that metric, so a reranker with its own randomness has a larger floor.
+- **How it was caught:** the two outputs disagreed, and EXP-0065 had measured Jev's own
+  run-to-run gap.
+- **Root cause:** `rag/eval/noise_floor.py` matches a run to a retrieval noise family
+  without checking whether the run adds a non-deterministic stage (a hosted reranker) that
+  the family's runs did not have.
+- **Impact:** none on the record: EXP-0065 and its index rows use the paired test and
+  call the label invalid. Earlier Axis 5 rows used the paired test too.
+- **Fix applied:** **not yet** — changing how the tool picks a noise family is a metric
+  decision and needs Krutik (CLAUDE.md section 9). Proposed: refuse a retrieval MDD label
+  when the run has a reranker the family does not, printing "no MDD measured".
+- **Prevention rule:** before quoting an MDD label, check the family's runs contain every
+  random stage the compared run has.
+- **Added to preflight:** yes, item 63.
