@@ -1238,3 +1238,22 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
      was **not** among them: it was answered with invented steps (F23), which I did not
      foresee.
   5. About 7.7 documents → **confirmed** (7.73).
+
+## H-043 — Sending the article title to Jev makes no measurable difference on strict recall@5 (EXP-0070)
+- **Date written:** 2026-10-01, before either EXP-0070 run.
+- **Source:** Claude's expectation. The 24.9% of candidate chunks with no title is measured
+  (DEC-102); nothing else here is.
+- **Setup:** EXP-0070 runs 1 and 2 against both EXP-0066 runs (`run_20261001_010640_e5b4`,
+  `run_20261001_011054_df57`: strict recall@5 0.760 / 0.750). Only `include_title: true`
+  changes. Decided by OQ-059.
+- **Expectations:**
+  1. strict recall@5: no measurable difference against either EXP-0066 run, in both runs.
+     The two EXP-0066 runs differ by 0.010, and the title reaches only a quarter of the
+     chunks, most of them second chunks of articles whose first chunk already carries the
+     title.
+  2. strict recall@1 and nDCG@10 within ±0.02 of EXP-0066.
+  3. Tokens per call rise by about 10–15 (the title), so cost is within 3% of EXP-0066's
+     $0.0816.
+- **The part I trust least:** 1. A second chunk with its title may now outrank the first
+  chunk, which changes which chunk represents the document but not the document order. The
+  effect on recall could go either way, and I have no basis for its size.
