@@ -1,0 +1,32 @@
+# EXP-0066 — Jev with 10 candidate documents instead of 50 (OQ-057)
+#
+# Identical to configs/exp_0065_rerank_jev_dev.yaml except `rerank_candidates`: Jev sees
+# every ranked chunk of the top 10 distinct documents (~12 chunks per question) and
+# keeps 5. Asks whether a short, focused candidate list ranks differently from 50; the
+# OQ-038 runs asked the same of cohere/rerank-4-fast (EXP-0052/0053). Two runs, because
+# Jev's scores are not repeatable (OQ-055). Decided by OQ-057.
+name: "EXP-0066 — Axis 5 reranking: TypeSafe Jev jev-1.13.0, 10 candidate docs -> top-5"
+axis: reranking
+split: dev
+eval_tier: tier1
+retriever: dense
+retriever_params:
+  embedding_backend: openrouter
+  embedding_model: qwen/qwen3-embedding-8b
+  embedding_provider: DeepInfra
+  batch_size: 64
+chunker: fixed_token
+chunker_params:
+  chunk_size: 600
+  overlap: 100
+retrieval_depth: 100
+candidate_pool: 50
+top_k: 5
+reranker: typesafe_jev
+reranker_params:
+  model: jev-1.13.0
+  prompt_version: v1
+  workers: 8
+rerank_candidates: 10
+doc_pooling: max
+seed: 1

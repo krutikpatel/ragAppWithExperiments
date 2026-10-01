@@ -878,3 +878,25 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
 - **Decided by:** a fresh sample, not the same 200 questions: the slice's direction on
   another split that has both sources (Krutik's call on which; `test` needs
   `--open-test`), at p < 0.05 on that slice alone. Its own approval for spend.
+
+## OQ-057 — Does Jev rank differently with 10 candidate documents instead of 50?
+- **Status:** queued as EXP-0066 (two runs). Surfaced 2026-10-01, Krutik's request.
+- **What is known:** at 50 candidates Jev showed no measurable difference against the
+  dense control (EXP-0065). For cohere/rerank-4-fast, 20 vs 50 vs 100 candidates made no
+  measurable difference (OQ-038, EXP-0052/0053). Jev with 10 candidates is untested.
+- **Decided by:** strict recall@5 on `dev` via `rag compare`, each run against promoted and
+  against both EXP-0065 runs; p < 0.05 with the CI excluding zero, in both EXP-0066 runs.
+  The two EXP-0066 runs against each other give its own noise gap.
+
+## OQ-058 — With Jev's ranking, does sending 10 documents to the generator instead of 5 change the answers?
+- **Status:** queued as EXP-0067 (Jev, top 5) and EXP-0068 (Jev, top 10), Tier 2.
+  Surfaced 2026-10-01, Krutik's request.
+- **What is known:** for the dense ranking, top_k 10 put the gold document in front of the
+  generator more often (0.670 → 0.820) but citation precision fell by more than its MDD
+  (EXP-0051, OQ-040). The same question with Jev's ranking is untested.
+- **Decided by:** EXP-0068 against EXP-0067 on the fixed 100-question dev subsample, on
+  the deterministic generation metrics OQ-040 used: gold in context, citation precision
+  and recall, step coverage, refusal rate, judged against their measured MDDs via
+  `rag diff`. Judge skipped (DEC-063). EXP-0067 against EXP-0006 also gives Jev's effect
+  on answers at top 5. Single runs; Jev's noise at Tier 2 is unmeasured, which the
+  write-up must say.
