@@ -77,6 +77,8 @@ class TypeSafeJevReranker(Reranker):
         rate_limit_backoff_s: float = 5.0,
         rate_limit_max_wait_s: float = 120.0,
         usd_per_mtok: float | None = None,
+        context_floor: float | None = None,
+        include_title: bool = False,
     ) -> None:
         super().__init__(chunk_text, generation_cache=generation_cache, vector_source=vector_source)
         if not model:
@@ -110,6 +112,21 @@ class TypeSafeJevReranker(Reranker):
                 )
             usd_per_mtok = float(rule["usd_per_mtok"])
         self.usd_per_mtok = usd_per_mtok
+        # OQ-054, DEC-102: off unless configured, so every earlier config reproduces.
+        if context_floor is not None and not 0.0 < context_floor <= 1.0:
+            raise ValueError(f"context_floor {context_floor!r} must be a probability in (0, 1]")
+        self.context_floor = context_floor
+        # OQ-059, DEC-102: a chunk past the first one of its article does not start with
+        # the article's title (25% of EXP-0065's candidate chunks). With `include_title`
+        # the state's passage becomes {"title", "text"}. Off by default: v1's state is
+        # a bare string, and changing it silently would change every Jev score.
+        self.include_title = include_title
+        self.titles: dict[str, str] = {}
+        if include_title:
+            from rag.corpus.loader import load_corpus
+
+            frame = load_corpus().frame
+            self.titles = dict(zip(frame["id"], frame["title"]))
 
     @staticmethod
     def _question(prompt) -> dict[str, Any]:
@@ -129,7 +146,7 @@ class TypeSafeJevReranker(Reranker):
     ) -> list[ScoredChunk]:
         if not chunks:
             return []
-        bodies = [self._body(query, self.chunk_text[c.chunk_id]) for c in chunks]
+        bodies = [self._body(query, self._passage(c)) for c in chunks]
         with ThreadPoolExecutor(max_workers=min(self.workers, len(bodies))) as pool:
             futures = [pool.submit(self._call, body) for body in bodies]
         # Every call that succeeded was billed, so its usage is counted before any
@@ -154,7 +171,15 @@ class TypeSafeJevReranker(Reranker):
         check_same_chunks(chunks, scored)
         return scored
 
-    def _body(self, query: str, passage: str) -> dict[str, Any]:
+    def _passage(self, chunk: ScoredChunk) -> str | dict[str, str]:
+        text = self.chunk_text[chunk.chunk_id]
+        if not self.include_title:
+            return text
+        if chunk.doc_id not in self.titles:
+            raise KeyError(f"no title for document {chunk.doc_id!r} in the frozen corpus")
+        return {"title": self.titles[chunk.doc_id], "text": text}
+
+    def _body(self, query: str, passage: str | dict[str, str]) -> dict[str, Any]:
         return {
             "model": self.model,
             "state": {"query": query, "passage": passage},
@@ -247,6 +272,8 @@ class TypeSafeJevReranker(Reranker):
             "prompt_ref": self.prompt.ref,
             "prompt_hash": self.prompt.content_hash,
             "calls_per_chunk": 1,
+            "context_floor": self.context_floor,
+            "state_passage": "{title, text}" if self.include_title else "text",
             "workers": self.workers,
             "endpoint": TYPESAFE_URL,
             "cost_basis": (

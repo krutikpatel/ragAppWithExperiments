@@ -252,3 +252,85 @@ def test_model_check_does_not_look_for_jev_on_openrouter():
     roles = {ref.role for ref in configured_models(config)}
     assert "reranker" not in roles
     assert "retriever embedder" in roles
+
+
+# --- OQ-054 / DEC-102: a probability floor on the context -----------------------------
+
+def _floored_result(monkeypatch, floor, probability):
+    """Run rerank_result over five one-chunk documents with fixed Jev probabilities."""
+    from rag.reranking.base import rerank_result
+    from rag.retrieval.base import RetrievalResult
+    from rag.retrieval.pooling import pool_chunks_to_docs, select_distinct_docs
+
+    ids = list(probability)
+    c2d = {c: f"d{c}" for c in ids}
+    jev = _jev(chunk_text={c: c for c in ids}, workers=1, context_floor=floor)
+    monkeypatch.setattr(jev, "_call", lambda body: (_payload(noul=probability[body["state"]["passage"]]), 1, 0, 0))
+    ranked = [(c, 1.0 - i / 10) for i, c in enumerate(ids)]
+    result = RetrievalResult(
+        question_id="q", chunks=[ScoredChunk(chunk_id=c, doc_id=c2d[c], score=s) for c, s in ranked],
+        docs=pool_chunks_to_docs(ranked, c2d, rule="max"), doc_pooling="max", meta={},
+        context=select_distinct_docs(ranked, c2d, k=3, candidate_pool=5),
+    )
+    return rerank_result(result, jev, query="q", chunk_to_doc=c2d, n_docs=4, k_docs=3,
+                         candidate_pool=5, doc_pooling="max")
+
+
+def test_the_floor_trims_the_context_and_records_the_cut(monkeypatch):
+    new, record = _floored_result(monkeypatch, 0.4, {"a": 0.9, "b": 0.3, "c": 0.5, "d": 0.1, "e": 0.99})
+    assert new.context.doc_ids == ["da", "dc"], "e is outside the 4 candidates; b and d are below 0.4"
+    assert record["context_floor_cut"] == 1.0
+
+
+def test_the_floor_never_changes_the_ranking(monkeypatch):
+    """Every retrieval metric reads the ranking, so a floor cannot move one."""
+    probability = {"a": 0.9, "b": 0.3, "c": 0.5, "d": 0.1, "e": 0.99}
+    with_floor, _ = _floored_result(monkeypatch, 0.4, probability)
+    without, record = _floored_result(monkeypatch, None, probability)
+    assert with_floor.chunk_ids == without.chunk_ids
+    assert with_floor.doc_ids == without.doc_ids
+    assert without.context.doc_ids == ["da", "dc", "db"]
+    assert "context_floor_cut" not in record
+
+
+def test_a_floor_above_every_score_leaves_an_empty_context(monkeypatch):
+    new, record = _floored_result(monkeypatch, 0.95, {"a": 0.9, "b": 0.3, "c": 0.5, "d": 0.1, "e": 0.99})
+    assert new.context.doc_ids == []
+    assert record["context_floor_cut"] == 3.0
+
+
+@pytest.mark.parametrize("floor", [0.0, -0.1, 1.5, 40])
+def test_the_floor_must_be_a_probability(floor):
+    """`40` is the easy mistake: Jev's scores are 0-1, not percentages."""
+    with pytest.raises(ValueError, match="probability"):
+        _jev(context_floor=floor)
+
+
+def test_no_floor_is_the_default_so_earlier_configs_reproduce():
+    jev = _jev()
+    assert jev.context_floor is None
+    assert jev.provenance()["context_floor"] is None
+
+
+# --- OQ-059 / DEC-102: the article title in the state ----------------------------------
+
+def test_the_passage_is_a_bare_string_by_default():
+    jev = _jev(chunk_text={"c1": "Go to Domains."})
+    assert jev._passage(ScoredChunk(chunk_id="c1", doc_id="d1", score=1.0)) == "Go to Domains."
+    assert jev.provenance()["state_passage"] == "text"
+
+
+@pytest.mark.skipif(
+    not __import__("rag.paths", fromlist=["CORPUS_PARQUET"]).CORPUS_PARQUET.exists(),
+    reason="frozen corpus not built",
+)
+def test_include_title_sends_the_article_title_with_the_text():
+    from rag.corpus.loader import load_corpus
+
+    frame = load_corpus().frame
+    doc_id, title = frame["id"].iloc[0], frame["title"].iloc[0]
+    jev = _jev(chunk_text={"c1": "later chunk text"}, include_title=True)
+    passage = jev._passage(ScoredChunk(chunk_id="c1", doc_id=doc_id, score=1.0))
+    assert passage == {"title": title, "text": "later chunk text"}
+    assert jev._body("q", passage)["state"]["passage"]["title"] == title
+    assert jev.provenance()["state_passage"] == "{title, text}"

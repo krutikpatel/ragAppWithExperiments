@@ -547,7 +547,10 @@ rag/
                     API (`TYPESAFE_JEV_KEY`), one `noul` yes/no call per candidate chunk,
                     sorted by P(relevant); pinned `jev-1.13.0`, aliases refused; cost =
                     reported input tokens x the published rate (no cost in the response);
-                    not checked by `rag models verify` (DEC-101)
+                    not checked by `rag models verify` (DEC-101). Opt-in (DEC-102):
+                    `context_floor` drops reranked chunks below a probability from the
+                    CONTEXT only (the ranking, so every retrieval metric, is unchanged);
+                    `include_title` sends `passage: {title, text}`
 
 prompts/            versioned YAML, addressed by (id, version). answer.yaml (Phase 0), query_{decompose,hyde,multi,step_back}.yaml (P2-12),
                     enforced_answer.yaml / span_answer.yaml / groundedness_check.yaml (P2-14),
@@ -585,6 +588,8 @@ configs/            experiment configs. promoted.yaml is the committed "current 
                     runs (DEC-072; the c100 one sets retrieval_depth 150).
                     exp_0065_rerank_jev_dev.yaml is TypeSafe Jev on the same 50 -> 5
                     candidate shape (DEC-101, OQ-053).
+                    exp_0069 is Jev top-10 at Tier 2 with a 0.4 floor (OQ-054) and
+                    exp_0070 Jev 10 -> 5 with the title in the state (OQ-059), DEC-102.
                     exp_0031..0034_*.yaml are Axis 4 (P2-12, DEC-065 — decomposition
                     runs first per the story).
                     exp_0027_mmr_lambda*.yaml and exp_0028..0030_*.yaml are Axis 6

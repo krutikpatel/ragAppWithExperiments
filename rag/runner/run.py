@@ -850,6 +850,16 @@ def _execute(
         aggregate["reranker"] = config.reranker
         aggregate["rerank_candidates"] = config.rerank_candidates
         aggregate["rerank_profile"] = reranker.provenance()
+        if reranker.context_floor is not None:
+            # OQ-054, DEC-102: what the floor did to the context, run-wide. An empty
+            # context still goes to the generator, whose prompt says to refuse.
+            rows_ = list(per_question.values())
+            aggregate["context_floor"] = {
+                "floor": reranker.context_floor,
+                "docs_cut_mean": round(sum(r["context_floor_cut"] for r in rows_) / len(rows_), 3),
+                "context_docs_mean": round(sum(r["context_docs"] for r in rows_) / len(rows_), 3),
+                "empty_context_questions": sum(1 for r in rows_ if r["context_docs"] == 0),
+            }
     aggregate.update(_selection_summary(per_question))
     aggregate["chunking_profile"] = chunking_profile
 

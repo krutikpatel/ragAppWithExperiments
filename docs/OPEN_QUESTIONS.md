@@ -846,7 +846,8 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   three rerankers (50 documents -> top 5).
 
 ## OQ-054 — Can Jev's probability be used as a cut-off, not only a sort key?
-- **Status:** open. Surfaced 2026-09-30 while proposing DEC-101.
+- **Status:** **queued** (2026-09-30): stored-score replay done (DEC-102); Tier 2 run
+  EXP-0069 configured, awaiting spend approval. Surfaced 2026-09-30 while proposing DEC-101.
 - **What is known:** Jev's `noul` answer is a probability, which the vendor describes as
   calibrated. External claim, **untested here.** A cut-off would send fewer than 5
   documents to the generator when few pass it — a Tier 2 (generation) question, not a
@@ -855,6 +856,19 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   P2-14 did for abstention), then run the chosen threshold at Tier 2 on `dev`: faithfulness
   and the refusal rate on the unanswerable slice against the same config without the
   cut-off. Its own DEC first.
+- **Replay, 2026-09-30 (DEC-102):**
+  - **Method.** Floors 0.2–0.8 were replayed over the six stored Jev runs, with no API
+    calls. With no floor, the replay matched the stored context on every question.
+  - **EXP-0068 (top 10) at 0.4:** 8.53 documents per question, gold in context 0.880 →
+    0.840, no empty context.
+  - **EXP-0065 run 1 (top 5) at 0.4:** 4.74 documents, gold in context 0.730 → 0.715.
+  - **What a floor can and cannot do.** It only removes documents, so gold in context
+    cannot rise.
+  - **What the replay cannot tell us.** `dev` has no unanswerable questions, so it cannot
+    show whether an emptier context produces correct refusals. The refusal half still needs
+    a run on the `unanswerable` split, both with and without the floor.
+  - **Next step.** EXP-0069 (floor 0.4, Krutik's value) against EXP-0068 on the 100-question
+    subsample: citation precision and recall, gold in context, refusal rate, step coverage.
 
 ## OQ-055 — How much does Jev's run-to-run score noise move EXP-0065's result?
 - **Status:** **answered by EXP-0065** (2026-10-01): two identical `dev` runs gave strict
@@ -904,3 +918,47 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   `rag diff`. Judge skipped (DEC-063). EXP-0067 against EXP-0006 also gives Jev's effect
   on answers at top 5. Single runs; Jev's noise at Tier 2 is unmeasured, which the
   write-up must say.
+
+## OQ-059 — Does giving Jev the article title change its ranking?
+- **Status:** queued (EXP-0070 configured, awaiting spend approval). Surfaced 2026-09-30
+  from Krutik's `docs/typesafe-rag-guide.md`.
+- **What is known:**
+  - The guide and TypeSafe's *Classifying RAG passages* cookbook put
+    `{id, title, text, source_type}` in the state. External claim, **untested here.**
+  - DEC-101 sends the chunk text alone.
+  - In EXP-0065 run 1, 2,913 of 11,680 scored chunks (24.9%) were not the first chunk of
+    their article, so they reached Jev with no title.
+- **The guide's calibration example does not match the stored runs.** The guide shows
+  "Wix Account and Site Ownership Disputes" scoring 0.34 for question `08bad226…`.
+  - In both EXP-0065 runs that pair scored **0.97**, rank 1.
+  - The gold article, "Roles & Permissions: Inviting People to Collaborate on Your Site",
+    scored 0.93 and 0.92 (rank 3).
+  - The 0.34 is line 1 of `tests/fixtures/jev_1_13_0_responses.jsonl`, a different probe
+    call (a 476-word passage). It was shown next to the rebuilt request in a chat answer.
+  - So on this example, the guide's own check fails: the near-miss outscored the gold.
+- **Decided by:** EXP-0070 (`include_title: true`) against both EXP-0066 runs. The
+  deciding metric is strict recall@5 on `dev` via `rag compare`, with p < 0.05 and the CI
+  excluding zero in both of EXP-0070's two runs. strict recall@1 and nDCG@10 are reported,
+  not deciding.
+
+## OQ-060 — Do several Jev questions per passage, routed in code, beat one relevance question?
+- **Status:** open. Surfaced 2026-09-30 from Krutik's `docs/typesafe-rag-guide.md`.
+- **What is known:**
+  - The guide asks four `noul` questions per passage in one call: relevant, has answer
+    evidence, contradicts the premise, prompt injection. It routes on fixed thresholds
+    (0.70 / 0.70 / 0.45 / 0.55) and ranks by 0.7 × evidence + 0.3 × relevance.
+  - TypeSafe's cookbook reports this routing on 6 queries / 72 passages, including one
+    injected passage caught at 0.99. External claims, **untested here.**
+  - The thresholds and weights are the cookbook's, not tuned on this corpus.
+- **Why not now:**
+  - `dev` has no false-premise or injected passages, so two of the four questions have
+    nothing to be measured on.
+  - Each extra question adds its instruction tokens to every call. Jev's per-call overhead
+    is 385 tokens at one question (probe, DEC-101).
+- **Decided by:**
+  1. First, a probe (its own spend approval) for the tokens per call with 2 and 4
+     questions.
+  2. Then relevance + evidence blended, against `rerank_jev@v1` alone, at 10 candidates on
+     `dev`, two runs: strict recall@5 via `rag compare`, p < 0.05 in both.
+  3. The contradiction and injection questions need an authored set with known false-premise
+     and injected passages. Krutik decides whether to build one.

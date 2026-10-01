@@ -3863,3 +3863,72 @@ own MDDs rather than asserted equal. **Nothing here is a bug.**
     0.26/0.24/0.23/0.28, 0.11/0.13/0.13/0.15 and 0.29/0.36/0.28/0.29. The request exposes no
     seed or temperature. Tracked as OQ-055.
   - Still open: the billed amount on TypeSafe's dashboard against the computed $0.009254.
+
+## DEC-102 — Two opt-in Jev options from TypeSafe's RAG guidance: a probability floor on the context, and the article title in the state
+- **Date:** 2026-09-30
+- **Decided by:** Krutik (the floor, and its value 0.4: "ignore the jev response if score is
+  lower than 40 or something"); Claude (where the floor applies, the title option, and
+  what was left out — said in chat).
+- **Status:** Active
+- **Context:** Krutik added `docs/typesafe-rag-guide.md`, a guide to using Jev in a RAG
+  pipeline built from TypeSafe's *Classifying RAG passages* and *Re-ranking* cookbooks.
+  It was compared with DEC-101's usage. The cookbooks were re-read on 2026-09-30.
+  External claims, **untested here.** What DEC-101 already does as the guide says: one
+  request per (query, passage) pair, a pinned `jev-1.13.0`, a `noul` question with `true`
+  and `false` criteria whose `false` names the near-miss, the full chunk text, sorting by
+  the probability.
+- **Options considered:**
+  1. **A floor on Jev's probability (OQ-054) — chosen, opt-in.** `reranker_params.
+     context_floor`: reranked chunks below it cannot reach the generator, so a question gets
+     0 to `top_k` documents. It is applied in `rerank_result` to the **context only**; the
+     ranking is unchanged, so no retrieval metric can move (tested). Tail chunks, which Jev
+     never scored, cannot pass a floor. Each question records `context_floor_cut`. A floored
+     question also reads `pool_exhausted` = 1. An empty context still goes to the generator,
+     whose prompt tells it to refuse. 0.4 is a probability: `40` is refused.
+  2. **The article title in the state (OQ-059) — chosen, opt-in.** `reranker_params.
+     include_title: true` sends `passage: {"title", "text"}` rather than the text alone.
+     Measured on EXP-0065 run 1's candidates: 2,913 of 11,680 scored chunks (24.9%) were not
+     their article's first chunk, so they reached Jev with no title. `source_type` and `id`
+     from the guide's state are left out: every article has the same source, and an id
+     carries no meaning for the question.
+  3. **Several `noul` questions per call with routing (relevance, answer evidence,
+     contradicts-the-premise, prompt injection) — not built now, OQ-060.** `dev` has no
+     false-premise or injected passages to measure the last two on. Each extra question adds
+     its instruction tokens to every call. The relevance + evidence blend has no measured
+     basis here.
+  4. Change the default for the existing configs — rejected: EXP-0065..0068 must reproduce.
+     Both options are off unless a config sets them, and neither key appears in an earlier
+     config, so no earlier `config_hash` moves.
+- **Decision:** Options 1 and 2, each off by default. EXP-0069
+  (`configs/exp_0069_rerank_jev_topk10_floor04_tier2_dev.yaml`, one dimension against
+  EXP-0068) tests the floor. EXP-0070 (`configs/exp_0070_rerank_jev_c10_title_dev.yaml`, one
+  dimension against EXP-0066) tests the title. Neither has run; each needs Krutik's spend
+  approval.
+- **Evidence:** A replay of floors over stored scores, with no API calls (OQ-054):
+  - **Method.** For each run, the reranked head was re-walked with the floor applied.
+    `results/probes/jev_threshold_replay/replay.py`, output `replay.csv` (gitignored).
+  - **Check.** With no floor, the replay matched the stored context on every question of
+    all six runs.
+  - **EXP-0068 (`run_20261001_012227_eaa4`, top 10, 100 questions):**
+
+    | Floor | Docs in context (mean) | Gold in context |
+    |---|---|---|
+    | none | 10 | 0.880 |
+    | 0.4 | 8.53 | 0.840 |
+    | 0.5 | 8.05 | 0.830 |
+    | 0.7 | 6.09 | 0.770 |
+
+    At 0.4, no question had an empty context.
+  - **EXP-0065 run 1 (`run_20260930_234940_b728`, top 5):** at 0.4, 4.74 docs and gold in
+    context 0.730 → 0.715.
+  - **A floor can only remove documents.** It never adds a gold document, so gold in context
+    can only stay level or fall. Whether removing documents changes the answers is EXP-0069's
+    question.
+- **Consequences:** `Reranker.context_floor` exists on the base class and only `typesafe_jev`
+  sets it. Run rows with a floor carry `metrics_json.context_floor`. A Jev call with the
+  title adds the title's tokens, which the cost estimate does not count. The guide's
+  calibration table is not used: its example scores do not match the stored runs (see
+  OQ-059).
+- **Revisit if:** EXP-0069 shows no measurable difference on any generation metric; a split
+  with unanswerable questions is run with a floor (OQ-054's refusal half); or TypeSafe
+  documents a supported way to pass passage metadata.
