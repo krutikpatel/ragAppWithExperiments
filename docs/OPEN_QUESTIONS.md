@@ -848,6 +848,10 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
 ## OQ-054 — Can Jev's probability be used as a cut-off, not only a sort key?
 - **Status:** **queued** (2026-09-30): stored-score replay done (DEC-102); Tier 2 run
   EXP-0069 configured, awaiting spend approval. Surfaced 2026-09-30 while proposing DEC-101.
+  > **Status update 2026-10-01:** the Tier 2 half on `dev` is **answered by EXP-0069**. A
+  > 0.55 floor cut the context by 23% with no measurable difference on any answer metric
+  > (citation precision +0.048, p = 0.202). The refusal half, on the `unanswerable` split,
+  > is still open. On `dev` the one empty context was not refused (OQ-061).
 - **What is known:** Jev's `noul` answer is a probability, which the vendor describes as
   calibrated. External claim, **untested here.** A cut-off would send fewer than 5
   documents to the generator when few pass it — a Tier 2 (generation) question, not a
@@ -965,3 +969,20 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
      `dev`, two runs: strict recall@5 via `rag compare`, p < 0.05 in both.
   3. The contradiction and injection questions need an authored set with known false-premise
      and injected passages. Krutik decides whether to build one.
+
+## OQ-061 — When the floor leaves no document, should the pipeline refuse without calling the generator?
+- **Status:** open. Surfaced 2026-10-01 from EXP-0069.
+- **What is known:**
+  - In EXP-0069 one question (`5c3ab38e…`) had an empty context. gpt-5-nano answered it
+    anyway, with four generic steps citing `[doc:question]`.
+  - `baseline_answer@v1` says to refuse when the articles do not cover the question; with
+    no articles it did not, in 1 of 1 cases.
+  - The refusal detector scored it as an answer.
+  - One case is not a rate.
+- **Decided by:**
+  1. Count first: the `unanswerable` split, Jev top 10 with the 0.55 floor. How many
+     questions get an empty context, and what the generator does with each.
+  2. If empty contexts are answered more than refused, a DEC for a pipeline rule: an
+     empty context returns the fixed refusal and makes no generator call. Measured
+     against the same config without the rule, on the `unanswerable` split's false-answer
+     rate.

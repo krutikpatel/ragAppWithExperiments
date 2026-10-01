@@ -1774,3 +1774,15 @@ Derived from the prevention rules below. Run through it and say in chat that you
   clock (the tool's maximum is 2 hours), and watch it with something that reports progress.
   A run that cannot finish inside the limit is money spent for nothing.
 - **Added to preflight:** yes, item 64.
+- **Addendum, 2026-10-01 (attempt 2):**
+  - **Attempt 2 completed.** `run_20261001_054236_d7ea` took about 31 minutes with the
+    2-hour limit.
+  - **Where the time went.** Stored stage latencies sum to about 14 minutes: retrieval
+    385 s, Jev 139 s, generation 326 s. Retrieval's tail was long, with one query embedding
+    at 83 s. The other ~17 minutes are not recorded by the runner.
+  - **Attempt 1's cause is still unknown.** Its stall may not have been the generator; a
+    30-minute run is within what attempt 2 needed.
+  - **A second error, during attempt 2.** Claude told Krutik Jev was slow, from counting
+    open connections once a second. The run's stored per-call mean was 175.8 ms, the same
+    as EXP-0068. A once-a-second sample of 0.2-second connections undercounts them.
+    Judge a stage's speed from what the run records, not from sampling sockets.

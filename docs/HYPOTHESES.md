@@ -1226,3 +1226,15 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
   5. Mean documents in context are about 7.7.
 - **The part I trust least:** 2. EXP-0068's precision drop may come from the generator
   citing documents that were relevant but not gold, which a floor would keep.
+- **Resolution (2026-10-01, EXP-0069 `run_20261001_054236_d7ea`):** **mixed.**
+  1. Gold in context: the level was right (0.880 → 0.820, the replay's 0.820), but the
+     significance was **wrong**: p = 0.069, although the bootstrap CI [−0.12, −0.01]
+     excludes zero. Seven losses against one gain did not reach p < 0.05 on 100
+     questions.
+  2. Citation precision rose by less than its MDD → **confirmed**: +0.048, p = 0.202. The
+     part I trusted least held in direction; it is not a finding.
+  3. Citation recall, no measurable difference → **confirmed** (−0.023, p = 0.630).
+  4. Refusals rise by 0–3 → **confirmed at the edge** (1 → 4). But the one empty context
+     was **not** among them: it was answered with invented steps (F23), which I did not
+     foresee.
+  5. About 7.7 documents → **confirmed** (7.73).
