@@ -880,7 +880,10 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   `--open-test`), at p < 0.05 on that slice alone. Its own approval for spend.
 
 ## OQ-057 — Does Jev rank differently with 10 candidate documents instead of 50?
-- **Status:** queued as EXP-0066 (two runs). Surfaced 2026-10-01, Krutik's request.
+- **Status:** **answered by EXP-0066** (2026-10-01): no measurable difference on strict
+  recall@5 against promoted (p = 0.229 / 0.408) or against EXP-0065. strict recall@1 and
+  nDCG@10 were below p = 0.05 in both runs (not the deciding metric). Surfaced 2026-10-01,
+  Krutik's request.
 - **What is known:** at 50 candidates Jev showed no measurable difference against the
   dense control (EXP-0065). For cohere/rerank-4-fast, 20 vs 50 vs 100 candidates made no
   measurable difference (OQ-038, EXP-0052/0053). Jev with 10 candidates is untested.
@@ -889,8 +892,9 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
   The two EXP-0066 runs against each other give its own noise gap.
 
 ## OQ-058 — With Jev's ranking, does sending 10 documents to the generator instead of 5 change the answers?
-- **Status:** queued as EXP-0067 (Jev, top 5) and EXP-0068 (Jev, top 10), Tier 2.
-  Surfaced 2026-10-01, Krutik's request.
+- **Status:** **answered by EXP-0068** (2026-10-01): same shape as OQ-040. Gold in context
+  0.740 → 0.880 (p = 0.0001), citation precision 0.492 → 0.404 (p = 0.016), citation
+  recall no measurable difference. Surfaced 2026-10-01, Krutik's request.
 - **What is known:** for the dense ranking, top_k 10 put the gold document in front of the
   generator more often (0.670 → 0.820) but citation precision fell by more than its MDD
   (EXP-0051, OQ-040). The same question with Jev's ranking is untested.
