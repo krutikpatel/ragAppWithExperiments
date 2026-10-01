@@ -929,6 +929,8 @@ ratio materially above 1.2, which would mean the context has real redundancy to 
 ## OQ-059 — Does giving Jev the article title change its ranking?
 - **Status:** queued (EXP-0070 configured, awaiting spend approval). Surfaced 2026-09-30
   from Krutik's `docs/typesafe-rag-guide.md`.
+  > **Status update 2026-10-01: answered by EXP-0070.** No measurable difference: strict
+  > recall@5 Δ −0.020 … −0.005 against both EXP-0066 runs, p ≥ 0.212 in all four pairings.
 - **What is known:**
   - The guide and TypeSafe's *Classifying RAG passages* cookbook put
     `{id, title, text, source_type}` in the state. External claim, **untested here.**

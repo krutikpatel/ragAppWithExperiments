@@ -1257,3 +1257,9 @@ expectation before a run, it goes here as H-005 onward, dated before the run.
 - **The part I trust least:** 1. A second chunk with its title may now outrank the first
   chunk, which changes which chunk represents the document but not the document order. The
   effect on recall could go either way, and I have no basis for its size.
+- **Resolution (2026-10-01, EXP-0070 `run_20261001_061721_a50f`, `run_20261001_062210_ec9c`):**
+  1. No measurable difference on strict recall@5 → **confirmed**: Δ −0.020 … −0.005, p ≥ 0.212
+     in all four pairings. The part I trusted least held.
+  2. strict@1 and nDCG@10 within ±0.02 → **confirmed** (+0.005 … +0.010; −0.001 … +0.002).
+  3. +10–15 tokens per call → **wrong**: +24 (846.6 → 870.6). Cost within 3% → **wrong at
+     the edge**: +2.9% against EXP-0066's actual, +3.4% against the estimate.
